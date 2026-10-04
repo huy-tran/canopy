@@ -44,7 +44,7 @@ npm run typecheck  # renderer (vue-tsc) and main process (tsc)
 ## Releasing
 
 1. Bump `version` in `package.json` and add a matching `## [x.y.z]` entry to `CHANGELOG.md`.
-2. Commit, then tag and push: `git tag vx.y.z && git push origin main vx.y.z`.
+2. Commit, then tag and push: `git tag vx.y.z && git push origin master vx.y.z`.
 3. The `Release` workflow builds the installer on Windows, publishes it as a GitHub release with the changelog entry as notes, and installed copies pick it up as an update.
 
 Builds are not code-signed, so Windows SmartScreen warns on first install ("More info" then "Run anyway").
