@@ -19,8 +19,8 @@ const menu = {
 
 export default defineAppConfig({
   canopy: {
-    releaseNotesUrl: '',
-    issuesUrl: '',
+    releaseNotesUrl: 'https://github.com/huy-tran/canopy/releases',
+    issuesUrl: 'https://github.com/huy-tran/canopy/issues',
   },
   ui: {
     icons: {

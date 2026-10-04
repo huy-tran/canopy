@@ -43,8 +43,16 @@ npm run typecheck  # renderer (vue-tsc) and main process (tsc)
 | Screenshots | A pasted image is saved to disk and its path pasted at Claude's prompt, which attaches it as `[Image #n]`. |
 | Notifications, updates, fonts | Electron `Notification`, `electron-updater`, `font-list`. |
 
-## Configuration still to fill in
+## Releasing
 
-- `app/app.config.ts` has empty `releaseNotesUrl` and `issuesUrl`.
-- `package.json` has no `build.publish` target yet, so packaged builds report an update-check error until one is set.
-- The app icon is drawn at runtime as a placeholder for the branding.
+1. Bump `version` in `package.json` and add a matching `## [x.y.z]` entry to `CHANGELOG.md`.
+2. Commit, then tag and push: `git tag vx.y.z && git push origin main vx.y.z`.
+3. The `Release` workflow builds the installer on Windows, publishes it as a GitHub release with the changelog entry as notes, and installed copies pick it up as an update.
+
+Builds are not code-signed, so Windows SmartScreen warns on first install ("More info" then "Run anyway").
+
+`node-pty` ships prebuilt N-API binaries that work in Electron, so packaging skips the native rebuild (`npmRebuild: false`) and needs no Visual Studio.
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,58 @@
+# Builds the Windows installer and publishes it as a GitHub release when a version tag (v1.2.3) is pushed.
+# The installed app checks these releases for updates (build.publish in package.json).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check the tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - name: Build and publish
+        run: npm run build && npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Use the changelog entry as release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found && /^\[.*\]: / { next }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ -s notes.md ]; then gh release edit "$GITHUB_REF_NAME" --notes-file notes.md; fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

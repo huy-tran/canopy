@@ -4,6 +4,18 @@
   "version": "0.1.0",
   "private": true,
   "description": "Multi-project Claude Code workspace",
+  "author": {
+    "name": "Huy Tran"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/huy-tran/canopy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huy-tran/canopy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/huy-tran/canopy/issues"
+  },
   "main": "dist-electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -57,7 +69,9 @@
     "files": [
       "dist-electron/**",
       ".output/public/**",
-      "package.json"
+      "package.json",
+      "!node_modules/node-pty/prebuilds/darwin-*/**",
+      "!node_modules/node-pty/prebuilds/**/*.pdb"
     ],
     "asarUnpack": [
       "node_modules/node-pty/**"
@@ -69,6 +83,13 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "huy-tran",
+      "repo": "canopy",
+      "releaseType": "release"
     }
   }
 }
