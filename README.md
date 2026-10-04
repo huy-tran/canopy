@@ -2,8 +2,6 @@
 
 A Windows desktop workspace for running many Claude Code sessions across many client projects. It groups real `claude` terminals by project, shows which session is waiting on you, tracks token cost and plan usage, and adds dev servers, a file/git explorer, worktrees, an inbox, rebindable shortcuts and an app menu.
 
-The design handoff (prototype and requirements) lives in `design_handoff_switchyard/`.
-
 ## Stack
 
 - Electron (main process: `electron/`)
