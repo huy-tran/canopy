@@ -1,0 +1,74 @@
+{
+  "name": "canopy",
+  "productName": "Canopy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-project Claude Code workspace",
+  "main": "dist-electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n nuxt,electron -c blue,green \"nuxt dev --port 3456\" \"npm run dev:electron\"",
+    "dev:electron": "node scripts/build-electron.mjs && wait-on -t 120000 http-get://localhost:3456 && cross-env CANOPY_DEV_URL=http://localhost:3456 electron .",
+    "build": "nuxt generate && node scripts/build-electron.mjs",
+    "dist": "npm run build && electron-builder --win",
+    "typecheck": "nuxt typecheck && tsc -p tsconfig.electron.json",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.9",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@iconify-json/hugeicons": "^1.2.35",
+    "@nuxt/ui": "^4.11.3",
+    "@pinia/nuxt": "^1.0.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.0.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "nuxt": "^4.5.2",
+    "pinia": "^4.0.3",
+    "shiki": "^4.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.0",
+    "vue": "^3.5.0",
+    "vue-tsc": "^3.0.0",
+    "wait-on": "^9.5.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.27.7": true,
+    "node-pty@1.1.0": true,
+    "electron-winstaller@5.4.0": true,
+    "vue-demi@0.14.10": true,
+    "electron@44.5.1": true
+  },
+  "build": {
+    "appId": "com.canopy.app",
+    "productName": "Canopy",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**",
+      ".output/public/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/canopy.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

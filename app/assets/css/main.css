@@ -1,0 +1,313 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@source "../../../shared";
+
+@theme {
+  --font-sans: var(--app-font);
+  --font-mono: var(--mono);
+  /* Brand wordmark font. */
+  --font-brand: 'Geist', var(--app-font);
+  /* Outfit reads heavy at 400 on small sizes, so normal text uses 300. */
+  --font-weight-normal: 300;
+}
+
+/* Theme palette for neutral and secondary. Static: Nuxt UI only references it through CSS variables. */
+@theme static {
+  --color-cobalt-gray-50: oklch(99.1% 0 0);
+  --color-cobalt-gray-100: oklch(98.2% 0.002 247.839);
+  --color-cobalt-gray-200: oklch(94.2% 0.005 247.879);
+  --color-cobalt-gray-300: oklch(91.1% 0.007 247.901);
+  --color-cobalt-gray-400: oklch(86.7% 0.011 247.949);
+  --color-cobalt-gray-500: oklch(76.9% 0.015 248.017);
+  --color-cobalt-gray-600: oklch(55.8% 0.016 244.893);
+  --color-cobalt-gray-700: oklch(42.8% 0.015 248.172);
+  --color-cobalt-gray-800: oklch(34.5% 0.013 248.212);
+  --color-cobalt-gray-900: oklch(26.2% 0.009 248.19);
+  --color-cobalt-gray-950: oklch(20.7% 0.008 248.192);
+  /* Brand ochre: 500 is the mark on dark (#D9773A), 600 the mark on light (#C2622A). */
+  --color-ochre-50: oklch(97.5% 0.015 60);
+  --color-ochre-100: oklch(94.5% 0.035 58);
+  --color-ochre-200: oklch(88.5% 0.07 56);
+  --color-ochre-300: oklch(81.5% 0.11 54);
+  --color-ochre-400: oklch(74.5% 0.135 52);
+  --color-ochre-500: #D9773A;
+  --color-ochre-600: #C2622A;
+  --color-ochre-700: oklch(51.5% 0.13 43);
+  --color-ochre-800: oklch(43% 0.11 42);
+  --color-ochre-900: oklch(36% 0.09 42);
+  --color-ochre-950: oklch(25.5% 0.06 42);
+}
+
+/*
+ * Nuxt UI theme (primary brand ochre, secondary/neutral cobalt-gray, radius 0.125rem).
+ * Shades follow the theme's token choices; the rest are Nuxt UI defaults.
+ */
+:root,
+.light {
+  --ui-radius: 0.125rem;
+  --ui-primary: var(--ui-color-primary-600);
+  --ui-secondary: var(--ui-color-secondary-600);
+  --ui-bg: var(--modal);
+  --ui-bg-muted: var(--chrome);
+  --ui-bg-elevated: var(--hov);
+  --ui-bg-accented: var(--sel);
+  --ui-bg-inverted: var(--tx);
+  --ui-text-dimmed: var(--fa);
+  --ui-text-muted: var(--mu);
+  --ui-text-toned: var(--tx3);
+  --ui-text: var(--tx2);
+  --ui-text-highlighted: var(--tx);
+  --ui-text-inverted: #fff;
+  --ui-border: var(--ln);
+  --ui-border-muted: var(--ln2);
+  --ui-border-accented: var(--bb);
+  --ui-border-inverted: var(--tx);
+}
+
+.dark {
+  --ui-radius: 0.125rem;
+  --ui-primary: var(--ui-color-primary-500);
+  --ui-secondary: var(--ui-color-secondary-500);
+  --ui-success: var(--ui-color-success-500);
+  --ui-info: var(--ui-color-info-500);
+  --ui-warning: var(--ui-color-warning-500);
+  --ui-error: var(--ui-color-error-500);
+  --ui-bg: var(--ui-color-neutral-900);
+  --ui-bg-muted: var(--ui-color-neutral-700);
+  --ui-bg-elevated: var(--ui-color-neutral-800);
+  --ui-bg-accented: var(--ui-color-neutral-700);
+  --ui-bg-inverted: white;
+  --ui-text-dimmed: var(--ui-color-neutral-500);
+  --ui-text-muted: var(--ui-color-neutral-400);
+  --ui-text-toned: var(--ui-color-neutral-300);
+  --ui-text: var(--ui-color-neutral-300);
+  --ui-text-highlighted: white;
+  --ui-text-inverted: var(--ui-color-neutral-950);
+  --ui-border: var(--ui-color-neutral-800);
+  --ui-border-muted: var(--ui-color-neutral-700);
+  --ui-border-accented: var(--ui-color-neutral-700);
+  --ui-border-inverted: white;
+}
+
+/*
+ * App tokens (names follow the design prototype), derived from the theme above so custom
+ * surfaces match Nuxt UI components. Status, chip and syntax colours stay from the design.
+ */
+:root,
+.dark {
+  --bg: var(--ui-color-neutral-950);
+  --chrome: color-mix(in oklch, var(--ui-color-neutral-900) var(--alpha), transparent);
+  --head: color-mix(in oklch, color-mix(in oklch, var(--ui-color-neutral-900) 50%, var(--ui-color-neutral-950)) var(--alpha), transparent);
+  --term: color-mix(in oklch, color-mix(in oklch, var(--ui-color-neutral-950) 72%, black) var(--alpha), transparent);
+  --modal: var(--ui-color-neutral-900);
+  --ln: var(--ui-color-neutral-800);
+  --ln2: color-mix(in oklch, var(--ui-color-neutral-800) 55%, var(--ui-color-neutral-900));
+  --hov: var(--ui-color-neutral-800);
+  --sel: color-mix(in oklch, var(--ui-color-neutral-800) 75%, var(--ui-color-neutral-900));
+  --chip: var(--ui-color-neutral-800);
+  --tx: var(--ui-color-neutral-50);
+  --tx2: var(--ui-color-neutral-200);
+  --tx3: var(--ui-color-neutral-300);
+  --mu: var(--ui-color-neutral-400);
+  --fa: var(--ui-color-neutral-500);
+  --ttx: var(--ui-color-neutral-200);
+  --pbg: var(--ui-color-neutral-900);
+  --seg: var(--ui-color-neutral-950);
+  --segon: var(--ui-color-neutral-700);
+  --bb: var(--ui-color-neutral-700);
+  --inp: var(--ui-color-neutral-950);
+  --trk: var(--ui-color-neutral-800);
+  --inv: var(--ui-primary);
+  --invtx: var(--ui-color-neutral-950);
+  --blue: oklch(0.72 0.12 250);
+  --amb: oklch(0.80 0.13 80);
+  --ambf: oklch(0.80 0.13 80);
+  --ambs: oklch(0.80 0.13 80 / 0.10);
+  --ambl: oklch(0.80 0.13 80 / 0.5);
+  --ambtx: oklch(0.90 0.07 80);
+  --grn: oklch(0.75 0.12 155);
+  --red: oklch(0.70 0.14 25);
+  --lnk: oklch(0.78 0.10 250);
+  --spin: oklch(0.75 0.12 45);
+  --idle: var(--ui-color-neutral-600);
+  --teal: oklch(0.78 0.10 175);
+  --vio: oklch(0.78 0.10 300);
+  --cyan: oklch(0.80 0.08 210);
+  --syn-kw: oklch(0.76 0.13 305);
+  --syn-str: oklch(0.79 0.12 140);
+  --syn-num: oklch(0.80 0.12 60);
+  --syn-com: var(--ui-color-neutral-500);
+  --syn-fn: oklch(0.79 0.11 245);
+  --syn-var: oklch(0.77 0.12 20);
+  --syn-ty: oklch(0.85 0.11 90);
+  --syn-tag: oklch(0.74 0.13 25);
+  --syn-at: oklch(0.82 0.11 65);
+  --syn-pr: oklch(0.82 0.08 200);
+  --thA: var(--ui-color-neutral-800);
+  --thB: var(--ui-color-neutral-900);
+  --ovl: rgba(5, 6, 7, 0.6);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --addbg: oklch(0.75 0.12 155 / 0.08);
+  --delbg: oklch(0.68 0.14 25 / 0.10);
+  --mono: 'monofur for Powerline', 'JetBrains Mono', ui-monospace, monospace;
+  --app-font: 'Outfit', system-ui, sans-serif;
+}
+
+/*
+ * Light: a cool-gray lightness ladder (hue 248, like cobalt-gray) with clear steps between
+ * surfaces, visible borders and text that stays readable at small sizes.
+ */
+.light {
+  --bg: oklch(98.5% 0.002 248);
+  --chrome: color-mix(in oklch, oklch(95.5% 0.006 248) var(--alpha), transparent);
+  --head: color-mix(in oklch, oklch(97.2% 0.004 248) var(--alpha), transparent);
+  --term: color-mix(in oklch, oklch(99.6% 0.001 248) var(--alpha), transparent);
+  --modal: #fff;
+  --ln: oklch(88% 0.008 248);
+  --ln2: oklch(91.5% 0.006 248);
+  --hov: oklch(92.5% 0.008 248);
+  --sel: oklch(89.5% 0.014 248);
+  --chip: oklch(91% 0.009 248);
+  --tx: oklch(21% 0.012 248);
+  --tx2: oklch(31% 0.013 248);
+  --tx3: oklch(41% 0.014 248);
+  --mu: oklch(48% 0.015 248);
+  --fa: oklch(54% 0.014 248);
+  --ttx: oklch(25% 0.012 248);
+  --pbg: oklch(94% 0.006 248);
+  --seg: oklch(93% 0.007 248);
+  --segon: #fff;
+  --bb: oklch(80% 0.012 248);
+  --inp: #fff;
+  --trk: oklch(88% 0.008 248);
+  --inv: var(--ui-primary);
+  --invtx: #fff;
+  --blue: oklch(0.52 0.15 250);
+  --amb: oklch(0.52 0.13 65);
+  --ambf: oklch(0.74 0.15 72);
+  --ambs: oklch(0.80 0.14 78 / 0.22);
+  --ambl: oklch(0.62 0.14 70 / 0.6);
+  --ambtx: oklch(0.42 0.11 60);
+  --grn: oklch(0.50 0.13 155);
+  --red: oklch(0.53 0.18 25);
+  --lnk: oklch(0.48 0.16 255);
+  --spin: oklch(0.55 0.15 45);
+  --idle: oklch(70% 0.01 248);
+  --teal: oklch(0.47 0.10 180);
+  --vio: oklch(0.46 0.16 300);
+  --cyan: oklch(0.46 0.10 225);
+  --syn-kw: oklch(0.46 0.19 305);
+  --syn-str: oklch(0.47 0.13 145);
+  --syn-num: oklch(0.52 0.15 50);
+  --syn-com: oklch(56% 0.014 248);
+  --syn-fn: oklch(0.46 0.16 255);
+  --syn-var: oklch(0.50 0.17 25);
+  --syn-ty: oklch(0.50 0.12 70);
+  --syn-tag: oklch(0.48 0.17 25);
+  --syn-at: oklch(0.52 0.13 60);
+  --syn-pr: oklch(0.46 0.10 215);
+  --thA: oklch(91% 0.008 248);
+  --thB: oklch(95.5% 0.005 248);
+  --ovl: rgba(20, 24, 32, 0.32);
+  --shadow: 0 12px 36px rgba(16, 24, 40, 0.16), 0 2px 6px rgba(16, 24, 40, 0.08);
+  --addbg: oklch(0.55 0.13 155 / 0.12);
+  --delbg: oklch(0.56 0.17 25 / 0.10);
+}
+
+/* Window transparency: --alpha is set from Settings. Translucent windows drop the solid backdrop. */
+:root {
+  --alpha: 100%;
+  --win: var(--bg);
+}
+
+:root.translucent {
+  --win: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--win);
+  color: var(--tx);
+  font-family: var(--app-font);
+  font-weight: var(--font-weight-normal);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Base text size for the UI. Kept off <html> so rem-based spacing stays at the standard 16px. */
+body {
+  font-size: 12px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--fa);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.28);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Shared prototype atoms */
+@layer components {
+  .mono {
+    font-family: var(--mono);
+  }
+
+  .label-caps {
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--mu);
+    font-weight: 600;
+  }
+
+  .chip-repo {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--tx2);
+    background: var(--chip);
+    padding: 0 4px;
+    border-radius: var(--radius-sm);
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .ellipsis {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .drag {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .thumb-bg {
+    background: repeating-linear-gradient(135deg, var(--thA) 0 5px, var(--thB) 5px 10px);
+  }
+}
+
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+}

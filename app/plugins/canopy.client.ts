@@ -1,0 +1,146 @@
+// Boots the workspace: loads saved state, wires main-process events, and runs the timers.
+import type { Persisted } from '#shared/types'
+import { comboOf, matchAction } from '#shared/actions'
+import { DEFAULT_PREFS } from '~/stores/prefs'
+
+/** ANSI colours readable on a light terminal (xterm's defaults assume a dark one). */
+const LIGHT_ANSI = {
+  black: '#1D1E21', red: '#C0362C', green: '#2E7D32', yellow: '#9A6A00', blue: '#2155C4', magenta: '#8E3FA8', cyan: '#00798A', white: '#6B6E75',
+  brightBlack: '#55585F', brightRed: '#D9443A', brightGreen: '#388E3C', brightYellow: '#B07A00', brightBlue: '#2F6BE0', brightMagenta: '#A24BBF', brightCyan: '#0A8FA3', brightWhite: '#3A3D42',
+}
+
+export default defineNuxtPlugin({
+  name: 'canopy',
+  dependsOn: ['pinia'],
+  async setup() {
+    const P = useProjectsStore()
+    const S = useSessionsStore()
+    const V = useServicesStore()
+    const G = useGitStore()
+    const prefs = usePrefsStore()
+    const ui = useUiStore()
+
+    // ---------- Saved state ----------
+    const saved = await api.state.load().catch(() => null)
+    if (saved) {
+      P.projects = (saved.projects || []).map(p => ({ ...p, repos: p.repos.map(r => ({ ...r, services: r.services || [] })) }))
+      P.sel = saved.sel && P.byId(saved.sel) ? saved.sel : (P.projects[0]?.id ?? null)
+      prefs.prefs = { ...prefs.prefs, ...(saved.prefs || {}) }
+      prefs.keys = saved.keys || {}
+      prefs.theme = saved.theme || 'dark'
+      ui.sidebar = saved.sidebar ?? null
+      ui.stripOn = saved.stripOn ?? true
+    }
+
+    let saveT: ReturnType<typeof setTimeout> | undefined
+    /** Until saved sessions are reopened, keep writing the saved list so an early save can't drop it. */
+    let reopened = false
+    const snapshot = (): Persisted => JSON.parse(JSON.stringify({
+      projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, sidebar: ui.sidebar, stripOn: ui.stripOn,
+      sessions: reopened ? S.saved : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
+    }))
+    watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.sidebar, ui.stripOn, JSON.stringify(S.saved), S.focus], () => {
+      clearTimeout(saveT)
+      saveT = setTimeout(() => api.state.save(snapshot()), 300)
+    }, { deep: true })
+
+    // ---------- Terminals ----------
+    // Terminal colours come from a probe scoped to the terminal's own theme (panes can stay dark in light mode).
+    const probe = document.createElement('div')
+    probe.style.display = 'none'
+    document.body.appendChild(probe)
+    const css = (name: string) => {
+      probe.className = prefs.terminalDark ? 'dark' : 'light'
+      return getComputedStyle(probe).getPropertyValue(name).trim()
+    }
+    const fontName = (v: string, fallback: string) => (v || '').trim().replace(/['";]/g, '') || fallback
+    const termOptions = () => {
+      const font = fontName(prefs.prefs.termFont, DEFAULT_PREFS.termFont)
+      return {
+        fontFamily: `'${font}', 'JetBrains Mono', ui-monospace, monospace`,
+        fontSize: prefs.prefs.termSize || 12,
+        cursor: prefs.prefs.cursor,
+        scrollback: Math.max(100, parseInt(prefs.prefs.scrollback, 10) || 10000),
+        transparent: (prefs.prefs.opacity ?? 100) < 100,
+        theme: { background: css('--term'), foreground: css('--ttx'), cursor: css('--ttx'), selection: prefs.terminalDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)', ansi: prefs.terminalDark ? undefined : LIGHT_ANSI },
+      }
+    }
+    setTerminalOptions(termOptions())
+    watch(() => [prefs.prefs.termFont, prefs.prefs.termSize, prefs.prefs.cursor, prefs.prefs.scrollback, prefs.prefs.opacity, prefs.resolvedTheme, prefs.terminalDark], () => {
+      document.documentElement.style.setProperty('--mono', `'${fontName(prefs.prefs.termFont, DEFAULT_PREFS.termFont)}','JetBrains Mono',ui-monospace,monospace`)
+      nextTick(() => setTerminalOptions(termOptions()))
+    }, { immediate: true })
+    watch(() => prefs.prefs.opacity ?? 100, (o) => {
+      document.documentElement.style.setProperty('--alpha', `${o}%`)
+      document.documentElement.classList.toggle('translucent', o < 100)
+    }, { immediate: true })
+    watch(() => prefs.prefs.appFont, (f) => {
+      document.documentElement.style.setProperty('--app-font', `'${fontName(f, DEFAULT_PREFS.appFont)}','Outfit',system-ui,sans-serif`)
+    }, { immediate: true })
+
+    configureTerminals({
+      isAppKey: (e) => {
+        const cb = comboOf(e)
+        if (!cb) return false
+        if (/^Alt\+[1-9]$/.test(cb)) return true
+        return !!matchAction(prefs.keys, cb)
+      },
+      onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
+      onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },
+      onImageClick: (sid, n) => ui.openLightbox(sid, n),
+      onFocus: (sid) => {
+        const s = S.byId(sid)
+        if (s && S.focusedId(s.pid) !== sid) S.setFocus(s.pid, sid)
+      },
+      openUrl: url => api.sys.openExternal(url),
+    })
+
+    // ---------- Main process events ----------
+    api.session.onHook(e => S.onHook(e))
+    api.session.onUsage(u => S.onUsage(u))
+    api.pty.onExit((id, code) => S.onExit(id, code))
+    api.svc.onData((id, d) => V.onData(id, d))
+    api.svc.onStatus((id, s, code) => V.onStatus(id, s, code))
+    api.sys.onNotifyClick(sid => ui.focusSession(sid))
+    api.sys.onNotifyAction?.((sid, key) => ui.answer(sid, key))
+    api.upd.onStatus((s) => { ui.upd = s })
+    api.upd.state().then((s) => { if (s) ui.upd = s })
+
+    // ---------- Window size and clock ----------
+    const onResize = () => { ui.width = window.innerWidth }
+    window.addEventListener('resize', onResize)
+    setInterval(() => {
+      ui.now = Date.now()
+      ui.inboxTick()
+    }, 1000)
+
+    // ---------- Plan usage ----------
+    const pollUsage = () => api.usage().then((u) => { ui.usage = u }).catch(() => {})
+    pollUsage()
+    setInterval(pollUsage, 120_000)
+
+    // ---------- Git status for the selected project's sessions and repos ----------
+    const pollGit = () => {
+      const p = P.current
+      if (!p) return
+      const cwds = new Set<string>([...p.repos.map(r => r.path), ...S.ofProject(p.id).map(s => s.cwd)])
+      cwds.forEach(c => G.refresh(c))
+    }
+    setInterval(pollGit, 5000)
+    watch(() => P.sel, pollGit, { immediate: true })
+
+    // ---------- Resume on launch ----------
+    // Sessions open at quit come back as they were: each Claude session resumes its own conversation.
+    const restore = prefs.prefs.resume ? (saved?.sessions || []) : []
+    if (restore.length) {
+      S.reopen(restore)
+      S.focus = { ...(saved?.focus || {}) }
+    }
+    reopened = true
+    // Projects with nothing to reopen fall back to "start all sessions when I open this project".
+    const restoredPids = new Set(restore.map(x => x.pid))
+    if (prefs.prefs.resume) P.projects.filter(p => p.resume && !restoredPids.has(p.id)).forEach(p => ui.resumeOnce.add(p.id))
+    const first = P.current
+    if (first?.autoStart && prefs.prefs.resume && !restoredPids.has(first.id)) nextTick(() => ui.startAll(first.id))
+  },
+})
