@@ -89,7 +89,7 @@
       "provider": "github",
       "owner": "huy-tran",
       "repo": "canopy",
-      "releaseType": "release"
+      "releaseType": "draft"
     }
   }
 }

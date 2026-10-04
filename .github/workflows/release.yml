@@ -39,12 +39,8 @@ jobs:
 
       - run: npm run typecheck
 
-      - name: Build and publish
-        run: npm run build && npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Use the changelog entry as release notes
+      # A draft made up front stops electron-builder creating one release per uploaded file.
+      - name: Create a draft release from the changelog entry
         run: |
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" '
@@ -53,6 +49,21 @@ jobs:
             found && /^\[.*\]: / { next }
             found { print }
           ' CHANGELOG.md > notes.md
-          if [ -s notes.md ]; then gh release edit "$GITHUB_REF_NAME" --notes-file notes.md; fi
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id"); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$version" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and upload
+        run: npm run build && npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the release
+        run: |
+          id="$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id")"
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false -f make_latest=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
