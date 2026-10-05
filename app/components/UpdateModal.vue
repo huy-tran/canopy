@@ -69,9 +69,7 @@ const v = computed<UpdView>(() => {
   >
     <template #content>
       <div class="flex items-center gap-3">
-        <div class="grid size-8 flex-none place-items-center rounded-lg bg-(--tx)">
-          <div class="size-3 rounded-xs bg-(--modal)" />
-        </div>
+        <BrandMark :size="32" />
         <div class="flex min-w-0 flex-col gap-[3px]">
           <span class="text-[14px] font-semibold whitespace-pre">{{ v.title }}</span>
           <span class="text-[12px] leading-[1.45] text-(--tx3)">{{ v.sub }}</span>
