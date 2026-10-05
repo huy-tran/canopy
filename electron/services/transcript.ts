@@ -250,6 +250,8 @@ export function projectHistory(repos: { id: string; path: string }[]): HistorySe
 // ---------- One day's activity, for the daily summary ----------
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+/** A quiet gap longer than this counts as a break, not work. */
+const IDLE_GAP = 15 * 60_000
 
 function relTo(cwd: string, file: string) {
   const f = file.replace(/\\/g, '/'), c = (cwd || '').replace(/\\/g, '/').replace(/\/$/, '')
@@ -271,6 +273,7 @@ export function dayActivity(repos: { id: string; path: string }[], since: number
       }
       const prompts: { t: string; at: number }[] = [], files = new Set<string>(), replies: string[] = []
       const usage = new Map<string, { u: any; model: string }>()
+      const spans: [number, number][] = []
       let start = 0, end = 0, branch = ''
       for (const line of raw.split('\n')) {
         if (!line.trim()) continue
@@ -284,6 +287,9 @@ export function dayActivity(repos: { id: string; path: string }[], since: number
         if (!ts || ts < since || ts >= until) continue
         if (!start) start = ts
         end = ts
+        const cur = spans[spans.length - 1]
+        if (cur && ts - cur[1] <= IDLE_GAP) cur[1] = Math.max(cur[1], ts)
+        else spans.push([ts, ts])
         if (e.gitBranch) branch = e.gitBranch
         const pt = promptText(e)
         if (pt) prompts.push({ t: pt, at: ts })
@@ -305,7 +311,7 @@ export function dayActivity(repos: { id: string; path: string }[], since: number
       }
       out.push({
         claudeId: path.basename(file, '.jsonl'), repoId: r.id, branch, start, end, cost,
-        prompts, files: [...files], lastReply: (replies[replies.length - 1] || '').slice(0, 1500),
+        prompts, files: [...files], lastReply: (replies[replies.length - 1] || '').slice(0, 1500), spans,
       })
     }
   }

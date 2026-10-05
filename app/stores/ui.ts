@@ -25,6 +25,8 @@ export const useUiStore = defineStore('ui', () => {
   const summary = ref<{ pid: string } | null>(null)
   /** Recaps written this run, per project and day, so reopening the summary keeps them. */
   const recaps = ref<Record<string, string>>({})
+  /** Timesheet hours for those recaps: Claude's estimate and any value typed in. */
+  const recapHours = ref<Record<string, { estimate?: number; hours?: string }>>({})
   const updOpen = ref(false)
   const upd = ref<UpdateState | null>(null)
   const details = ref(false)
@@ -537,7 +539,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, sidebar, palette, projectModal, explorer, settings, about, summary, recaps, updOpen, upd, details, inbox, bc, svcAdd,
+    width, now, sidebar, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, inbox, bc, svcAdd,
     logsOpen, svcTab, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, collapsed, cur, fid, focused, waitList,
     toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,

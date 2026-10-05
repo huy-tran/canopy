@@ -79,6 +79,29 @@ const recap = computed({
 const writing = ref(false)
 const recapError = ref('')
 
+// ---------- Hours: measured active time, Claude's estimate, and the value for the timesheet ----------
+const quarter = (h: number) => Math.round(h * 4) / 4
+const hrs = (h: number) => `${h}h`
+
+/** Active time across all sessions, counting overlapping sessions once. */
+const measured = computed(() => {
+  let ms = 0, cur: [number, number] | null = null
+  for (const [a, b] of sessions.value.flatMap(s => s.spans).sort((x, y) => x[0] - y[0])) {
+    if (cur && a <= cur[1]) cur[1] = Math.max(cur[1], b)
+    else {
+      if (cur) ms += cur[1] - cur[0]
+      cur = [a, b]
+    }
+  }
+  if (cur) ms += cur[1] - cur[0]
+  return quarter(ms / 3_600_000)
+})
+const estimate = computed(() => ui.recapHours[key.value]?.estimate)
+const hours = computed({
+  get: () => ui.recapHours[key.value]?.hours ?? String(measured.value),
+  set: (v: string) => { ui.recapHours = { ...ui.recapHours, [key.value]: { ...ui.recapHours[key.value], hours: v } } },
+})
+
 function clip(t: string, n: number) {
   const s = t.replace(/\s+/g, ' ').trim()
   return s.length > n ? s.slice(0, n) + '…' : s
@@ -113,15 +136,21 @@ async function writeRecap() {
     'Then one bullet per distinct piece of work, each starting with "- " (a single hyphen and a space).',
     'Write for a non-technical reader: describe the outcome and what users or the client can now do or see, not the implementation.',
     'Merge small related steps into one bullet. Leave out failed attempts, tooling chatter and anything not finished unless it is clearly in progress.',
-    'Never use em dashes or en dashes; use a plain hyphen. Reply with the recap only.',
+    'Never use em dashes or en dashes; use a plain hyphen.',
+    'After the bullets, add one last line "Hours: <n>": your estimate of how many hours a mid-level developer would take to do this work, rounded to the nearest 0.25.',
+    'Reply with the recap and the hours line only.',
     '',
     'Activity:',
     activityText(),
   ].join('\n')
   try {
     const r = await api.claude.run(prompt)
-    if (r.ok) recap.value = r.text
-    else recapError.value = r.error || 'Claude could not write the recap.'
+    if (r.ok) {
+      const HOURS = /^\s*Hours:\s*([\d.]+)\s*h?\s*$/im
+      const est = Number(r.text.match(HOURS)?.[1])
+      recap.value = r.text.replace(HOURS, '').trim()
+      if (est > 0) ui.recapHours = { ...ui.recapHours, [key.value]: { ...ui.recapHours[key.value], estimate: quarter(est) } }
+    } else recapError.value = r.error || 'Claude could not write the recap.'
   } finally {
     writing.value = false
   }
@@ -184,6 +213,23 @@ function copyRecap() {
               <UButton color="primary" size="sm" :loading="writing" :disabled="writing || loading || empty" :label="writing ? 'Writing…' : 'Write recap'" @click="writeRecap" />
             </div>
             <span v-if="recapError" class="text-[11.5px] text-(--red)">{{ recapError }}</span>
+            <div v-if="!loading && !empty" class="flex items-center gap-2.5 border-t border-(--ln2) pt-2.5">
+              <span class="label-caps">Hours</span>
+              <UInput
+                v-model="hours"
+                variant="none"
+                inputmode="decimal"
+                class="w-20"
+                :ui="{ base: 'mono w-full rounded-md border border-(--ln) bg-(--inp) px-2 py-1 text-[12.5px] text-(--tx)' }"
+              />
+              <span class="flex-1" />
+              <UTooltip text="Time you were active in Claude Code, ignoring breaks over 15 minutes">
+                <UButton color="neutral" variant="ghost" size="xs" :label="`Active ${hrs(measured)}`" @click="hours = String(measured)" />
+              </UTooltip>
+              <UTooltip v-if="estimate !== undefined" text="Claude's estimate of how long a mid-level developer would take">
+                <UButton color="neutral" variant="ghost" size="xs" :label="`Estimate ${hrs(estimate)}`" @click="hours = String(estimate)" />
+              </UTooltip>
+            </div>
           </div>
 
           <!-- Activity -->

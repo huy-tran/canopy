@@ -263,6 +263,8 @@ export interface DaySession {
   files: string[]
   /** Claude's last reply in the window: usually its summary of the work. */
   lastReply: string
+  /** Stretches of activity as [start, end], split wherever the log goes quiet for 15 minutes. */
+  spans: [number, number][]
 }
 
 export interface DayCommit {
