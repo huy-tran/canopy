@@ -2,6 +2,11 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-06
+
+- Ctrl Tab and Ctrl Shift Tab switch to the next and previous project, in sidebar order. Alt ] and Alt [ still switch between sessions in a project.
+- The About window shows just the version number.
+
 ## [0.2.0] - 2026-10-06
 
 - Star projects to keep them in a Starred section at the top of the sidebar. Use the star on a project row, or right-click and pick Star.
@@ -44,6 +49,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.2.1]: https://github.com/huy-tran/canopy/releases/tag/v0.2.1
 [0.2.0]: https://github.com/huy-tran/canopy/releases/tag/v0.2.0
 [0.1.4]: https://github.com/huy-tran/canopy/releases/tag/v0.1.4
 [0.1.3]: https://github.com/huy-tran/canopy/releases/tag/v0.1.3
