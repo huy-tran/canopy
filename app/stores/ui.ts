@@ -108,6 +108,14 @@ export const useUiStore = defineStore('ui', () => {
     focusSession(ss[(i + dir + ss.length) % ss.length]!.id)
   }
 
+  /** Steps through projects in sidebar order (starred first), wrapping at either end. */
+  function cycleProject(dir: number) {
+    const ps = P.ordered
+    if (!ps.length) return
+    const i = ps.findIndex(p => p.id === P.sel)
+    selectProject(ps[(i + dir + ps.length) % ps.length]!.id)
+  }
+
   function setLayout(l: Layout) {
     if (!P.sel) return
     P.patch(P.sel, { layout: l, view: 'terminals' })
@@ -512,6 +520,8 @@ export const useUiStore = defineStore('ui', () => {
       commands: () => openPalette('cmd'),
       nextWaiting,
       inbox: toggleInbox,
+      nextProject: () => cycleProject(1),
+      prevProject: () => cycleProject(-1),
       nextSession: () => cycle(1),
       prevSession: () => cycle(-1),
       paneRight: () => cycle(1),
