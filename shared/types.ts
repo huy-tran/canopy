@@ -47,6 +47,8 @@ export interface Project {
   resume: boolean
   editor: Editor
   createdAt: number
+  /** Pinned to the Starred section at the top of the sidebar. */
+  starred?: boolean
 }
 
 export interface Worktree {

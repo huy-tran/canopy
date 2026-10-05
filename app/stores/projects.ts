@@ -7,6 +7,10 @@ export const useProjectsStore = defineStore('projects', () => {
   const sel = ref<string | null>(null)
 
   const current = computed(() => projects.value.find(p => p.id === sel.value) || null)
+  const starred = computed(() => projects.value.filter(p => p.starred))
+  const unstarred = computed(() => projects.value.filter(p => !p.starred))
+  /** Projects as the sidebar lists them: starred first. Alt 1-9 and the palette follow this order. */
+  const ordered = computed(() => [...starred.value, ...unstarred.value])
 
   function byId(id: string | null | undefined) {
     return projects.value.find(p => p.id === id) || null
@@ -34,5 +38,20 @@ export const useProjectsStore = defineStore('projects', () => {
     if (sel.value === id) sel.value = projects.value[0]?.id ?? null
   }
 
-  return { projects, sel, current, byId, repoOf, update, patch, add, remove }
+  function toggleStar(id: string) {
+    const p = byId(id)
+    if (p) patch(id, { starred: !p.starred })
+  }
+
+  /** Drops a project next to another, taking on that project's section (starred or not). */
+  function move(id: string, targetId: string, after: boolean) {
+    const p = byId(id), t = byId(targetId)
+    if (!p || !t || id === targetId) return
+    const rest = projects.value.filter(x => x.id !== id)
+    const at = rest.findIndex(x => x.id === targetId) + (after ? 1 : 0)
+    rest.splice(at, 0, { ...p, starred: !!t.starred })
+    projects.value = rest
+  }
+
+  return { projects, sel, current, starred, unstarred, ordered, byId, repoOf, update, patch, add, remove, toggleStar, move }
 })

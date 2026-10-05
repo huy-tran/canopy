@@ -61,7 +61,7 @@ export function useAppShortcuts() {
         usingInput: true,
         handler: () => {
           if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox) return
-          const p = P.projects[i - 1]
+          const p = P.ordered[i - 1]
           if (p) ui.selectProject(p.id)
         },
       }

@@ -48,7 +48,7 @@ const navItems = computed<PalItem[]>(() => {
     }
     items.push({ id: 's' + s.id, label: `${p.name} · ${r.label} · ${s.title}`, hint: SL[s.status] || '', mc: SC[s.status] || 'var(--idle)', mr: '50%', ms: '7px', run: () => ui.focusSession(s.id) })
   })
-  P.projects.forEach((p, i) => items.push({ id: 'p' + p.id, label: p.name, hint: i < 9 ? `Alt ${i + 1}` : 'Project', mc: pcol(p.hue), mr: '3px', ms: '10px', run: () => ui.selectProject(p.id) }))
+  P.ordered.forEach((p, i) => items.push({ id: 'p' + p.id, label: p.name, hint: i < 9 ? `Alt ${i + 1}` : 'Project', mc: pcol(p.hue), mr: '3px', ms: '10px', run: () => ui.selectProject(p.id) }))
   return items
 })
 
