@@ -144,6 +144,16 @@ export interface Persisted {
   sessions?: SavedSession[]
   /** Focused session per project. */
   focus?: Record<string, string | null>
+  /** Daily summary recaps and their timesheet hours, keyed by "<project id>:<day start>". Last 7 days only. */
+  recaps?: Record<string, string>
+  recapHours?: Record<string, RecapHours>
+}
+
+export interface RecapHours {
+  /** Claude's estimate of the hours the work would take. */
+  estimate?: number
+  /** Hours typed in for the timesheet. */
+  hours?: string
 }
 
 /** Enough of a session to reopen it after a restart. */

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Layout, PlanUsage, Session, UpdateState, ShellKind } from '#shared/types'
+import type { Layout, PlanUsage, RecapHours, Session, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
 export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'notifications' | 'keys'
@@ -23,10 +23,10 @@ export const useUiStore = defineStore('ui', () => {
   const about = ref(false)
   /** Daily summary modal for a project. */
   const summary = ref<{ pid: string } | null>(null)
-  /** Recaps written this run, per project and day, so reopening the summary keeps them. */
+  /** Recaps per project and day, saved with the app state. */
   const recaps = ref<Record<string, string>>({})
   /** Timesheet hours for those recaps: Claude's estimate and any value typed in. */
-  const recapHours = ref<Record<string, { estimate?: number; hours?: string }>>({})
+  const recapHours = ref<Record<string, RecapHours>>({})
   const updOpen = ref(false)
   const upd = ref<UpdateState | null>(null)
   const details = ref(false)

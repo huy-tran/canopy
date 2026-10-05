@@ -9,6 +9,14 @@ const LIGHT_ANSI = {
   brightBlack: '#55585F', brightRed: '#D9443A', brightGreen: '#388E3C', brightYellow: '#B07A00', brightBlue: '#2F6BE0', brightMagenta: '#A24BBF', brightCyan: '#0A8FA3', brightWhite: '#3A3D42',
 }
 
+/** Recap entries for the days the daily summary can still show (today and the six before). */
+function recent<T>(m: Record<string, T> | undefined): Record<string, T> {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - 6)
+  return Object.fromEntries(Object.entries(m || {}).filter(([k]) => Number(k.slice(k.lastIndexOf(':') + 1)) >= d.getTime()))
+}
+
 export default defineNuxtPlugin({
   name: 'canopy',
   dependsOn: ['pinia'],
@@ -30,6 +38,8 @@ export default defineNuxtPlugin({
       prefs.theme = saved.theme || 'dark'
       ui.sidebar = saved.sidebar ?? null
       ui.stripOn = saved.stripOn ?? true
+      ui.recaps = recent(saved.recaps)
+      ui.recapHours = recent(saved.recapHours)
     }
 
     let saveT: ReturnType<typeof setTimeout> | undefined
@@ -38,8 +48,9 @@ export default defineNuxtPlugin({
     const snapshot = (): Persisted => JSON.parse(JSON.stringify({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, sidebar: ui.sidebar, stripOn: ui.stripOn,
       sessions: reopened ? S.saved : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
+      recaps: ui.recaps, recapHours: ui.recapHours,
     }))
-    watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.sidebar, ui.stripOn, JSON.stringify(S.saved), S.focus], () => {
+    watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.sidebar, ui.stripOn, JSON.stringify(S.saved), S.focus, ui.recaps, ui.recapHours], () => {
       clearTimeout(saveT)
       saveT = setTimeout(() => api.state.save(snapshot()), 300)
     }, { deep: true })
