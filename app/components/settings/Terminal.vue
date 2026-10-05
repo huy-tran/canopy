@@ -75,7 +75,7 @@ function setScrollback(v: string | number) {
       <UInput
         ref="scrollRef"
         :model-value="prefs.prefs.scrollback"
-        placeholder="10000"
+        placeholder="5000"
         variant="none"
         inputmode="numeric"
         :ui="{

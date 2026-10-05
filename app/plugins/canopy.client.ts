@@ -71,7 +71,7 @@ export default defineNuxtPlugin({
         fontFamily: `'${font}', 'JetBrains Mono', ui-monospace, monospace`,
         fontSize: prefs.prefs.termSize || 12,
         cursor: prefs.prefs.cursor,
-        scrollback: Math.max(100, parseInt(prefs.prefs.scrollback, 10) || 10000),
+        scrollback: Math.max(100, parseInt(prefs.prefs.scrollback, 10) || 5000),
         transparent: (prefs.prefs.opacity ?? 100) < 100,
         theme: { background: css('--term'), foreground: css('--ttx'), cursor: css('--ttx'), selection: prefs.terminalDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)', ansi: prefs.terminalDark ? undefined : LIGHT_ANSI },
       }

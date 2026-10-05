@@ -15,7 +15,7 @@ export const DEFAULT_PREFS: Prefs = {
   termFont: 'monofur for Powerline',
   termSize: 12,
   cursor: 'Block',
-  scrollback: '10000',
+  scrollback: '5000',
   notifyWaiting: true,
   notifyDone: true,
   skipViewing: true,

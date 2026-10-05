@@ -3,6 +3,7 @@
 import { Terminal, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { WebglAddon } from '@xterm/addon-webgl'
 import { api } from './bridge'
 
 export interface TermHooks {
@@ -30,6 +31,8 @@ interface Entry {
   el: HTMLDivElement
   opened: boolean
   ro: ResizeObserver | null
+  /** The GPU renderer, held only while the terminal is in a pane. */
+  gl: WebglAddon | null
 }
 
 const entries = new Map<string, Entry>()
@@ -37,6 +40,8 @@ if (import.meta.dev && typeof window !== 'undefined') (window as any).__canopyTe
 let hooks: TermHooks | null = null
 let opts: TermOptions | null = null
 let wired = false
+/** Set once WebGL fails to start, so terminals stay on the DOM renderer. */
+let noGl = false
 
 const CURSOR = { Block: 'block', Bar: 'bar', Underline: 'underline' } as const
 
@@ -91,6 +96,24 @@ function safeFit(e: Entry) {
   }
 }
 
+/** Draws with WebGL while in a pane. Hidden terminals let go of their context, since Chromium caps them per page. */
+function enableGl(e: Entry) {
+  if (e.gl || noGl) return
+  try {
+    const gl = new WebglAddon()
+    gl.onContextLoss(() => disableGl(e))
+    e.term.loadAddon(gl)
+    e.gl = gl
+  } catch {
+    noGl = true
+  }
+}
+
+function disableGl(e: Entry) {
+  e.gl?.dispose()
+  e.gl = null
+}
+
 /** Highlights [Image #n] and @path mentions; images preview on hover and open on click. */
 function linkProvider(sid: string, term: Terminal) {
   return {
@@ -142,7 +165,7 @@ export function ensureTerminal(sid: string): Entry {
     }
     return true
   })
-  e = { term, fit, el, opened: false, ro: null }
+  e = { term, fit, el, opened: false, ro: null, gl: null }
   entries.set(sid, e)
   return e
 }
@@ -171,6 +194,7 @@ export function attachTerminal(sid: string, host: HTMLElement) {
     }, true)
     ta?.addEventListener('focus', () => hooks?.onFocus(sid))
   }
+  enableGl(e)
   e.ro?.disconnect()
   e.ro = new ResizeObserver(() => safeFit(e))
   e.ro.observe(host)
@@ -183,6 +207,7 @@ export function detachTerminal(sid: string, host: HTMLElement) {
   if (e.el.parentElement === host) {
     e.ro?.disconnect()
     e.ro = null
+    disableGl(e)
     host.removeChild(e.el)
   }
 }
@@ -191,6 +216,7 @@ export function disposeTerminal(sid: string) {
   const e = entries.get(sid)
   if (!e) return
   e.ro?.disconnect()
+  disableGl(e)
   e.term.dispose()
   e.el.remove()
   entries.delete(sid)
