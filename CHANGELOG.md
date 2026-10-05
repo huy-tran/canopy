@@ -2,6 +2,14 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-06
+
+- Star projects to keep them in a Starred section at the top of the sidebar. Use the star on a project row, or right-click and pick Star.
+- Drag projects to reorder them in the sidebar or the collapsed icon rail. Dragging a project between Starred and Projects stars or unstars it.
+- Alt 1-9 and the command palette follow the sidebar order, starred projects first.
+- Terminals draw with WebGL, which roughly halves the window's CPU use while Claude streams output.
+- New installs keep 5,000 lines of scrollback per terminal instead of 10,000, to save memory. Change it in Settings > Terminal.
+
 ## [0.1.4] - 2026-10-05
 
 - A global shortcut (Alt Space by default) shows or hides Canopy from any app. Change it or turn it off in Settings > Keys.
@@ -36,6 +44,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.2.0]: https://github.com/huy-tran/canopy/releases/tag/v0.2.0
 [0.1.4]: https://github.com/huy-tran/canopy/releases/tag/v0.1.4
 [0.1.3]: https://github.com/huy-tran/canopy/releases/tag/v0.1.3
 [0.1.2]: https://github.com/huy-tran/canopy/releases/tag/v0.1.2
