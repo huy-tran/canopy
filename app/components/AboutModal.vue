@@ -48,7 +48,7 @@ function copy() {
       <BrandMark :size="44" />
       <div class="flex flex-col items-center gap-1">
         <span class="font-brand text-[17px] font-semibold tracking-[-0.02em]">Canopy</span>
-        <span class="text-[12.5px] text-(--tx3)">Version {{ info?.version || '-' }} · Beta channel</span>
+        <span class="text-[12.5px] text-(--tx3)">Version {{ info?.version || '-' }}</span>
       </div>
       <div class="grid w-full grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg border border-(--ln) bg-(--chrome) px-3.5 py-3 text-[12px]">
         <template v-for="r in rows" :key="r.k">
