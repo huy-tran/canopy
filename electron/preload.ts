@@ -66,6 +66,7 @@ const api: CanopyApi = {
     close: inv('win:close') as any,
     isMaximized: inv('win:isMaximized') as any,
     onMaximized: on('win:maximized'),
+    summonKey: inv('win:summonKey') as any,
   },
   app: { quit: inv('app:quit') as any },
   upd: {

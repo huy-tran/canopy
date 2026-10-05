@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, Notification, protocol, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, shell, Tray } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -88,6 +88,41 @@ function ensureTray() {
     tray.destroy()
     tray = null
   }
+}
+
+// ---------- Global summon shortcut ----------
+
+const ACCEL_KEYS: Record<string, string> = { '→': 'Right', '←': 'Left', '↑': 'Up', '↓': 'Down', 'Esc': 'Escape' }
+let summonCombo = ''
+let summonOk = true
+
+/** Brings the window to the front, or tucks it away when it already has focus. */
+function toggleWindow() {
+  if (!win) return
+  if (win.isVisible() && !win.isMinimized() && win.isFocused()) {
+    if (prefs()?.tray) win.hide()
+    else win.minimize()
+  } else showWindow()
+}
+
+/** "Ctrl+Alt+→" -> Electron accelerator "Ctrl+Alt+Right". */
+function toAccelerator(combo: string) {
+  return combo.split('+').map(k => ACCEL_KEYS[k] || k).join('+')
+}
+
+/** Registers the summon shortcut; false when another app already holds it. */
+function applySummonKey(combo: string) {
+  if (combo === summonCombo && summonOk) return true
+  if (summonCombo && summonOk) globalShortcut.unregister(toAccelerator(summonCombo))
+  summonCombo = combo
+  summonOk = true
+  if (!combo) return true
+  try {
+    summonOk = globalShortcut.register(toAccelerator(combo), toggleWindow)
+  } catch {
+    summonOk = false
+  }
+  return summonOk
 }
 
 function createWindow() {
@@ -197,6 +232,7 @@ function registerIpc() {
     ensureTray()
     applyWindowLook()
     applyLoginItem()
+    applySummonKey(s.prefs?.summonKey ?? '')
   })
 
   handle('pty:spawn', o => spawnSession(o, (id, d) => send('pty:data', id, d), (id, code) => {
@@ -310,6 +346,7 @@ function registerIpc() {
   handle('win:toggleMaximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()))
   handle('win:close', () => win?.close())
   handle('win:isMaximized', () => !!win?.isMaximized())
+  handle('win:summonKey', (combo: string) => applySummonKey(combo))
   handle('app:quit', () => {
     quitting = true
     app.quit()
@@ -340,11 +377,13 @@ app.whenReady().then(async () => {
   registerIpc()
   createWindow()
   ensureTray()
+  applySummonKey(prefs()?.summonKey ?? 'Alt+Space')
   if (app.isPackaged && prefs()?.autoUpdate !== false) setTimeout(() => checkUpdates().catch(() => undefined), 8000)
 })
 
 app.on('before-quit', () => {
   quitting = true
+  globalShortcut.unregisterAll()
   killAllSessions()
   stopAllServices()
   stopHookServer()

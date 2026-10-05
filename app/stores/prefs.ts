@@ -27,6 +27,7 @@ export const DEFAULT_PREFS: Prefs = {
   shell: 'powershell',
   panelDock: 'bottom',
   panelSize: { bottom: 260, right: 460 },
+  summonKey: 'Alt+Space',
 }
 
 export const usePrefsStore = defineStore('prefs', () => {

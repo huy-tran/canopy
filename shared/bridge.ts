@@ -77,6 +77,8 @@ export interface CanopyApi {
     close(): Promise<void>
     isMaximized(): Promise<boolean>
     onMaximized(fn: (v: boolean) => void): Off
+    /** Registers the global summon shortcut ('' turns it off). False when another app already holds it. */
+    summonKey(combo: string): Promise<boolean>
   }
   app: {
     quit(): Promise<void>

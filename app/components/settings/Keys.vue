@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ACTIONS, RESERVED, comboOf, type ActionDef } from '#shared/actions'
+import { DEFAULT_PREFS } from '~/stores/prefs'
 
 type Msg =
   | { kind: 'err'; id: string; t: string }
@@ -43,11 +44,40 @@ function assign(id: string, idx: number | null, combo: string, stealFrom?: strin
   msg.value = null
 }
 
+// ---------- Global summon shortcut ----------
+
+const SUMMON = 'summon'
+/** False when another app (Tabby, PowerToys...) already holds the summon shortcut. */
+const summonOk = ref(true)
+const summonKey = computed(() => prefs.prefs.summonKey || '')
+
+/** Registers the saved shortcut, or releases it while recording so the press reaches the recorder. */
+async function syncSummon() {
+  const recording = rec.value?.id === SUMMON
+  const ok = await api.win.summonKey(recording ? '' : summonKey.value)
+  if (!recording) summonOk.value = ok
+}
+watch([summonKey, () => rec.value?.id === SUMMON], syncSummon, { immediate: true })
+
+function recordSummon(combo: string) {
+  const nice = combo.replace(/\+/g, ' ')
+  const last = combo.split('+').pop() || ''
+  if (RESERVED[combo]) { msg.value = { kind: 'err', id: SUMMON, t: RESERVED[combo] + ' Pick another shortcut.' }; return }
+  if (!/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: SUMMON, t: 'Add Ctrl or Alt to ' + nice + ' so it doesn\'t fire while typing in other apps.' }; return }
+  const other = ACTIONS.find(a => prefs.keysFor(a.id).includes(combo))
+  if (other) { msg.value = { kind: 'err', id: SUMMON, t: nice + ' is already used by "' + other.label + '".' }; return }
+  prefs.set({ summonKey: combo })
+  rec.value = null
+  msg.value = null
+}
+
 function recordKey(combo: string) {
   const r = rec.value
   if (!r) return
   const nice = combo.replace(/\+/g, ' ')
   if (combo === 'Esc') { rec.value = null; msg.value = null; return }
+  if (r.id === SUMMON) return recordSummon(combo)
+  if (combo === summonKey.value) { msg.value = { kind: 'err', id: r.id, t: nice + ' shows and hides Canopy from anywhere.' }; return }
   if (RESERVED[combo]) { msg.value = { kind: 'err', id: r.id, t: RESERVED[combo] + ' Pick another shortcut.' }; return }
   const last = combo.split('+').pop() || ''
   if (!/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: r.id, t: 'Add Ctrl or Alt to ' + nice + ' so typing still reaches the terminal.' }; return }
@@ -75,7 +105,11 @@ function onKey(e: KeyboardEvent) {
   if (cb) recordKey(cb)
 }
 onMounted(() => window.addEventListener('keydown', onKey, true))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey, true)
+  // Closing settings mid-recording would otherwise leave the summon shortcut released.
+  if (rec.value?.id === SUMMON) api.win.summonKey(summonKey.value)
+})
 
 const CAP = 'mono h-[18px] min-w-0 px-[5px] text-[10.5px] font-normal normal-case rounded-sm border border-(--bb) border-b-2 bg-(--chrome) text-(--tx) ring-0 box-border'
 </script>
@@ -173,6 +207,61 @@ const CAP = 'mono h-[18px] min-w-0 px-[5px] text-[10.5px] font-normal normal-cas
     </div>
 
     <div v-if="!groups.length" class="px-2 py-2.5 text-[12px] text-(--fa)">No shortcuts match.</div>
+
+    <div class="flex flex-col">
+      <div class="label-caps px-2 pt-2 pb-1">Anywhere in Windows</div>
+      <div class="flex flex-col gap-1.5 rounded-lg px-2 py-[5px] hover:bg-(--hov)" :class="(rec?.id === SUMMON || msg?.id === SUMMON) && 'bg-(--sel)'">
+        <div class="flex min-h-[26px] items-center gap-2.5">
+          <div class="flex min-w-0 flex-1 flex-col gap-[2px]">
+            <span class="text-[12.5px] text-(--tx2)">Show or hide Canopy</span>
+            <span class="text-[11px] text-(--fa)">Works even when another app has focus.</span>
+          </div>
+          <div class="flex flex-wrap items-center justify-end gap-1.5">
+            <div
+              v-if="summonKey || rec?.id === SUMMON"
+              role="button"
+              tabindex="0"
+              title="Click to change"
+              class="box-border flex h-[26px] cursor-pointer items-center gap-[3px] rounded-md border pr-[3px] pl-[4px]"
+              :class="rec?.id === SUMMON ? 'border-(--ambf) bg-(--ambs)' : 'border-(--ln) bg-transparent'"
+              @click="startRec(SUMMON, 0)"
+              @keydown.enter.prevent="startRec(SUMMON, 0)"
+            >
+              <span v-if="rec?.id === SUMMON" class="whitespace-nowrap px-1 text-[11px] text-(--amb)">Press keys… Esc cancels</span>
+              <template v-else>
+                <UKbd v-for="(cap, ci) in summonKey.split('+')" :key="ci" :class="CAP">{{ cap }}</UKbd>
+                <span
+                  role="button"
+                  title="Turn off"
+                  class="grid size-4 place-items-center rounded-sm text-[9px] text-(--fa) hover:bg-(--hov) hover:text-(--tx)"
+                  @click.stop="prefs.set({ summonKey: '' })"
+                ><UIcon name="i-hugeicons-cancel-01" class="size-2.5" /></span>
+              </template>
+            </div>
+            <template v-else>
+              <span class="text-[11.5px] text-(--fa)">Off</span>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                title="Set a shortcut"
+                class="grid size-[22px] place-items-center rounded-sm p-0 text-[14px] text-(--mu) hover:bg-(--segon) hover:text-(--tx)"
+                @click="startRec(SUMMON, 0)"
+              >
+                +
+              </UButton>
+            </template>
+            <button v-if="summonKey !== DEFAULT_PREFS.summonKey" type="button" title="Reset to default" class="cursor-pointer text-[11px] text-(--lnk)" @click="prefs.set({ summonKey: DEFAULT_PREFS.summonKey })">Reset</button>
+          </div>
+        </div>
+        <div v-if="msg?.id === SUMMON" class="flex items-center gap-2.5 pb-[2px] text-[11.5px] text-(--red)">
+          <span class="flex-1 leading-[1.4]">{{ msg.t }}</span>
+          <button type="button" class="cursor-pointer text-(--mu)" @click="msg = null">Dismiss</button>
+        </div>
+        <div v-else-if="summonKey && !summonOk && rec?.id !== SUMMON" class="pb-[2px] text-[11.5px] leading-[1.4] text-(--amb)">
+          Another app is already using {{ summonKey.replace(/\+/g, ' ') }} (Tabby, for example). Free it there or pick another shortcut.
+        </div>
+      </div>
+    </div>
 
     <div class="flex flex-col">
       <div class="label-caps px-2 pt-2 pb-1">Built in · can’t be changed</div>

@@ -32,7 +32,7 @@ const browserFallback: CanopyApi = {
     pickFolder: none, fonts: async () => [], shells: async () => [], info: async () => ({ version: '0.0.0', electron: '-', chromium: '-', node: '-', claudeVersion: '-', claudePath: '-', windows: '-' }),
     saveImage: async (_s, n) => n, copyImage: none, saveImageAs: none, notify: none, onNotifyClick: noop, onNotifyAction: noop,
   },
-  win: { minimize: none, toggleMaximize: none, close: none, isMaximized: async () => false, onMaximized: noop },
+  win: { minimize: none, toggleMaximize: none, close: none, isMaximized: async () => false, onMaximized: noop, summonKey: async () => true },
   app: { quit: none },
   upd: { check: none, download: none, install: none, state: none, onStatus: noop },
 }

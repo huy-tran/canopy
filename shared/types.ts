@@ -130,6 +130,8 @@ export interface Prefs {
   panelDock: PanelDock
   /** Panel height when docked at the bottom and width when docked on the right, in px. */
   panelSize: { bottom: number; right: number }
+  /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
+  summonKey: string
 }
 
 export interface Persisted {
