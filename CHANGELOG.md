@@ -2,6 +2,10 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-10-05
+
+- Daily summary: recaps and timesheet hours from the last 7 days are kept when Canopy restarts.
+
 ## [0.1.2] - 2026-10-05
 
 - The update window now shows the Canopy logo.
@@ -28,6 +32,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.1.3]: https://github.com/huy-tran/canopy/releases/tag/v0.1.3
 [0.1.2]: https://github.com/huy-tran/canopy/releases/tag/v0.1.2
 [0.1.1]: https://github.com/huy-tran/canopy/releases/tag/v0.1.1
 [0.1.0]: https://github.com/huy-tran/canopy/releases/tag/v0.1.0
