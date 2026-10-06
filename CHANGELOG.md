@@ -2,6 +2,15 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-06
+
+- Shell panel shortcuts, while a shell in the panel has focus: Ctrl T opens a new tab with your default shell, Ctrl Shift T lets you pick which shell, and Ctrl Alt Right / Left move between shell tabs. Change them in Settings > Keys.
+- File explorer: drag the divider to resize the file tree, drag the edges or corners to resize the window, and maximize it with the button in the header or by double-clicking the header.
+- File explorer: wrap long lines in the file and diff view with the wrap button or Alt Z.
+- The explorer remembers its size, tree width and wrapping between openings.
+- Sidebar: project rows show when the project was last active instead of today's cost.
+- Sidebar: hover a project name that is cut off to see it in full.
+
 ## [0.2.1] - 2026-10-06
 
 - Ctrl Tab and Ctrl Shift Tab switch to the next and previous project, in sidebar order. Alt ] and Alt [ still switch between sessions in a project.
@@ -49,6 +58,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.3.0]: https://github.com/huy-tran/canopy/releases/tag/v0.3.0
 [0.2.1]: https://github.com/huy-tran/canopy/releases/tag/v0.2.1
 [0.2.0]: https://github.com/huy-tran/canopy/releases/tag/v0.2.0
 [0.1.4]: https://github.com/huy-tran/canopy/releases/tag/v0.1.4
