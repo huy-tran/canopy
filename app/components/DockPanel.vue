@@ -65,9 +65,19 @@ function startResize(e: MouseEvent) {
 const newShellItems = computed<DropdownMenuItem[][]>(() => [[
   ...S.shells.map(sh => ({
     label: sh.label + (sh.kind === prefs.prefs.shell ? ' (default)' : ''),
-    onSelect: () => ui.openShell(null, { kind: sh.kind }),
+    onSelect: () => ui.newPanelShell(sh.kind),
   })),
 ]])
+
+/** When the menu closes, focus goes to the shell in view (the new one when one was picked), not back to the + button. */
+const pickerContent = {
+  align: 'start' as const,
+  sideOffset: 4,
+  onCloseAutoFocus: (e: Event) => {
+    e.preventDefault()
+    setTimeout(() => { if (activeShell.value) focusTerminal(activeShell.value.id) }, 0)
+  },
+}
 
 function prim() {
   const v = cv.value
@@ -136,6 +146,7 @@ const iconBtn = 'grid size-[22px] flex-none place-items-center rounded p-0 text-
 
   <div
     v-if="cur && (list.length || shells.length)"
+    data-dock-panel
     class="relative flex flex-none flex-col bg-(--term)"
     :class="right ? 'min-h-0 border-l border-(--ln)' : 'border-t border-(--ln)'"
     :style="right ? { width: size + 'px' } : { height: size + 'px' }"
@@ -167,8 +178,8 @@ const iconBtn = 'grid size-[22px] flex-none place-items-center rounded p-0 text-
               @click.stop="closeShell(s.id)"
             ><UIcon name="i-hugeicons-cancel-01" class="size-2.5" /></span>
           </div>
-          <UDropdownMenu :items="newShellItems" :content="{ align: 'start', sideOffset: 4 }" :ui="{ content: 'w-[220px]' }">
-            <UTooltip :text="`New shell (${prefs.kl('shell')})`">
+          <UDropdownMenu v-model:open="ui.shellPicker" :items="newShellItems" :content="pickerContent" :ui="{ content: 'w-[220px]' }">
+            <UTooltip :text="`New shell (${prefs.kl('shellNewPick')})`">
               <button class="grid size-6 flex-none cursor-pointer place-items-center rounded text-(--mu) hover:bg-(--hov) hover:text-(--tx)">
                 <UIcon name="i-hugeicons-add-01" class="size-3.5" />
               </button>

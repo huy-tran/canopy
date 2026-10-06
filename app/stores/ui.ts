@@ -432,6 +432,30 @@ export const useUiStore = defineStore('ui', () => {
     setTimeout(() => focusTerminal(s.id), 60)
   }
 
+  /** Open while the dock panel's "new shell" menu is showing, so a shortcut can pop it. */
+  const shellPicker = ref(false)
+
+  /** The docked shell showing in the panel, if a shell tab is selected. */
+  function panelShell() {
+    const s = S.byId(svcTab.value)
+    return s?.docked && s.pid === P.sel ? s : null
+  }
+
+  /** A new docked shell next to the one in view: same repo and folder. */
+  function newPanelShell(kind?: ShellKind) {
+    const s = panelShell()
+    openShell(s?.repoId, { kind, cwd: s?.cwd })
+  }
+
+  function cycleShell(dir: number) {
+    const ss = S.dockedOf(P.sel || '')
+    if (!ss.length) return
+    const i = ss.findIndex(s => s.id === svcTab.value)
+    const next = ss[(i + dir + ss.length) % ss.length]!
+    svcTab.value = next.id
+    setTimeout(() => focusTerminal(next.id), 60)
+  }
+
   /** Ctrl+`: shows the shell panel, starting a shell when there is none. Closes it when a shell is showing. */
   function toggleShellPanel() {
     const p = cur.value
@@ -538,6 +562,10 @@ export const useUiStore = defineStore('ui', () => {
       editor: openEditor,
       logs: () => toggleLogs(),
       shell: toggleShellPanel,
+      shellNew: () => newPanelShell(),
+      shellNewPick: () => { shellPicker.value = true },
+      shellNext: () => cycleShell(1),
+      shellPrev: () => cycleShell(-1),
       newProject: () => openModal('add'),
       settings: () => openSettings('general'),
       shortcuts: () => openSettings('keys'),
@@ -550,11 +578,11 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     width, now, sidebar, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, inbox, bc, svcAdd,
-    logsOpen, svcTab, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
+    logsOpen, svcTab, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, collapsed, cur, fid, focused, waitList,
     toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     toggleSidebar, newSession, startAll, closeSession, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
-    toggleLogs, openShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
+    toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
   }
 })
