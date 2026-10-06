@@ -8,7 +8,6 @@ const ui = useUiStore()
 const P = useProjectsStore()
 const S = useSessionsStore()
 const prefs = usePrefsStore()
-const costs = useCostsStore()
 
 const waitStyle = computed(() => prefs.prefs.waitStyle || 'both')
 const hl = computed(() => waitStyle.value !== 'badge')
@@ -18,10 +17,20 @@ function waitingOf(pid: string) {
   return S.ofProject(pid).filter(s => s.status === 'waiting').length
 }
 
+/** When a session last did something. */
+function lastAt(s: Session) {
+  return s.status === 'waiting' ? (s.waitingSince || s.lastAt) : (s.endedAt || s.lastAt || s.started)
+}
+
 function sAgo(s: Session) {
-  if (s.status === 'working') return 'now'
-  const t = s.status === 'waiting' ? (s.waitingSince || s.lastAt) : (s.endedAt || s.lastAt || s.started)
-  return ago(ui.now - t)
+  return s.status === 'working' ? 'now' : ago(ui.now - lastAt(s))
+}
+
+/** The project's latest activity across its sessions; empty when it has none. */
+function pAgo(p: Project) {
+  const ss = S.ofProject(p.id)
+  if (!ss.length) return ''
+  return ss.some(s => s.status === 'working') ? 'now' : ago(ui.now - Math.max(...ss.map(lastAt)))
 }
 
 function waitAgo(s: Session) {
@@ -29,10 +38,12 @@ function waitAgo(s: Session) {
   return a === 'now' ? '<1m' : a
 }
 
-function costText(p: Project) {
-  if (!prefs.prefs.showCost) return ''
-  const c = costs.today(p.id)
-  return c > 0 ? usd(c) : '-'
+/** The project whose name is cut off under the pointer, so only truncated names get a tooltip. */
+const clipped = ref<string | null>(null)
+
+function onNameEnter(e: PointerEvent, p: Project) {
+  const el = e.currentTarget as HTMLElement
+  clipped.value = el.scrollWidth > el.clientWidth ? p.id : null
 }
 
 function rowBg(p: Project) {
@@ -197,10 +208,13 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
               :ui="{ root: 'h-5 w-5 flex-none rounded-md', fallback: 'text-[9px] font-bold text-[#121316] leading-none' }"
               :style="{ background: pcol(p.hue) }"
             />
-            <span
-              class="ellipsis flex-1 text-[13.5px] font-medium"
-              :style="{ color: waitingOf(p.id) && hl ? 'var(--ambtx)' : 'var(--tx)' }"
-            >{{ p.name }}</span>
+            <UTooltip :text="p.name" :disabled="clipped !== p.id" :content="{ side: 'top', align: 'start' }">
+              <span
+                class="ellipsis flex-1 text-[13.5px] font-medium"
+                :style="{ color: waitingOf(p.id) && hl ? 'var(--ambtx)' : 'var(--tx)' }"
+                @pointerenter="onNameEnter($event, p)"
+              >{{ p.name }}</span>
+            </UTooltip>
             <UBadge
               v-if="waitingOf(p.id) && pill"
               :label="String(waitingOf(p.id))"
@@ -213,7 +227,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
                 @click.stop="P.toggleStar(p.id)"
               ><UIcon name="i-hugeicons-star" class="size-3.5" /></span>
             </UTooltip>
-            <span v-if="prefs.prefs.showCost" class="mono min-w-10 text-right text-[11.5px] text-(--fa)">{{ costText(p) }}</span>
+            <span class="mono min-w-8 text-right text-[11px] text-(--fa)">{{ pAgo(p) }}</span>
           </div>
         </UContextMenu>
         <UCollapsible :open="p.expanded" :ui="{ content: 'flex flex-col gap-0.5' }">
@@ -310,7 +324,6 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
           <div class="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-(--hov)" @click="ui.selectProject(p.id)">
             <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: pcol(p.hue) }" />
             <span class="flex-1 text-[12.5px] font-semibold text-(--tx)">{{ p.name }}</span>
-            <span class="mono text-[10.5px] text-(--fa)">{{ usd(costs.today(p.id)) }}</span>
           </div>
           <div
             v-for="s in S.ofProject(p.id)"
