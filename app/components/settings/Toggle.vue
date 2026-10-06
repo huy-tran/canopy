@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Prefs } from '#shared/types'
 
-type BoolKey = { [K in keyof Prefs]: Prefs[K] extends boolean ? K : never }[keyof Prefs]
+type BoolKey = { [K in keyof Prefs]-?: Prefs[K] extends boolean ? K : never }[keyof Prefs]
 
 const props = defineProps<{ label: string; sub?: string; k: BoolKey }>()
 const prefs = usePrefsStore()

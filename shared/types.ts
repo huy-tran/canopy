@@ -134,6 +134,19 @@ export interface Prefs {
   panelSize: { bottom: number; right: number }
   /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
   summonKey: string
+  /** File explorer layout, remembered between openings. */
+  explorer?: ExplorerLayout
+}
+
+export interface ExplorerLayout {
+  /** Tree panel width as a share of the explorer, 0-1. */
+  tree: number
+  /** Window size in px when not maximized. */
+  w: number
+  h: number
+  max: boolean
+  /** Wrap long lines in the file and diff view. */
+  wrap: boolean
 }
 
 export interface Persisted {

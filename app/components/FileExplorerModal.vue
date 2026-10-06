@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { GitChange } from '#shared/types'
+import { useWindowSize } from '@vueuse/core'
+import type { ExplorerLayout, GitChange } from '#shared/types'
 import type { HlSeg } from '~/composables/useHighlighter'
 
 type Mode = 'search' | 'changes' | 'files'
@@ -493,6 +494,11 @@ function onKey(e: KeyboardEvent) {
     if (s?.type === 'file') mention(s.path)
     return
   }
+  if (e.altKey && !e.ctrlKey && !e.shiftKey && e.code === 'KeyZ') {
+    e.preventDefault()
+    toggleWrap()
+    return
+  }
   if (e.ctrlKey && e.altKey && e.code === 'KeyC') {
     e.preventDefault()
     if (s) copyPath(s.path)
@@ -535,8 +541,74 @@ watch(() => [si.value, q.value, ex.value?.tab, ex.value?.repoId], () => {
   })
 })
 
-const showPreview = computed(() => ui.width >= 860)
-const showHints = computed(() => ui.width >= 1000)
+// ---------- Window size, tree width and wrapping (remembered in prefs) ----------
+
+const prefs = usePrefsStore()
+const { width: vw, height: vh } = useWindowSize()
+const LAYOUT: ExplorerLayout = { tree: 0.42, w: 1120, h: 700, max: false, wrap: false }
+const TOP = 28
+const MIN_W = 560, MIN_H = 360
+const lay = computed<ExplorerLayout>(() => ({ ...LAYOUT, ...prefs.prefs.explorer }))
+const clamp = (v: number, lo: number, hi: number) => Math.round(Math.max(lo, Math.min(hi, v)))
+
+function setLay(p: Partial<ExplorerLayout>) {
+  prefs.set({ explorer: { ...lay.value, ...p } })
+}
+
+/** Maximized fills the window below the title bar; otherwise the saved size, kept on screen. */
+const box = computed(() => lay.value.max
+  ? { w: vw.value - 16, h: vh.value - TOP - 8 }
+  : { w: clamp(lay.value.w, MIN_W, vw.value - 32), h: clamp(lay.value.h, MIN_H, vh.value - TOP - 28) })
+
+const contentProps = computed(() => ({
+  onOpenAutoFocus: onAutoFocus,
+  style: { width: box.value.w + 'px', height: box.value.h + 'px' },
+}))
+
+const toggleMax = () => setLay({ max: !lay.value.max })
+const toggleWrap = () => setLay({ wrap: !lay.value.wrap })
+
+/** Follows the pointer until release, with the given cursor shown everywhere meanwhile. */
+function drag(e: MouseEvent, cursor: string, move: (dx: number, dy: number) => void) {
+  e.preventDefault()
+  const sx = e.clientX, sy = e.clientY
+  const onMove = (ev: MouseEvent) => move(ev.clientX - sx, ev.clientY - sy)
+  const up = () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', up)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  document.body.style.cursor = cursor
+  document.body.style.userSelect = 'none'
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', up)
+}
+
+/** Drags an edge or corner. The window stays centred, so a side edge grows it by twice the pointer travel. */
+function startResize(e: MouseEvent, sx: -1 | 0 | 1, sy: 0 | 1) {
+  const from = { ...box.value }
+  const cursor = sx && sy ? (sx > 0 ? 'nwse-resize' : 'nesw-resize') : sx ? 'ew-resize' : 'ns-resize'
+  drag(e, cursor, (dx, dy) => setLay({
+    max: false,
+    w: clamp(from.w + dx * sx * 2, MIN_W, vw.value - 32),
+    h: clamp(from.h + dy * sy, MIN_H, vh.value - TOP - 28),
+  }))
+}
+
+const bodyEl = ref<HTMLElement | null>(null)
+const TREE_MIN = 220, PREVIEW_MIN = 280
+
+/** Drags the divider between the tree and the preview. */
+function startSplit(e: MouseEvent) {
+  const r = bodyEl.value?.getBoundingClientRect()
+  if (!r) return
+  const from = lay.value.tree * r.width
+  drag(e, 'ew-resize', dx => setLay({ tree: Math.max(TREE_MIN, Math.min(r.width - PREVIEW_MIN, from + dx)) / r.width }))
+}
+
+const showPreview = computed(() => box.value.w >= 640)
+const showHints = computed(() => box.value.w >= 980)
 
 const actBtn = 'h-[26px] px-2.5 text-[11.5px] rounded-md'
 const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal text-[10px] text-(--fa) mono'
@@ -545,16 +617,24 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
 <template>
   <UModal
     v-model:open="open"
-    :content="{ onOpenAutoFocus: onAutoFocus }"
+    :content="contentProps"
     :ui="{
       overlay: 'bg-(--ovl) z-[62]',
-      content: 'z-[62] top-[28px] left-1/2 -translate-x-1/2 translate-y-0 w-[calc(100vw-32px)] max-w-[1120px] h-[calc(100dvh-56px)] max-h-[700px] sm:max-h-[700px] flex flex-col overflow-hidden bg-(--modal) ring-0 border border-(--bb) rounded-xl shadow-(--shadow) divide-y-0 text-(--tx) text-[12px]',
+      content: 'z-[62] top-[28px] left-1/2 -translate-x-1/2 translate-y-0 max-w-none max-h-none sm:max-h-none flex flex-col overflow-hidden bg-(--modal) ring-0 border border-(--bb) rounded-xl shadow-(--shadow) divide-y-0 text-(--tx) text-[12px]',
     }"
   >
     <template #content>
+      <!-- Drag an edge or corner to resize -->
+      <template v-if="!lay.max">
+        <div class="absolute inset-y-3 -left-[3px] z-10 w-[7px] cursor-ew-resize" @mousedown="startResize($event, -1, 0)" />
+        <div class="absolute inset-y-3 -right-[3px] z-10 w-[7px] cursor-ew-resize" @mousedown="startResize($event, 1, 0)" />
+        <div class="absolute inset-x-3 -bottom-[3px] z-10 h-[7px] cursor-ns-resize" @mousedown="startResize($event, 0, 1)" />
+        <div class="absolute -bottom-[3px] -left-[3px] z-10 size-3 cursor-nesw-resize" @mousedown="startResize($event, -1, 1)" />
+        <div class="absolute -right-[3px] -bottom-[3px] z-10 size-3 cursor-nwse-resize" @mousedown="startResize($event, 1, 1)" />
+      </template>
       <template v-if="ex && proj && repo">
-        <!-- Header -->
-        <div class="flex flex-wrap items-center gap-2.5 border-b border-(--ln) py-2.5 pr-2.5 pl-[14px]">
+        <!-- Header: double-click to maximize or restore -->
+        <div class="flex flex-wrap items-center gap-2.5 border-b border-(--ln) py-2.5 pr-2.5 pl-[14px]" @dblclick.self="toggleMax">
           <div class="size-2.5 flex-none rounded-sm" :style="{ background: `oklch(0.72 0.12 ${proj.hue})` }" />
           <span class="whitespace-nowrap text-[13px] font-semibold">{{ proj.name }}</span>
           <span v-if="proj.repos.length > 1" @mousedown.prevent>
@@ -567,7 +647,17 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
             style="background: color-mix(in oklch, var(--teal) 15%, transparent)"
           ><UIcon name="i-hugeicons-git-fork" class="size-3 align-[-2px]" /> worktree</span>
           <span class="whitespace-nowrap text-[11.5px] text-(--fa)">{{ summary }}</span>
-          <div class="flex-1" />
+          <div class="flex-1" @dblclick="toggleMax" />
+          <UButton
+            color="neutral"
+            variant="ghost"
+            :title="lay.max ? 'Restore' : 'Maximize'"
+            class="size-6 justify-center p-0 text-[12px] text-(--fa)"
+            @mousedown.prevent
+            @click="toggleMax"
+          >
+            <UIcon :name="lay.max ? 'i-hugeicons-minimize-screen' : 'i-hugeicons-maximize-screen'" class="size-3.5" />
+          </UButton>
           <UButton
             color="neutral"
             variant="ghost"
@@ -598,8 +688,8 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
         </div>
 
         <!-- Body -->
-        <div class="flex min-h-0 flex-1">
-          <div class="flex min-w-0 flex-none flex-col border-r border-(--ln)" :style="{ width: showPreview ? '42%' : '100%' }">
+        <div ref="bodyEl" class="flex min-h-0 flex-1">
+          <div class="flex min-w-0 flex-none flex-col" :style="{ width: showPreview ? lay.tree * 100 + '%' : '100%' }">
             <UCheckbox
               v-if="mode === 'changes' && canOnly"
               v-model="onlySession"
@@ -659,10 +749,33 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
             <GitCommitPanel v-if="mode === 'changes' && status?.isRepo" :cwd="cwd" :changes="changes" />
           </div>
 
+          <!-- Drag to resize the tree; double-click to reset -->
+          <div
+            v-if="showPreview"
+            class="group relative w-px flex-none cursor-ew-resize bg-(--ln)"
+            title="Drag to resize"
+            @mousedown="startSplit"
+            @dblclick="setLay({ tree: LAYOUT.tree })"
+          >
+            <div class="absolute inset-y-0 -left-[3px] -right-[3px] group-hover:bg-(--lnk)/40" />
+          </div>
           <div v-if="showPreview" class="flex min-w-0 flex-1 flex-col">
             <template v-if="cur && cur.type === 'file'">
               <div class="flex min-h-[24px] items-center gap-2.5 border-b border-(--ln2) py-2 pr-3 pl-[14px]">
                 <span class="mono min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] text-(--tx2)">{{ cur.path }}</span>
+                <UTooltip :text="lay.wrap ? 'Stop wrapping lines (Alt Z)' : 'Wrap lines (Alt Z)'">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    class="size-6 flex-none justify-center p-0"
+                    :class="lay.wrap ? 'bg-(--sel) text-(--tx)' : 'text-(--fa)'"
+                    :aria-pressed="lay.wrap"
+                    @mousedown.prevent
+                    @click="toggleWrap"
+                  >
+                    <UIcon name="i-hugeicons-text-wrap" class="size-3.5" />
+                  </UButton>
+                </UTooltip>
                 <template v-if="selChg">
                   <span class="whitespace-nowrap text-[11px]" :style="{ color: SCc[selChg.st] }">{{ SLB[selChg.st] }}{{ selChg.staged ? ' · staged' : '' }}</span>
                   <span class="mono whitespace-nowrap text-[11px] text-(--mu)">+{{ selChg.a }} −{{ selChg.d }}</span>
@@ -675,10 +788,10 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                 {{ editingBy }}
               </div>
               <div class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 text-[12px] leading-[1.6]">
-                <div v-for="(ln, k) in preview" :key="k" class="flex min-w-max whitespace-pre" :style="{ background: ln.bg }">
+                <div v-for="(ln, k) in preview" :key="k" class="flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
                   <span class="w-11 flex-none select-none pr-2.5 text-right text-(--fa)">{{ ln.n }}</span>
                   <span class="w-4 flex-none select-none" :style="{ color: ln.sc }">{{ ln.sign }}</span>
-                  <span class="pr-4" :style="{ color: ln.tc }"><span v-for="(g, j) in ln.segs" :key="j" :style="{ color: g.color, fontStyle: g.fs }">{{ g.t }}</span></span>
+                  <span class="pr-4" :class="lay.wrap && 'min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]'" :style="{ color: ln.tc }"><span v-for="(g, j) in ln.segs" :key="j" :style="{ color: g.color, fontStyle: g.fs }">{{ g.t }}</span></span>
                 </div>
               </div>
             </template>
@@ -699,7 +812,7 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
         <!-- Footer -->
         <div class="flex flex-wrap items-center gap-[14px] border-t border-(--ln) py-2 pr-2.5 pl-[14px] text-[11px] text-(--fa)">
           <template v-if="showHints">
-            <span>↑ ↓ move</span><span>Tab Changes / Files</span><span>← → folders</span><span>Esc close</span>
+            <span>↑ ↓ move</span><span>Tab Changes / Files</span><span>← → folders</span><span>Alt Z wrap</span><span>Esc close</span>
           </template>
           <div class="flex-1" />
           <UTooltip :text="`Plain shell in ${shellDir || 'the repo folder'}`">
