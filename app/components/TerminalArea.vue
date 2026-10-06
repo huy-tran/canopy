@@ -16,7 +16,7 @@ const layout = computed(() => props.project.layout)
 const multi = computed(() => layout.value !== 'tabs' && visible.value.length > 1)
 const prefs = usePrefsStore()
 /** Width taken by the dock panel when it is open on the right. */
-const dockW = computed(() => (ui.logsOpen && prefs.prefs.panelDock === 'right' ? prefs.prefs.panelSize?.right ?? 460 : 0))
+const dockW = computed(() => (ui.panelShown && prefs.prefs.panelDock === 'right' ? prefs.prefs.panelSize?.right ?? 460 : 0))
 const mainW = computed(() => ui.width - (ui.collapsed ? 52 : 264) - dockW.value)
 const paneW = computed(() => layout.value === 'split' ? mainW.value / Math.max(1, visible.value.length) : layout.value === 'grid' && visible.value.length > 1 ? mainW.value / 2 : mainW.value)
 const gridCols = computed(() => layout.value === 'split'

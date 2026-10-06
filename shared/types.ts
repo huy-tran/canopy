@@ -164,6 +164,14 @@ export interface Persisted {
   /** Daily summary recaps and their timesheet hours, keyed by "<project id>:<day start>". Last 7 days only. */
   recaps?: Record<string, string>
   recapHours?: Record<string, RecapHours>
+  /** Dock panel (shells and server logs) per project: open or hidden, and the tab in view. */
+  panels?: Record<string, DockPanelState>
+}
+
+export interface DockPanelState {
+  open: boolean
+  /** Shell session or dev server id. */
+  tab: string | null
 }
 
 export interface RecapHours {

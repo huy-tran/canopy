@@ -32,6 +32,8 @@ export default defineNuxtPlugin({
     const saved = await api.state.load().catch(() => null)
     if (saved) {
       P.projects = (saved.projects || []).map(p => ({ ...p, repos: p.repos.map(r => ({ ...r, services: r.services || [] })) }))
+      // Before P.sel, so selecting the project restores its panel.
+      ui.panels = Object.fromEntries(Object.entries(saved.panels || {}).filter(([pid]) => P.byId(pid)))
       P.sel = saved.sel && P.byId(saved.sel) ? saved.sel : (P.projects[0]?.id ?? null)
       prefs.prefs = { ...prefs.prefs, ...(saved.prefs || {}) }
       prefs.keys = saved.keys || {}
@@ -48,9 +50,9 @@ export default defineNuxtPlugin({
     const snapshot = (): Persisted => JSON.parse(JSON.stringify({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, sidebar: ui.sidebar, stripOn: ui.stripOn,
       sessions: reopened ? S.saved : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
-      recaps: ui.recaps, recapHours: ui.recapHours,
+      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels,
     }))
-    watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.sidebar, ui.stripOn, JSON.stringify(S.saved), S.focus, ui.recaps, ui.recapHours], () => {
+    watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.sidebar, ui.stripOn, JSON.stringify(S.saved), S.focus, ui.recaps, ui.recapHours, ui.panels], () => {
       clearTimeout(saveT)
       saveT = setTimeout(() => api.state.save(snapshot()), 300)
     }, { deep: true })

@@ -2,7 +2,6 @@
 const ui = useUiStore()
 const P = useProjectsStore()
 const S = useSessionsStore()
-const V = useServicesStore()
 const prefs = usePrefsStore()
 
 const cur = computed(() => P.current)
@@ -11,7 +10,7 @@ const ss = computed(() => (cur.value ? S.ofProject(cur.value.id) : []))
 const inboxSession = computed(() => (ui.inbox?.sid ? S.byId(ui.inbox.sid) : null))
 const inboxHere = computed(() => !!(inboxSession.value && cur.value && inboxSession.value.pid === cur.value.id))
 const showTabs = computed(() => isT.value && cur.value!.layout === 'tabs' && ss.value.length > 0 && !inboxHere.value)
-const showPanel = computed(() => isT.value && ui.logsOpen && (V.ofProject(cur.value).length > 0 || S.dockedOf(cur.value!.id).length > 0))
+const showPanel = computed(() => ui.panelShown)
 </script>
 
 <template>

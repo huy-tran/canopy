@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Layout, PlanUsage, RecapHours, Session, UpdateState, ShellKind } from '#shared/types'
+import type { DockPanelState, Layout, PlanUsage, RecapHours, Session, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
 export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'notifications' | 'keys'
@@ -35,6 +35,17 @@ export const useUiStore = defineStore('ui', () => {
   const svcAdd = ref(false)
   const logsOpen = ref(false)
   const svcTab = ref<string | null>(null)
+  /** Dock panel state per project, saved with the app state and swapped in as the selected project changes. */
+  const panels = ref<Record<string, DockPanelState>>({})
+  // Sync so code that selects a project and then opens a tab is not overwritten afterwards.
+  watch(() => P.sel, (next) => {
+    const saved = next ? panels.value[next] : undefined
+    logsOpen.value = saved?.open ?? false
+    svcTab.value = saved?.tab ?? null
+  }, { flush: 'sync' })
+  watch([logsOpen, svcTab], ([open, tab]) => {
+    if (P.sel) panels.value = { ...panels.value, [P.sel]: { open, tab } }
+  }, { flush: 'sync' })
   const stripOn = ref(true)
   const stripMode = ref<'prompt' | 'session'>('prompt')
   const lightbox = ref<{ sid: string; idx: number } | null>(null)
@@ -51,6 +62,11 @@ export const useUiStore = defineStore('ui', () => {
   const cur = computed(() => P.current)
   const fid = computed(() => S.focusedId(P.sel))
   const focused = computed(() => S.byId(fid.value))
+  /** The dock panel is open and has a server or shell to show. */
+  const panelShown = computed(() => {
+    const p = cur.value
+    return !!p && p.view !== 'overview' && logsOpen.value && (V.ofProject(p).length > 0 || S.dockedOf(p.id).length > 0)
+  })
   const waitList = computed(() => S.sessions.filter(s => s.status === 'waiting').sort((a, b) => (a.waitingSince || 0) - (b.waitingSince || 0)))
 
   function toast(o: { title: string; body?: string; hue?: number; ini?: string; error?: boolean }) {
@@ -578,8 +594,8 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     width, now, sidebar, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, inbox, bc, svcAdd,
-    logsOpen, svcTab, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
-    wide, collapsed, cur, fid, focused, waitList,
+    logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
+    wide, collapsed, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     toggleSidebar, newSession, startAll, closeSession, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
