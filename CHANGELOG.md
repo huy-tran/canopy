@@ -2,6 +2,12 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-10-06
+
+- 16 project colors to choose from, up from 8.
+- Sidebar: project rows are tinted with the project's color and show the name in that color, in place of the initials badge. The collapsed sidebar still shows initials.
+- The shell panel stays open or hidden per project, and is restored after restarting the app.
+
 ## [0.3.0] - 2026-10-06
 
 - Shell panel shortcuts, while a shell in the panel has focus: Ctrl T opens a new tab with your default shell, Ctrl Shift T lets you pick which shell, and Ctrl Alt Right / Left move between shell tabs. Change them in Settings > Keys.
