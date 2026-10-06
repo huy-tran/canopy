@@ -1,6 +1,6 @@
 // Keyboard shortcuts, generated from the user's keybindings so rebinding takes effect immediately.
 import { useEventListener } from '@vueuse/core'
-import { ACTIONS, comboOf, keysOf } from '#shared/actions'
+import { ACTIONS, comboOf, keysOf, matchAction } from '#shared/actions'
 
 const NUXT_KEY: Record<string, string> = { '→': 'arrowright', '←': 'arrowleft', '↑': 'arrowup', '↓': 'arrowdown', 'Esc': 'escape', 'Space': 'space' }
 
@@ -50,6 +50,7 @@ export function useAppShortcuts() {
     const c: Record<string, { usingInput: true; handler: () => void }> = {}
     fallback.clear()
     for (const a of ACTIONS) {
+      if (a.scope) continue
       for (const combo of keysOf(prefs.keys, a.id)) {
         const nk = toNuxt(combo)
         if (nk) c[nk] = { usingInput: true, handler: () => run(a.id) }
@@ -79,4 +80,14 @@ export function useAppShortcuts() {
     e.preventDefault()
     run(id)
   })
+
+  // Shell panel shortcuts win while focus is in the dock panel: caught before the terminal and the app-wide shortcuts see the key.
+  useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+    if (!(document.activeElement as HTMLElement | null)?.closest('[data-dock-panel]')) return
+    const id = matchAction(prefs.keys, comboOf(e), 'shell')
+    if (!id || !allowed(id)) return
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    run(id)
+  }, { capture: true })
 }

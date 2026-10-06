@@ -78,11 +78,14 @@ function recordKey(combo: string) {
   if (combo === 'Esc') { rec.value = null; msg.value = null; return }
   if (r.id === SUMMON) return recordSummon(combo)
   if (combo === summonKey.value) { msg.value = { kind: 'err', id: r.id, t: nice + ' shows and hides Canopy from anywhere.' }; return }
-  if (RESERVED[combo]) { msg.value = { kind: 'err', id: r.id, t: RESERVED[combo] + ' Pick another shortcut.' }; return }
+  // Shell panel keys never reach Claude, so Claude's own keys are free there.
+  const scope = ACTIONS.find(a => a.id === r.id)?.scope
+  if (RESERVED[combo] && !scope) { msg.value = { kind: 'err', id: r.id, t: RESERVED[combo] + ' Pick another shortcut.' }; return }
   const last = combo.split('+').pop() || ''
   if (!/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: r.id, t: 'Add Ctrl or Alt to ' + nice + ' so typing still reaches the terminal.' }; return }
   if (/^Alt\+[1-9]$/.test(combo)) { msg.value = { kind: 'err', id: r.id, t: 'Alt 1-9 already switches projects.' }; return }
-  const other = ACTIONS.find(a => a.id !== r.id && prefs.keysFor(a.id).includes(combo))
+  // A shell panel key may match an app-wide one: inside the panel the panel's wins.
+  const other = ACTIONS.find(a => a.id !== r.id && a.scope === scope && prefs.keysFor(a.id).includes(combo))
   if (other) {
     rec.value = null
     msg.value = { kind: 'conflict', id: r.id, idx: r.idx, combo, other: other.id, t: nice + ' is already used by "' + other.label + '".' }

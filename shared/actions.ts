@@ -5,6 +5,8 @@ export interface ActionDef {
   g: string
   label: string
   def: string[]
+  /** 'shell' actions only fire while a shell in the dock panel has focus, and may reuse keys bound elsewhere. */
+  scope?: 'shell'
 }
 
 export const ACTIONS: ActionDef[] = [
@@ -73,9 +75,8 @@ export function keysOf(keys: Record<string, string[]>, id: string): string[] {
   return keys[id] || (a ? a.def : [])
 }
 
-/** Matches a combo against the user's bindings. */
-export function matchAction(keys: Record<string, string[]>, combo: string | null): string | null {
+/** Matches a combo against the user's bindings: app-wide ones by default, or those of a scope. */
+export function matchAction(keys: Record<string, string[]>, combo: string | null, scope?: ActionDef['scope']): string | null {
   if (!combo) return null
-  const find = (cb: string) => ACTIONS.find(x => keysOf(keys, x.id).includes(cb))?.id ?? null
-  return find(combo)
+  return ACTIONS.find(x => x.scope === scope && keysOf(keys, x.id).includes(combo))?.id ?? null
 }
