@@ -2,6 +2,11 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-10-06
+
+- The sidebar no longer collapses into an icon rail. The Ctrl Shift B shortcut and the "Collapse or expand sidebar" command are gone.
+- Projects no longer have initials. The Initials field is removed from the project form.
+
 ## [0.4.0] - 2026-10-06
 
 - 16 project colors to choose from, up from 8.
