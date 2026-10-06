@@ -2,11 +2,6 @@
 const ui = useUiStore()
 
 useAppShortcuts()
-
-const collapsed = computed({
-  get: () => ui.collapsed,
-  set: (v: boolean) => { ui.sidebar = v },
-})
 </script>
 
 <template>
@@ -15,11 +10,8 @@ const collapsed = computed({
       <AppTitleBar />
       <UDashboardGroup unit="px" :persistent="false" class="relative inset-auto min-h-0 flex-1">
         <UDashboardSidebar
-          v-model:collapsed="collapsed"
-          collapsible
           :default-size="264"
-          :collapsed-size="52"
-          :min-size="52"
+          :min-size="264"
           :max-size="264"
           :toggle="false"
           :ui="{
@@ -27,9 +19,7 @@ const collapsed = computed({
             body: 'p-0 gap-0 overflow-hidden',
           }"
         >
-          <template #default="{ collapsed: isRail }">
-            <AppSidebar :rail="isRail" />
-          </template>
+          <AppSidebar />
         </UDashboardSidebar>
         <UDashboardPanel id="main" :ui="{ root: 'min-h-0 flex-1', body: 'p-0 sm:p-0 gap-0 sm:gap-0 overflow-hidden' }">
           <template #body>

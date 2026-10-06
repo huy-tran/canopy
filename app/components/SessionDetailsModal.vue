@@ -38,18 +38,18 @@ async function openFolder() {
   const fs = s.value, cur = p.value
   if (!fs || !cur) return
   await api.sys.showInFolder(fs.cwd)
-  ui.toast({ title: 'Opening folder in Explorer', body: fs.cwd, hue: cur.hue, ini: cur.ini })
+  ui.toast({ title: 'Opening folder in Explorer', body: fs.cwd, hue: cur.hue })
 }
 
 function copyId() {
   const fs = s.value, cur = p.value
   if (!fs || !cur) return
   if (!fs.claudeId) {
-    ui.toast({ title: 'No session ID yet', body: 'Claude Code reports it once the session starts.', hue: cur.hue, ini: cur.ini })
+    ui.toast({ title: 'No session ID yet', body: 'Claude Code reports it once the session starts.', hue: cur.hue })
     return
   }
   navigator.clipboard.writeText(fs.claudeId).catch(() => {})
-  ui.toast({ title: 'Session ID copied', body: fs.claudeId, hue: cur.hue, ini: cur.ini })
+  ui.toast({ title: 'Session ID copied', body: fs.claudeId, hue: cur.hue })
 }
 </script>
 

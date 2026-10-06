@@ -30,7 +30,7 @@ function copy() {
   if (!i) return
   const body = `Canopy ${i.version} · Electron ${i.electron} · Claude Code ${i.claudeVersion}`
   navigator.clipboard.writeText(body).catch(() => {})
-  ui.toast({ title: 'Version info copied', body, hue: 250, ini: 'i' })
+  ui.toast({ title: 'Version info copied', body, hue: 250 })
 }
 </script>
 

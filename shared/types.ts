@@ -36,7 +36,6 @@ export interface Repo {
 export interface Project {
   id: string
   name: string
-  ini: string
   hue: number
   repos: Repo[]
   layout: Layout
@@ -155,7 +154,6 @@ export interface Persisted {
   keys: Record<string, string[]>
   theme: ThemePref
   sel: string | null
-  sidebar: boolean | null
   stripOn: boolean
   /** Open sessions and shells, reopened on the next launch. */
   sessions?: SavedSession[]

@@ -14,8 +14,6 @@ export const useUiStore = defineStore('ui', () => {
 
   const width = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
   const now = ref(Date.now())
-  /** null = automatic (collapsed below 900px). */
-  const sidebar = ref<boolean | null>(null)
   const palette = ref<PaletteMode | null>(null)
   const projectModal = ref<{ mode: 'add' | 'edit'; pid: string | null; confirmDel: boolean } | null>(null)
   const explorer = ref<{ tab: 'changes' | 'files'; repoId: string; cwd: string; wt: boolean } | null>(null)
@@ -58,7 +56,6 @@ export const useUiStore = defineStore('ui', () => {
   const resumeOnce = new Set<string>()
 
   const wide = computed(() => width.value >= 900)
-  const collapsed = computed(() => (sidebar.value != null ? sidebar.value : !wide.value))
   const cur = computed(() => P.current)
   const fid = computed(() => S.focusedId(P.sel))
   const focused = computed(() => S.byId(fid.value))
@@ -69,7 +66,7 @@ export const useUiStore = defineStore('ui', () => {
   })
   const waitList = computed(() => S.sessions.filter(s => s.status === 'waiting').sort((a, b) => (a.waitingSince || 0) - (b.waitingSince || 0)))
 
-  function toast(o: { title: string; body?: string; hue?: number; ini?: string; error?: boolean }) {
+  function toast(o: { title: string; body?: string; hue?: number; error?: boolean }) {
     nuxtToast.add({ title: o.title, description: o.body, color: o.error ? 'error' : 'neutral', duration: o.error ? 6000 : 3500 })
   }
 
@@ -156,10 +153,6 @@ export const useUiStore = defineStore('ui', () => {
     if (p) setView(p.view === 'overview' ? 'terminals' : 'overview')
   }
 
-  function toggleSidebar() {
-    sidebar.value = !collapsed.value
-  }
-
   // ---------- Sessions ----------
 
   async function newSession(repoId?: string | null, wt?: boolean) {
@@ -206,7 +199,7 @@ export const useUiStore = defineStore('ui', () => {
     if (!s || !p) return
     const r = P.repoOf(p.id, s.repoId)
     const res = await api.sys.openEditor(p.editor, s.cwd)
-    if (res.ok) toast({ title: `Opening ${r.label} in ${p.editor}`, body: s.cwd, hue: p.hue, ini: p.ini })
+    if (res.ok) toast({ title: `Opening ${r.label} in ${p.editor}`, body: s.cwd, hue: p.hue })
     else toast({ title: `Could not open ${p.editor}`, body: res.error, error: true })
   }
 
@@ -224,7 +217,7 @@ export const useUiStore = defineStore('ui', () => {
     }
     await S.respawn(sid, r.path, { wt: null, branch: base })
     G.refresh(r.path)
-    toast({ title: `Merged ${from} into ${base}`, body: 'Worktree removed. The session now runs in the main folder.', hue: p.hue, ini: p.ini })
+    toast({ title: `Merged ${from} into ${base}`, body: 'Worktree removed. The session now runs in the main folder.', hue: p.hue })
   }
 
   // ---------- Inbox ----------
@@ -322,7 +315,7 @@ export const useUiStore = defineStore('ui', () => {
     const { others, mine } = shareInfo(sid)
     if (!others.length) {
       const other = p.repos.find(x => x.id !== s.repoId)
-      toast({ title: 'No session in another repo', body: 'Start one in ' + (other ? other.label : 'the other repo') + ' first.', hue: p.hue, ini: p.ini })
+      toast({ title: 'No session in another repo', body: 'Start one in ' + (other ? other.label : 'the other repo') + ' first.', hue: p.hue })
       return
     }
     const t = others.find(x => x.status !== 'working') || others[0]!
@@ -348,7 +341,7 @@ export const useUiStore = defineStore('ui', () => {
     const ss = S.claudeOf(p.id).filter(s => s.repoId === repoId)
     const target = ss.find(s => s.id === fid.value) || ss[0]
     if (!target) {
-      toast({ title: 'No session running in ' + (r?.label || 'this repo'), body: 'Start one to mention files in a prompt.', hue: p.hue, ini: p.ini })
+      toast({ title: 'No session running in ' + (r?.label || 'this repo'), body: 'Start one to mention files in a prompt.', hue: p.hue })
       return
     }
     explorer.value = null
@@ -567,7 +560,6 @@ export const useUiStore = defineStore('ui', () => {
       paneRight: () => cycle(1),
       paneLeft: () => cycle(-1),
       toggleView,
-      sidebar: toggleSidebar,
       newSession: () => newSession(),
       promptAll: openBc,
       share: shareFocused,
@@ -593,11 +585,11 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, sidebar, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, inbox, bc, svcAdd,
+    width, now, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
-    wide, collapsed, cur, fid, focused, panelShown, waitList,
+    wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
-    toggleSidebar, newSession, startAll, closeSession, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
+    newSession, startAll, closeSession, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
   }

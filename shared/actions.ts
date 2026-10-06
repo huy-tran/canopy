@@ -27,7 +27,6 @@ export const ACTIONS: ActionDef[] = [
   { id: 'details', g: 'Sessions', label: 'Session details', def: ['Ctrl+Shift+D'] },
   { id: 'strip', g: 'Sessions', label: 'Show or hide the image strip', def: ['Ctrl+Shift+M'] },
   { id: 'cycleLayout', g: 'Layout', label: 'Cycle layout: tabs, split, grid', def: ['Ctrl+Shift+L'] },
-  { id: 'sidebar', g: 'Layout', label: 'Collapse or expand the sidebar', def: ['Ctrl+Shift+B'] },
   { id: 'files', g: 'Files and dev servers', label: 'Files and git changes', def: ['Ctrl+Shift+F'] },
   { id: 'editor', g: 'Files and dev servers', label: 'Open the focused repo in your editor', def: ['Ctrl+Shift+E'] },
   { id: 'logs', g: 'Files and dev servers', label: 'Dev server logs', def: ['Ctrl+Shift+S'] },

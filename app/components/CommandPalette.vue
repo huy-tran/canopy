@@ -79,7 +79,6 @@ const cmdItems = computed<PalItem[]>(() => {
   C('Open focused repo in editor', kl('editor'), () => ui.openEditor())
   C('Session details', kl('details'), () => { ui.details = !ui.details })
   C('Show or hide image strip', kl('strip'), () => { ui.stripOn = !ui.stripOn })
-  C('Collapse or expand sidebar', kl('sidebar'), () => ui.toggleSidebar())
   C(`Switch to ${prefs.resolvedTheme === 'light' ? 'dark' : 'light'} theme`, '', () => prefs.toggleTheme())
   C('Keyboard shortcuts', kl('shortcuts'), () => ui.openSettings('keys'))
   C('Settings', kl('settings'), () => ui.openSettings('general'))

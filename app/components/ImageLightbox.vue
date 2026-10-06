@@ -47,14 +47,14 @@ async function copy() {
   const i = img.value
   if (!i) return
   await api.sys.copyImage(i.path)
-  ui.toast({ title: 'Image copied to clipboard', body: i.name, hue: 250, ini: '#' + i.n })
+  ui.toast({ title: 'Image copied to clipboard', body: i.name, hue: 250 })
 }
 
 async function save() {
   const i = img.value
   if (!i) return
   const res = await api.sys.saveImageAs(i.path)
-  if (res) ui.toast({ title: 'Saved', body: res, hue: 250, ini: '#' + i.n })
+  if (res) ui.toast({ title: 'Saved', body: res, hue: 250 })
 }
 
 const navBtn = 'grid size-8 flex-none cursor-pointer place-items-center rounded-full bg-[#1A1B1F] text-[15px] text-[#C7CAD1] hover:bg-[#2A2C31]'

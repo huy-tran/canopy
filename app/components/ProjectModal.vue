@@ -4,8 +4,6 @@ import type { Editor, Project, Repo, RepoInfo } from '#shared/types'
 interface Draft {
   pid: string | null
   name: string
-  ini: string
-  iniEdited: boolean
   hue: number
   repos: Repo[]
   autoStart: boolean
@@ -57,7 +55,7 @@ watch(() => ui.projectModal, (m, prev) => {
       return
     }
     draft.value = {
-      pid: p.id, name: p.name, ini: p.ini, iniEdited: true, hue: p.hue,
+      pid: p.id, name: p.name, hue: p.hue,
       repos: p.repos.map(r => ({ ...r, services: (r.services || []).map(v => ({ ...v })) })),
       autoStart: p.autoStart, autoServices: !!p.autoServices, resume: p.resume, editor: p.editor,
     }
@@ -65,7 +63,7 @@ watch(() => ui.projectModal, (m, prev) => {
     const used = P.projects.map(p => p.hue)
     const hue = HUES.find(h => !used.includes(h)) ?? 140
     draft.value = {
-      pid: null, name: '', ini: '', iniEdited: false, hue, repos: [emptyRepo()],
+      pid: null, name: '', hue, repos: [emptyRepo()],
       autoStart: true, autoServices: true, resume: true, editor: prefs.prefs.editor,
     }
   }
@@ -139,15 +137,7 @@ const nameErr = computed(() => (tried.value && errors.value.name) || undefined)
 // ---------- Field handlers ----------
 
 function setName(v: string) {
-  const d = draft.value!
-  d.name = v
-  if (!d.iniEdited) d.ini = initials(v)
-}
-
-function setIni(v: string) {
-  const d = draft.value!
-  d.ini = String(v).toUpperCase().slice(0, 3)
-  d.iniEdited = !!d.ini
+  draft.value!.name = v
 }
 
 function setPath(r: Repo, v: string) {
@@ -242,8 +232,7 @@ async function save() {
       services: (r.services || []).filter(v => (v.cmd || '').trim()).map(v => ({ id: v.id || uid('v'), cmd: v.cmd.trim(), port: String(v.port || '').replace(/[^0-9]/g, '') })),
     }
   })
-  const ini = (d.ini || initials(d.name)).slice(0, 3).toUpperCase()
-  const fields = { name: d.name.trim(), ini, hue: d.hue, repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor }
+  const fields = { name: d.name.trim(), hue: d.hue, repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor }
 
   if (mode.value === 'add') {
     const p: Project = {
@@ -347,7 +336,7 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
         </div>
 
         <div class="flex flex-col gap-[18px] px-5 py-[18px]">
-          <div class="grid grid-cols-[minmax(0,1fr)_100px] gap-3">
+          <div>
             <UFormField
               label="Name"
               name="name"
@@ -363,24 +352,6 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
                 :ui="{ base: ['h-8 px-2.5 py-0 rounded-md bg-(--inp) ring ring-inset text-[13px] text-(--tx)', ring(!!nameErr)] }"
                 @update:model-value="setName(String($event))"
               />
-            </UFormField>
-            <UFormField label="Initials" name="ini" title="Shown when the sidebar is collapsed" :ui="{ label: 'text-[12px] font-normal text-(--tx3)', container: 'mt-1.5' }">
-              <UInput
-                :model-value="draft.ini"
-                variant="none"
-                class="w-full"
-                :ui="{ base: 'h-8 ps-[34px] pe-2 py-0 rounded-md bg-(--inp) ring ring-inset ring-(--ln) text-[13px] text-(--tx)', leading: 'ps-2' }"
-                @update:model-value="setIni(String($event))"
-              >
-                <template #leading>
-                  <div
-                    class="grid size-[18px] flex-none place-items-center rounded text-[8.5px] font-bold text-[#121316]"
-                    :style="{ background: pcol(draft.hue) }"
-                  >
-                    {{ draft.ini || '··' }}
-                  </div>
-                </template>
-              </UInput>
             </UFormField>
           </div>
 

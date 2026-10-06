@@ -87,7 +87,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         branch = res.branch
         wt = { path: res.path, base: r.branch || 'main' }
       } catch (e: any) {
-        useUiStore().toast({ title: 'Could not create a worktree', body: String(e?.message || e), hue: p.hue, ini: p.ini, error: true })
+        useUiStore().toast({ title: 'Could not create a worktree', body: String(e?.message || e), hue: p.hue, error: true })
         return null
       }
     }

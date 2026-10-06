@@ -42,13 +42,6 @@ export function ptx(h: number): string {
   return `oklch(var(--ptl) var(--ptc) ${h})`
 }
 
-export function initials(name: string): string {
-  const w = name.trim().split(/\s+/).filter(Boolean)
-  if (!w.length) return ''
-  if (w.length === 1) return w[0]!.slice(0, 2).toUpperCase()
-  return (w[0]![0]! + w[1]![0]!).toUpperCase()
-}
-
 export function uid(prefix: string): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }

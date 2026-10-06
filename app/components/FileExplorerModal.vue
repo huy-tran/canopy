@@ -431,14 +431,14 @@ async function openFile(path: string) {
   if (!p) return
   const full = winPath(path)
   const res = await api.sys.openEditor(p.editor, cwd.value, full)
-  if (res.ok) ui.toast({ title: `Opening ${path.split('/').pop()} in ${p.editor}`, body: full, hue: p.hue, ini: p.ini })
+  if (res.ok) ui.toast({ title: `Opening ${path.split('/').pop()} in ${p.editor}`, body: full, hue: p.hue })
   else ui.toast({ title: `Could not open ${p.editor}`, body: res.error, error: true })
 }
 
 function copyPath(path: string) {
   const p = proj.value
   navigator.clipboard?.writeText(path).catch(() => {})
-  ui.toast({ title: 'Path copied', body: path, hue: p?.hue, ini: p?.ini })
+  ui.toast({ title: 'Path copied', body: path, hue: p?.hue })
 }
 
 function revealFile(path: string) {
