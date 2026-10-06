@@ -1,6 +1,6 @@
 // Formatting helpers, ported from the prototype.
 
-export const HUES = [45, 80, 140, 185, 230, 295, 345, 20]
+export const HUES = [20, 45, 65, 80, 100, 120, 140, 160, 185, 205, 230, 255, 275, 295, 320, 345]
 
 export function k(n: number): string {
   return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n))
@@ -35,6 +35,11 @@ export function clock(ts: number): string {
 /** Project colour: oklch(0.72 0.12 H), optionally with alpha. */
 export function pcol(h: number, a?: number): string {
   return `oklch(0.72 0.12 ${h}${a != null ? ' / ' + a : ''})`
+}
+
+/** Project colour for text, with lightness and chroma set per theme so it reads on either. */
+export function ptx(h: number): string {
+  return `oklch(var(--ptl) var(--ptc) ${h})`
 }
 
 export function initials(name: string): string {

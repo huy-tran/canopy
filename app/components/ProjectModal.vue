@@ -364,7 +364,7 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
                 @update:model-value="setName(String($event))"
               />
             </UFormField>
-            <UFormField label="Initials" name="ini" :ui="{ label: 'text-[12px] font-normal text-(--tx3)', container: 'mt-1.5' }">
+            <UFormField label="Initials" name="ini" title="Shown when the sidebar is collapsed" :ui="{ label: 'text-[12px] font-normal text-(--tx3)', container: 'mt-1.5' }">
               <UInput
                 :model-value="draft.ini"
                 variant="none"

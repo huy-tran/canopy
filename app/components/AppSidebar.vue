@@ -48,7 +48,7 @@ function onNameEnter(e: PointerEvent, p: Project) {
 
 function rowBg(p: Project) {
   if (waitingOf(p.id) && hl.value) return 'var(--ambs)'
-  return p.id === P.sel ? 'var(--sel)' : 'transparent'
+  return pcol(p.hue, p.id === P.sel ? 0.2 : 0.07)
 }
 
 function sessBg(s: Session, p: Project) {
@@ -195,23 +195,20 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
       >
         <UContextMenu :items="ctxItems(p)" :ui="ctxUi">
           <div
-            class="group flex h-[34px] cursor-pointer items-center gap-2.5 rounded-md pl-0.5 pr-1.5 hover:brightness-[1.12]"
+            class="group relative flex h-[34px] cursor-pointer items-center gap-2 overflow-hidden rounded-md pl-1.5 pr-1.5 hover:brightness-[1.12]"
             :style="{ background: rowBg(p) }"
             draggable="true"
             @dragstart="onDragStart($event, p)"
             @dragend="onDragEnd"
             @click="ui.selectProject(p.id)"
           >
-            <span class="grid h-5 w-[14px] place-items-center text-(--fa)" @click.stop="toggleExpanded(p)"><UIcon :name="p.expanded ? 'i-hugeicons-arrow-down-01' : 'i-hugeicons-arrow-right-01'" class="size-3" /></span>
-            <UAvatar
-              :text="p.ini"
-              :ui="{ root: 'h-5 w-5 flex-none rounded-md', fallback: 'text-[9px] font-bold text-[#121316] leading-none' }"
-              :style="{ background: pcol(p.hue) }"
-            />
+            <span class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(p.hue) }" />
+            <span class="grid h-5 w-[14px] place-items-center" :style="{ color: ptx(p.hue) }" @click.stop="toggleExpanded(p)"><UIcon :name="p.expanded ? 'i-hugeicons-arrow-down-01' : 'i-hugeicons-arrow-right-01'" class="size-3" /></span>
             <UTooltip :text="p.name" :disabled="clipped !== p.id" :content="{ side: 'top', align: 'start' }">
               <span
-                class="ellipsis flex-1 text-[13.5px] font-medium"
-                :style="{ color: waitingOf(p.id) && hl ? 'var(--ambtx)' : 'var(--tx)' }"
+                class="ellipsis flex-1 text-[13.5px]"
+                :class="p.id === P.sel ? 'font-semibold' : 'font-medium'"
+                :style="{ color: waitingOf(p.id) && hl ? 'var(--ambtx)' : ptx(p.hue) }"
                 @pointerenter="onNameEnter($event, p)"
               >{{ p.name }}</span>
             </UTooltip>
@@ -235,7 +232,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
           <div
             v-for="s in S.ofProject(p.id)"
             :key="s.id"
-            class="flex h-[30px] cursor-pointer items-center gap-2 rounded-md pl-[34px] pr-1.5 hover:bg-(--hov)"
+            class="flex h-[30px] cursor-pointer items-center gap-2 rounded-md pl-7 pr-1.5 hover:bg-(--hov)"
             :style="{ background: sessBg(s, p) }"
             @click.stop="ui.focusSession(s.id)"
           >
@@ -246,7 +243,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             <span class="ellipsis flex-1 text-[12.5px]" :style="{ color: s.status === 'waiting' ? 'var(--tx)' : 'var(--tx3)' }">{{ s.title }}</span>
             <span class="mono text-[11px] text-(--fa)">{{ sAgo(s) }}</span>
           </div>
-          <div v-if="!S.ofProject(p.id).length" class="flex h-[30px] items-center gap-1.5 pl-[34px] text-[12.5px] text-(--fa)">
+          <div v-if="!S.ofProject(p.id).length" class="flex h-[30px] items-center gap-1.5 pl-7 text-[12.5px] text-(--fa)">
             No sessions running<span class="cursor-pointer text-(--lnk)" @click.stop="ui.startAll(p.id)">Start</span>
           </div>
           </template>

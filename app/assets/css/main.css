@@ -134,6 +134,8 @@
   --teal: oklch(0.78 0.10 175);
   --vio: oklch(0.78 0.10 300);
   --cyan: oklch(0.80 0.08 210);
+  --ptl: 0.82;
+  --ptc: 0.11;
   --syn-kw: oklch(0.76 0.13 305);
   --syn-str: oklch(0.79 0.12 140);
   --syn-num: oklch(0.80 0.12 60);
@@ -197,6 +199,8 @@
   --teal: oklch(0.47 0.10 180);
   --vio: oklch(0.46 0.16 300);
   --cyan: oklch(0.46 0.10 225);
+  --ptl: 0.47;
+  --ptc: 0.14;
   --syn-kw: oklch(0.46 0.19 305);
   --syn-str: oklch(0.47 0.13 145);
   --syn-num: oklch(0.52 0.15 50);
