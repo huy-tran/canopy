@@ -121,12 +121,27 @@ export const useUiStore = defineStore('ui', () => {
     focusSession(ss[(i + dir + ss.length) % ss.length]!.id)
   }
 
-  /** Steps through projects in sidebar order (starred first), wrapping at either end. */
+  /**
+   * Steps through every open session in sidebar order (starred projects first), skipping projects without sessions
+   * and wrapping at either end. Falls back to stepping through projects while no session is open anywhere.
+   */
   function cycleProject(dir: number) {
     const ps = P.ordered
     if (!ps.length) return
-    const i = ps.findIndex(p => p.id === P.sel)
-    selectProject(ps[(i + dir + ps.length) % ps.length]!.id)
+    const ss = ps.flatMap(p => S.ofProject(p.id))
+    if (!ss.length) {
+      const i = ps.findIndex(p => p.id === P.sel)
+      selectProject(ps[(i + dir + ps.length) % ps.length]!.id)
+      return
+    }
+    let i = ss.findIndex(s => s.id === fid.value)
+    if (i < 0) {
+      // The selected project has no sessions: start from the gap where it sits in the sidebar.
+      const at = ps.findIndex(p => p.id === P.sel)
+      const after = ss.findIndex(s => ps.findIndex(p => p.id === s.pid) > at)
+      i = (after < 0 ? ss.length : after) - (dir > 0 ? 1 : 0)
+    }
+    focusSession(ss[(i + dir + ss.length) % ss.length]!.id)
   }
 
   function setLayout(l: Layout) {

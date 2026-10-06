@@ -53,8 +53,17 @@ function sessBg(s: Session, p: Project) {
   return p.id === P.sel && s.id === ui.fid ? 'var(--sel)' : 'transparent'
 }
 
+/** Open sessions in a project. A project without any always shows collapsed. */
+function countOf(pid: string) {
+  return S.ofProject(pid).length
+}
+
+function isOpen(p: Project) {
+  return p.expanded && countOf(p.id) > 0
+}
+
 function toggleExpanded(p: Project) {
-  P.patch(p.id, { expanded: !p.expanded })
+  if (countOf(p.id)) P.patch(p.id, { expanded: !p.expanded })
 }
 
 // ---------- Starred and Projects sections, reordered by dragging ----------
@@ -201,7 +210,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             @click="ui.selectProject(p.id)"
           >
             <span class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(p.hue) }" />
-            <span class="grid h-5 w-[14px] place-items-center" :style="{ color: ptx(p.hue) }" @click.stop="toggleExpanded(p)"><UIcon :name="p.expanded ? 'i-hugeicons-arrow-down-01' : 'i-hugeicons-arrow-right-01'" class="size-3" /></span>
+            <span class="grid h-5 w-[14px] place-items-center" :class="{ invisible: !countOf(p.id) }" :style="{ color: ptx(p.hue) }" @click.stop="toggleExpanded(p)"><UIcon :name="isOpen(p) ?'i-hugeicons-arrow-down-01' : 'i-hugeicons-arrow-right-01'" class="size-3" /></span>
             <UTooltip :text="p.name" :disabled="clipped !== p.id" :content="{ side: 'top', align: 'start' }">
               <span
                 class="ellipsis flex-1 text-[13.5px]"
@@ -215,6 +224,9 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
               :label="String(waitingOf(p.id))"
               :ui="{ base: 'mono h-4 min-w-4 justify-center rounded-lg bg-(--ambf) px-1 text-[10px] font-bold text-[#131417] ring-0' }"
             />
+            <UTooltip v-if="countOf(p.id)" :text="`${countOf(p.id)} open session${countOf(p.id) === 1 ? '' : 's'}`">
+              <span class="chip-repo">{{ countOf(p.id) }}</span>
+            </UTooltip>
             <UTooltip :text="p.starred ? 'Unstar' : 'Star'">
               <span
                 class="grid h-5 w-5 flex-none place-items-center rounded-sm hover:bg-(--hov)"
@@ -225,7 +237,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             <span class="mono min-w-8 text-right text-[11px] text-(--fa)">{{ pAgo(p) }}</span>
           </div>
         </UContextMenu>
-        <UCollapsible :open="p.expanded" :ui="{ content: 'flex flex-col gap-0.5' }">
+        <UCollapsible :open="isOpen(p)":ui="{ content: 'flex flex-col gap-0.5' }">
           <template #content>
           <div
             v-for="s in S.ofProject(p.id)"
@@ -240,9 +252,6 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             <UIcon v-if="s.wt" title="Git worktree" name="i-hugeicons-git-fork" class="size-3 flex-none text-(--teal)" />
             <span class="ellipsis flex-1 text-[12.5px]" :style="{ color: s.status === 'waiting' ? 'var(--tx)' : 'var(--tx3)' }">{{ s.title }}</span>
             <span class="mono text-[11px] text-(--fa)">{{ sAgo(s) }}</span>
-          </div>
-          <div v-if="!S.ofProject(p.id).length" class="flex h-[30px] items-center gap-1.5 pl-7 text-[12.5px] text-(--fa)">
-            No sessions running<span class="cursor-pointer text-(--lnk)" @click.stop="ui.startAll(p.id)">Start</span>
           </div>
           </template>
         </UCollapsible>
