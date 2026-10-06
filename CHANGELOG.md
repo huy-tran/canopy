@@ -2,7 +2,7 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-06
 
 - Ctrl Tab and Ctrl Shift Tab step through every open session in sidebar order, moving on to the next project's sessions and skipping projects with none.
 - Sidebar: projects without sessions stay collapsed, and each project with open sessions shows how many it has.
