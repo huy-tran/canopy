@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Font picker for the terminal (installed monospace fonts, Nerd Fonts first) or the app (any font), or any typed name.
+// Font picker for the terminal (bundled coding fonts, then installed monospace fonts, Nerd Fonts first) or the app (any font), or any typed name.
+import { TERM_FONTS } from '#shared/fonts'
 import { DEFAULT_PREFS } from '~/stores/prefs'
 
 type Font = { name: string; nerd: boolean; mono: boolean }
@@ -20,8 +21,9 @@ const isTerm = computed(() => props.kind === 'term')
 const key = computed(() => (isTerm.value ? 'termFont' : 'appFont') as 'termFont' | 'appFont')
 const css = (n: string) => `'${n.replace(/['";]/g, '')}',${isTerm.value ? "'JetBrains Mono',monospace" : 'system-ui,sans-serif'}`
 const PREVIEW = computed(() => (isTerm.value ? 'AaBb 0O 1lI {} => !=' : 'The quick brown fox 0123'))
-/** Bundled with the app, so always available as an app font. */
+/** Bundled with the app, so always available. */
 const BUNDLED: Font[] = [{ name: 'Outfit', nerd: false, mono: false }]
+const BUNDLED_TERM: Font[] = TERM_FONTS.map(f => ({ name: f.name, nerd: false, mono: true }))
 
 const current = computed(() => prefs.prefs[key.value] || DEFAULT_PREFS[key.value])
 const isNerd = computed(() => isTerm.value && (fonts.value?.find(f => f.name === current.value)?.nerd ?? /nerd font/i.test(current.value)))
@@ -31,8 +33,12 @@ const items = computed<Entry[][]>(() => {
   const mark = (f: Font) => ({ ...f, class: f.name === current.value ? 'before:bg-(--sel)' : undefined })
   const label = (name: string, list: Font[]) => (list.length ? [{ type: 'label' as const, name }, ...list.map(mark)] : [])
   if (isTerm.value) {
-    const mono = all.filter(f => f.mono)
-    return [label('Nerd Fonts', mono.filter(f => f.nerd)), label('Other monospace fonts', mono.filter(f => !f.nerd))].filter(g => g.length)
+    const mono = all.filter(f => f.mono && !BUNDLED_TERM.some(b => b.name === f.name))
+    return [
+      label('Bundled with Canopy', BUNDLED_TERM),
+      label('Installed Nerd Fonts', mono.filter(f => f.nerd)),
+      label('Other installed monospace fonts', mono.filter(f => !f.nerd)),
+    ].filter(g => g.length)
   }
   const installed = all.filter(f => !BUNDLED.some(b => b.name === f.name))
   return [label('Bundled with Canopy', BUNDLED), label('Installed fonts', installed)].filter(g => g.length)
@@ -112,7 +118,7 @@ function pick(name: string) {
     </template>
 
     <template v-if="isTerm" #content-bottom>
-      <div class="border-t border-(--ln) px-3 py-2 text-[11px] leading-[1.45] text-(--fa)">Nerd Fonts include the icons your Claude Code status line uses.</div>
+      <div class="border-t border-(--ln) px-3 py-2 text-[11px] leading-[1.45] text-(--fa)">Status line icons show with every font: Canopy includes the Nerd Font symbols.</div>
     </template>
   </USelectMenu>
 </template>

@@ -12,7 +12,7 @@ export const DEFAULT_PREFS: Prefs = {
   waitStyle: 'both',
   showCost: true,
   appFont: 'Outfit',
-  termFont: 'monofur for Powerline',
+  termFont: 'JetBrains Mono',
   termSize: 12,
   cursor: 'Block',
   scrollback: '5000',

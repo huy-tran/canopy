@@ -49,7 +49,7 @@ function setScrollback(v: string | number) {
 <template>
   <div class="flex flex-col">
     <div class="mb-1 text-[15px] font-semibold">Terminal</div>
-    <SettingsRow label="Font" sub="Use a Nerd Font so icons from your Claude Code status line render." wrap>
+    <SettingsRow label="Font" sub="Pick a bundled coding font or any installed one. Status line icons work with all of them." wrap>
       <div class="w-[280px] max-w-full flex-none">
         <SettingsFontPicker kind="term" />
       </div>

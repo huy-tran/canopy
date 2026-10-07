@@ -1,6 +1,7 @@
 // Boots the workspace: loads saved state, wires main-process events, and runs the timers.
 import type { Persisted } from '#shared/types'
 import { comboOf, matchAction } from '#shared/actions'
+import { NERD_SYMBOLS } from '#shared/fonts'
 import { DEFAULT_PREFS } from '~/stores/prefs'
 
 /** ANSI colours readable on a light terminal (xterm's defaults assume a dark one). */
@@ -66,10 +67,11 @@ export default defineNuxtPlugin({
       return getComputedStyle(probe).getPropertyValue(name).trim()
     }
     const fontName = (v: string, fallback: string) => (v || '').trim().replace(/['";]/g, '') || fallback
+    const termFont = () => fontName(prefs.prefs.termFont, DEFAULT_PREFS.termFont)
+    const monoStack = (font: string) => `'${font}', 'JetBrains Mono', '${NERD_SYMBOLS}', ui-monospace, monospace`
     const termOptions = () => {
-      const font = fontName(prefs.prefs.termFont, DEFAULT_PREFS.termFont)
       return {
-        fontFamily: `'${font}', 'JetBrains Mono', ui-monospace, monospace`,
+        fontFamily: monoStack(termFont()),
         fontSize: prefs.prefs.termSize || 12,
         cursor: prefs.prefs.cursor,
         scrollback: Math.max(100, parseInt(prefs.prefs.scrollback, 10) || 5000),
@@ -79,8 +81,13 @@ export default defineNuxtPlugin({
     }
     setTerminalOptions(termOptions())
     watch(() => [prefs.prefs.termFont, prefs.prefs.termSize, prefs.prefs.cursor, prefs.prefs.scrollback, prefs.prefs.opacity, prefs.resolvedTheme, prefs.terminalDark], () => {
-      document.documentElement.style.setProperty('--mono', `'${fontName(prefs.prefs.termFont, DEFAULT_PREFS.termFont)}','JetBrains Mono',ui-monospace,monospace`)
-      nextTick(() => setTerminalOptions(termOptions()))
+      const font = termFont()
+      document.documentElement.style.setProperty('--mono', monoStack(font))
+      // Bundled fonts load on first use; wait for them so xterm measures the cells with the right font.
+      const size = prefs.prefs.termSize || 12
+      Promise.all([`${size}px '${font}'`, `bold ${size}px '${font}'`, `${size}px '${NERD_SYMBOLS}'`].map(f => document.fonts.load(f)))
+        .catch(() => {})
+        .then(() => nextTick(() => setTerminalOptions(termOptions())))
     }, { immediate: true })
     watch(() => prefs.prefs.opacity ?? 100, (o) => {
       document.documentElement.style.setProperty('--alpha', `${o}%`)

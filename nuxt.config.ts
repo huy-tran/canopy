@@ -1,4 +1,6 @@
 // Canopy renderer: a client-only Nuxt app loaded by Electron.
+import { TERM_FONTS } from './shared/fonts'
+
 export default defineNuxtConfig({
   ssr: false,
   modules: ['@nuxt/ui', '@pinia/nuxt'],
@@ -19,6 +21,8 @@ export default defineNuxtConfig({
       { name: 'Outfit', provider: 'google', weights: [300, 400, 500, 600, 700], global: true },
       { name: 'Geist', provider: 'google', weights: [500, 600], global: true },
       { name: 'JetBrains Mono', provider: 'google', weights: [400, 500, 700], global: true },
+      // Terminal fonts offered in Settings, regular and bold.
+      ...TERM_FONTS.filter(f => f.name !== 'JetBrains Mono').map(f => ({ ...f, weights: [400, 700], global: true })),
     ],
   },
   icon: {

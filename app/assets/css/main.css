@@ -152,7 +152,7 @@
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   --addbg: oklch(0.75 0.12 155 / 0.08);
   --delbg: oklch(0.68 0.14 25 / 0.10);
-  --mono: 'monofur for Powerline', 'JetBrains Mono', ui-monospace, monospace;
+  --mono: 'JetBrains Mono', 'Symbols Nerd Font Mono', ui-monospace, monospace;
   --app-font: 'Outfit', system-ui, sans-serif;
 }
 
@@ -227,6 +227,13 @@
 
 :root.translucent {
   --win: transparent;
+}
+
+/* Nerd Font icons, placed after every terminal font so status line icons render with any font. */
+@font-face {
+  font-family: 'Symbols Nerd Font Mono';
+  src: url('/fonts/SymbolsNerdFontMono-Regular.ttf') format('truetype');
+  font-display: block;
 }
 
 html,
