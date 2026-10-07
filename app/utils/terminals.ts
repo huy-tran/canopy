@@ -1,6 +1,6 @@
 // xterm instances live here, outside Vue, so they survive layout and project switches.
 // Panes attach a terminal's element into their host and detach it on unmount.
-import { Terminal, type ILink } from '@xterm/xterm'
+import { Terminal, type FontWeight, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
@@ -20,7 +20,13 @@ export interface TermOptions {
   fontFamily: string
   fontSize: number
   lineHeight: number
+  fontWeight: number
+  fontWeightBold: number
+  letterSpacing: number
+  minimumContrastRatio: number
+  drawBoldTextInBrightColors: boolean
   cursor: 'Block' | 'Bar' | 'Underline'
+  cursorBlink: boolean
   scrollback: number
   transparent: boolean
   theme: { background: string; foreground: string; cursor: string; selection: string; ansi?: Record<string, string> }
@@ -51,8 +57,13 @@ function xtermOptions(o: TermOptions) {
     fontFamily: o.fontFamily,
     fontSize: o.fontSize,
     lineHeight: o.lineHeight,
+    fontWeight: o.fontWeight as FontWeight,
+    fontWeightBold: o.fontWeightBold as FontWeight,
+    letterSpacing: o.letterSpacing,
+    minimumContrastRatio: o.minimumContrastRatio,
+    drawBoldTextInBrightColors: o.drawBoldTextInBrightColors,
     cursorStyle: CURSOR[o.cursor],
-    cursorBlink: true,
+    cursorBlink: o.cursorBlink,
     scrollback: o.scrollback,
     allowProposedApi: true,
     allowTransparency: o.transparent,
@@ -81,7 +92,13 @@ export function setTerminalOptions(o: TermOptions) {
     e.term.options.fontFamily = x.fontFamily
     e.term.options.fontSize = x.fontSize
     e.term.options.lineHeight = x.lineHeight
+    e.term.options.fontWeight = x.fontWeight
+    e.term.options.fontWeightBold = x.fontWeightBold
+    e.term.options.letterSpacing = x.letterSpacing
+    e.term.options.minimumContrastRatio = x.minimumContrastRatio
+    e.term.options.drawBoldTextInBrightColors = x.drawBoldTextInBrightColors
     e.term.options.cursorStyle = x.cursorStyle
+    e.term.options.cursorBlink = x.cursorBlink
     e.term.options.scrollback = x.scrollback
     e.term.options.allowTransparency = x.allowTransparency
     e.term.options.theme = x.theme

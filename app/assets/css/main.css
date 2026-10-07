@@ -112,6 +112,8 @@
   --mu: var(--ui-color-neutral-400);
   --fa: var(--ui-color-neutral-500);
   --ttx: var(--ui-color-neutral-200);
+  --ttx-dim: var(--ui-color-neutral-300);
+  --ttx-bright: var(--ui-color-neutral-50);
   --pbg: var(--ui-color-neutral-900);
   --seg: var(--ui-color-neutral-950);
   --segon: var(--ui-color-neutral-700);
@@ -177,6 +179,8 @@
   --mu: oklch(48% 0.015 248);
   --fa: oklch(54% 0.014 248);
   --ttx: oklch(25% 0.012 248);
+  --ttx-dim: oklch(38% 0.013 248);
+  --ttx-bright: oklch(12% 0.01 248);
   --pbg: oklch(94% 0.006 248);
   --seg: oklch(93% 0.007 248);
   --segon: #fff;

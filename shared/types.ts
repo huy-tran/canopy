@@ -115,6 +115,18 @@ export interface Prefs {
   termSize: number
   /** Terminal line height, as a multiple of the font size. */
   termLineHeight: number
+  /** Font weight for normal and bold terminal text. */
+  termWeight: number
+  termWeightBold: number
+  /** Extra space between characters, in px. */
+  termLetterSpacing: number
+  /** Terminal text colour: dimmer or brighter than the theme's. */
+  termBrightness: 'dim' | 'normal' | 'bright'
+  /** Raise the contrast of coloured text that is hard to read on the background. */
+  termContrast: boolean
+  /** Show bold text in the bright version of its colour. */
+  termBoldBright: boolean
+  cursorBlink: boolean
   cursor: 'Block' | 'Bar' | 'Underline'
   scrollback: string
   notifyWaiting: boolean

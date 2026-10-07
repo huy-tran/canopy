@@ -69,24 +69,36 @@ export default defineNuxtPlugin({
     const fontName = (v: string, fallback: string) => (v || '').trim().replace(/['";]/g, '') || fallback
     const termFont = () => fontName(prefs.prefs.termFont, DEFAULT_PREFS.termFont)
     const monoStack = (font: string) => `'${font}', 'JetBrains Mono', '${NERD_SYMBOLS}', ui-monospace, monospace`
+    const TEXT = { dim: '--ttx-dim', normal: '--ttx', bright: '--ttx-bright' } as const
     const termOptions = () => {
+      const p = prefs.prefs
+      const fg = css(TEXT[p.termBrightness] || '--ttx')
       return {
         fontFamily: monoStack(termFont()),
-        fontSize: prefs.prefs.termSize || 12,
-        lineHeight: prefs.prefs.termLineHeight || 1.15,
-        cursor: prefs.prefs.cursor,
-        scrollback: Math.max(100, parseInt(prefs.prefs.scrollback, 10) || 5000),
-        transparent: (prefs.prefs.opacity ?? 100) < 100,
-        theme: { background: css('--term'), foreground: css('--ttx'), cursor: css('--ttx'), selection: prefs.terminalDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)', ansi: prefs.terminalDark ? undefined : LIGHT_ANSI },
+        fontSize: p.termSize || DEFAULT_PREFS.termSize,
+        lineHeight: p.termLineHeight || DEFAULT_PREFS.termLineHeight,
+        fontWeight: p.termWeight || DEFAULT_PREFS.termWeight,
+        fontWeightBold: p.termWeightBold || DEFAULT_PREFS.termWeightBold,
+        letterSpacing: p.termLetterSpacing ?? 0,
+        minimumContrastRatio: p.termContrast ? 4.5 : 1,
+        drawBoldTextInBrightColors: p.termBoldBright ?? true,
+        cursor: p.cursor,
+        cursorBlink: p.cursorBlink ?? true,
+        scrollback: Math.max(100, parseInt(p.scrollback, 10) || 5000),
+        transparent: (p.opacity ?? 100) < 100,
+        theme: { background: css('--term'), foreground: fg, cursor: fg, selection: prefs.terminalDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)', ansi: prefs.terminalDark ? undefined : LIGHT_ANSI },
       }
     }
     setTerminalOptions(termOptions())
-    watch(() => [prefs.prefs.termFont, prefs.prefs.termSize, prefs.prefs.termLineHeight, prefs.prefs.cursor, prefs.prefs.scrollback, prefs.prefs.opacity, prefs.resolvedTheme, prefs.terminalDark], () => {
+    watch(() => {
+      const p = prefs.prefs
+      return [p.termFont, p.termSize, p.termLineHeight, p.termWeight, p.termWeightBold, p.termLetterSpacing, p.termBrightness, p.termContrast, p.termBoldBright, p.cursor, p.cursorBlink, p.scrollback, p.opacity, prefs.resolvedTheme, prefs.terminalDark]
+    }, () => {
       const font = termFont()
       document.documentElement.style.setProperty('--mono', monoStack(font))
       // Bundled fonts load on first use; wait for them so xterm measures the cells with the right font.
-      const size = prefs.prefs.termSize || 12
-      Promise.all([`${size}px '${font}'`, `bold ${size}px '${font}'`, `${size}px '${NERD_SYMBOLS}'`].map(f => document.fonts.load(f)))
+      const o = termOptions()
+      Promise.all([`${o.fontWeight} ${o.fontSize}px '${font}'`, `${o.fontWeightBold} ${o.fontSize}px '${font}'`, `${o.fontSize}px '${NERD_SYMBOLS}'`].map(f => document.fonts.load(f)))
         .catch(() => {})
         .then(() => nextTick(() => setTerminalOptions(termOptions())))
     }, { immediate: true })

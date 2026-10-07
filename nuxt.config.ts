@@ -20,9 +20,9 @@ export default defineNuxtConfig({
       // Referenced through CSS variables, so register them globally for @nuxt/fonts.
       { name: 'Outfit', provider: 'google', weights: [300, 400, 500, 600, 700], global: true },
       { name: 'Geist', provider: 'google', weights: [500, 600], global: true },
-      { name: 'JetBrains Mono', provider: 'google', weights: [400, 500, 700], global: true },
-      // Terminal fonts offered in Settings, regular and bold.
-      ...TERM_FONTS.filter(f => f.name !== 'JetBrains Mono').map(f => ({ ...f, weights: [400, 700], global: true })),
+      { name: 'JetBrains Mono', provider: 'google', weights: [300, 400, 500, 600, 700], global: true },
+      // Terminal fonts offered in Settings, in the weights Settings > Terminal offers.
+      ...TERM_FONTS.filter(f => f.name !== 'JetBrains Mono').map(f => ({ ...f, weights: [300, 400, 500, 600, 700], global: true })),
     ],
   },
   icon: {
