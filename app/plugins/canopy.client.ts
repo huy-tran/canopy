@@ -73,6 +73,7 @@ export default defineNuxtPlugin({
       return {
         fontFamily: monoStack(termFont()),
         fontSize: prefs.prefs.termSize || 12,
+        lineHeight: prefs.prefs.termLineHeight || 1.15,
         cursor: prefs.prefs.cursor,
         scrollback: Math.max(100, parseInt(prefs.prefs.scrollback, 10) || 5000),
         transparent: (prefs.prefs.opacity ?? 100) < 100,
@@ -80,7 +81,7 @@ export default defineNuxtPlugin({
       }
     }
     setTerminalOptions(termOptions())
-    watch(() => [prefs.prefs.termFont, prefs.prefs.termSize, prefs.prefs.cursor, prefs.prefs.scrollback, prefs.prefs.opacity, prefs.resolvedTheme, prefs.terminalDark], () => {
+    watch(() => [prefs.prefs.termFont, prefs.prefs.termSize, prefs.prefs.termLineHeight, prefs.prefs.cursor, prefs.prefs.scrollback, prefs.prefs.opacity, prefs.resolvedTheme, prefs.terminalDark], () => {
       const font = termFont()
       document.documentElement.style.setProperty('--mono', monoStack(font))
       // Bundled fonts load on first use; wait for them so xterm measures the cells with the right font.

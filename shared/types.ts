@@ -113,6 +113,8 @@ export interface Prefs {
   appFont: string
   termFont: string
   termSize: number
+  /** Terminal line height, as a multiple of the font size. */
+  termLineHeight: number
   cursor: 'Block' | 'Bar' | 'Underline'
   scrollback: string
   notifyWaiting: boolean

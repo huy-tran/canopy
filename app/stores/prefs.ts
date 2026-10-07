@@ -14,6 +14,7 @@ export const DEFAULT_PREFS: Prefs = {
   appFont: 'Outfit',
   termFont: 'JetBrains Mono',
   termSize: 12,
+  termLineHeight: 1.15,
   cursor: 'Block',
   scrollback: '5000',
   notifyWaiting: true,

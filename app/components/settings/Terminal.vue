@@ -4,6 +4,11 @@ import type { Prefs } from '#shared/types'
 const prefs = usePrefsStore()
 
 const SIZES = [11, 12, 13, 14].map(n => ({ label: String(n), value: n }))
+const LINE_HEIGHTS = [
+  { label: 'Compact', value: 1 },
+  { label: 'Normal', value: 1.15 },
+  { label: 'Relaxed', value: 1.3 },
+]
 const CURSORS: { label: string; value: Prefs['cursor'] }[] = [
   { label: 'Block', value: 'Block' },
   { label: 'Bar', value: 'Bar' },
@@ -29,6 +34,10 @@ const colors = computed({
 const size = computed({
   get: () => prefs.prefs.termSize,
   set: (v: number) => prefs.set({ termSize: v }),
+})
+const lineHeight = computed({
+  get: () => prefs.prefs.termLineHeight,
+  set: (v: number) => prefs.set({ termLineHeight: v }),
 })
 const cursor = computed({
   get: () => prefs.prefs.cursor,
@@ -67,6 +76,9 @@ function setScrollback(v: string | number) {
     </SettingsRow>
     <SettingsRow label="Font size" wrap>
       <Seg v-model="size" :items="SIZES" size="lg" />
+    </SettingsRow>
+    <SettingsRow label="Line height" sub="Space between lines. Compact matches most other terminals." wrap>
+      <Seg v-model="lineHeight" :items="LINE_HEIGHTS" size="lg" />
     </SettingsRow>
     <SettingsRow label="Cursor" wrap>
       <Seg v-model="cursor" :items="CURSORS" size="lg" />

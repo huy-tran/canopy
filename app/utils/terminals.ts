@@ -19,6 +19,7 @@ export interface TermHooks {
 export interface TermOptions {
   fontFamily: string
   fontSize: number
+  lineHeight: number
   cursor: 'Block' | 'Bar' | 'Underline'
   scrollback: number
   transparent: boolean
@@ -49,7 +50,7 @@ function xtermOptions(o: TermOptions) {
   return {
     fontFamily: o.fontFamily,
     fontSize: o.fontSize,
-    lineHeight: 1.15,
+    lineHeight: o.lineHeight,
     cursorStyle: CURSOR[o.cursor],
     cursorBlink: true,
     scrollback: o.scrollback,
@@ -79,6 +80,7 @@ export function setTerminalOptions(o: TermOptions) {
     const x = xtermOptions(o)
     e.term.options.fontFamily = x.fontFamily
     e.term.options.fontSize = x.fontSize
+    e.term.options.lineHeight = x.lineHeight
     e.term.options.cursorStyle = x.cursorStyle
     e.term.options.scrollback = x.scrollback
     e.term.options.allowTransparency = x.allowTransparency
