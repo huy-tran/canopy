@@ -2,7 +2,7 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] - 2026-10-07
 
 - 11 coding fonts come with Canopy for the terminal: JetBrains Mono, Cascadia Code, Fira Code, Geist Mono, IBM Plex Mono, Source Code Pro, Roboto Mono, Ubuntu Mono, Inconsolata, Victor Mono and Red Hat Mono. Pick them in Settings > Terminal without installing anything.
 - Status line icons show with every terminal font, not just Nerd Fonts.
@@ -81,6 +81,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.7.0]: https://github.com/huy-tran/canopy/releases/tag/v0.7.0
 [0.6.0]: https://github.com/huy-tran/canopy/releases/tag/v0.6.0
 [0.5.0]: https://github.com/huy-tran/canopy/releases/tag/v0.5.0
 [0.4.0]: https://github.com/huy-tran/canopy/releases/tag/v0.4.0
