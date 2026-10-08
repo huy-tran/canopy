@@ -21,6 +21,10 @@ const VIEWS = [
   { name: 'stage', q: 'view=stage&hour=21&fast=10' },
   { name: 'desks', q: 'view=desks&hour=15' },
   { name: 'reactions', q: 'view=react&hour=15' },
+  // Three days' common room lineups, which between them show every table and both corner games.
+  { name: 'common-pool-foos-darts', q: 'view=common&hour=15&fast=10&day=20734' },
+  { name: 'common-board-pool-arcade', q: 'view=common&hour=15&fast=10&day=20735' },
+  { name: 'common-pong-hockey-darts', q: 'view=common&hour=15&fast=10&day=20741' },
 ]
 
 const browser = process.env.CHROME || [

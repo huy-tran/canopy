@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The 3D World's common room has a new lineup every day: two of ping pong, foosball, pool, air hockey and a board game in the middle, and the arcade machine or darts at the front.
+
 ## [0.15.0] - 2026-10-08
 
 - The terminal in the 3D World's session window is see-through again. In 0.14.0 only the frame around it was.

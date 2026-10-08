@@ -4,16 +4,16 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import type { Act, Status, ToolResult } from '#shared/types'
 import type { Sky } from '~/composables/useWeather'
 import {
-  arcade, beanBag, bigScreen, blueprintGround, book, carpet, coffeeBar, consoleBench, controller, deskPod, disposeKit, disposeTree, doorArch, drumKit, drumstick,
-  type Figure, figure, floorLamp, floorText, FONT, foosball, guitar, hashOf, lightPillar, lightPool, lowWall, mat, mesh, micStand, oklch, type Pick,
-  pingPong, plant, type Role, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
+  airHockey, arcade, beanBag, bigScreen, blueprintGround, boardGame, book, carpet, coffeeBar, consoleBench, controller, cue, dartboard, deskPod, disposeKit,
+  disposeTree, doorArch, drumKit, drumstick, type Figure, figure, floorLamp, floorText, FONT, foosball, guitar, hashOf, lightPillar, lightPool, lowWall, mat,
+  mesh, micStand, oklch, type Pick, pingPong, plant, poolTable, type Role, seeded, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
 } from './kit'
 
 /**
  * The Canopy workspace as an open-plan office. Each project is a room behind low walls in its
  * colour, with its name on the arch over the door and on the floor outside. Each Claude session
  * is a developer or a designer: at their desk while Claude works or waits on you, off to the
- * common room for football, games, ping pong or a coffee while it is idle. Subagents are smaller
+ * common room for football, games, the day's table games or a coffee while it is idle. Subagents are smaller
  * helpers standing behind the one who started them. New people are summoned in a rune circle;
  * a room's lights are on while it has a session open. In front of the common room a rock band
  * plays on a stage, and idle people drift between the band, the games and the coffee.
@@ -110,7 +110,35 @@ type RoomActor = {
   floor: ReturnType<typeof floorText>
 }
 
-type SpotKind = 'sofa' | 'bean' | 'game' | 'pong' | 'foos' | 'coffee' | 'arcade' | 'chat' | 'crowd'
+type SpotKind = 'sofa' | 'bean' | 'game' | 'pong' | 'foos' | 'pool' | 'hockey' | 'board' | 'coffee' | 'arcade' | 'darts' | 'chat' | 'crowd'
+
+/** What can stand on the common room's two tables in the middle, and in its front corner. */
+const TABLES = ['pong', 'foos', 'pool', 'hockey', 'board'] as const
+const CORNERS = ['arcade', 'darts'] as const
+type Table = (typeof TABLES)[number]
+type Corner = (typeof CORNERS)[number]
+
+/** Every pair of tables, in a fixed shuffled order, so each day brings out a different pair. */
+const PAIRS: [Table, Table][] = (() => {
+  const pairs: [Table, Table][] = []
+  TABLES.forEach((a, i) => TABLES.slice(i + 1).forEach(b => pairs.push([a, b])))
+  const rand = seeded(20261008)
+  for (let i = pairs.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[pairs[i], pairs[j]] = [pairs[j]!, pairs[i]!]
+  }
+  return pairs
+})()
+
+/** The common room's lineup on a day: a pair of tables (swapping sides every other round) and the corner game. */
+export function lineupFor(day: number): { tables: [Table, Table]; corner: Corner } {
+  const round = Math.floor(day / PAIRS.length)
+  const [a, b] = PAIRS[day % PAIRS.length]!
+  return { tables: round % 2 ? [b, a] : [a, b], corner: CORNERS[(day + round) % CORNERS.length]! }
+}
+
+/** Today as a count of days, by the local calendar, so the common room changes at midnight. */
+const dayNumber = (at = new Date()) => Math.floor(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()) / 86_400_000)
 
 /** Somewhere in the common room to spend idle time. */
 type Spot = {
@@ -168,6 +196,7 @@ type PersonActor = {
   gone: boolean
   stride: number
   pad: THREE.Object3D | null
+  cue: THREE.Object3D | null
   book: THREE.Object3D | null
   /** A reaction to a command finishing: cheering at passing tests, smoke at a failure, until `until`. */
   react: { ok: boolean; test: boolean; until: number } | null
@@ -232,6 +261,11 @@ export class WorkspaceScene {
   private game: Telly | null = null
   private arcadeGlow: THREE.MeshStandardMaterial | null = null
   private pong: { ball: THREE.Mesh; x: number; z: number } | null = null
+  private hockey: { puck: THREE.Mesh; mallets: THREE.Object3D[] } | null = null
+  /** The day the common room is laid out for, when to look at the calendar again, and how to lay it all out anew. */
+  private day = 0
+  private dayCheck = 0
+  private rebuild: (() => void) | null = null
   private band: Band | null = null
   /** The person the camera keeps up with, and where they were last frame. */
   private follow: { id: string; last: THREE.Vector3 } | null = null
@@ -305,7 +339,8 @@ export class WorkspaceScene {
     const signature = JSON.stringify(rooms.map(r => [r.id, r.name, r.hue, perSide(r.id)]))
     if (signature !== this.structure) {
       this.structure = signature
-      this.build(rooms, perSide)
+      this.rebuild = () => this.build(rooms, perSide)
+      this.rebuild()
     }
 
     const t = this.clock.elapsedTime
@@ -538,6 +573,7 @@ export class WorkspaceScene {
     this.game = null
     this.arcadeGlow = null
     this.pong = null
+    this.hockey = null
     this.band = null
   }
 
@@ -673,8 +709,9 @@ export class WorkspaceScene {
 
   /**
    * The common room in front of the rooms: football on the big TV and sofas to watch it from on the
-   * left, ping pong and foosball in the middle, the games corner on the right, a coffee bar and an
-   * arcade machine at the front, and string lights over it all.
+   * left, two tables in the middle (ping pong, foosball, pool, air hockey or a board game), the games
+   * corner on the right, a coffee bar and the arcade machine or darts at the front, and string lights
+   * over it all. The tables and the front game change every day.
    */
   private buildCommon(width: number) {
     const x0 = -width / 2, x1 = width / 2
@@ -706,17 +743,46 @@ export class WorkspaceScene {
       spot('bean', x0 + 5.6, zc + dz, -Math.PI / 2, x0 + 6.6, -0.02, 'football')
     }
 
-    // Ping pong and foosball in the middle.
-    const pong = at(pingPong(), -3.4, zc - 0.6)
-    spot('pong', -5.5, zc - 0.6, Math.PI / 2, -5.5)
-    spot('pong', -1.3, zc - 0.6, -Math.PI / 2, -1.3)
-    const ball = mesh(new THREE.SphereGeometry(0.05, 10, 8), mat('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.3 }), false)
-    ball.visible = false
-    g.add(ball)
-    this.pong = { ball, x: pong.position.x, z: pong.position.z }
-    at(foosball(), 3.4, zc - 0.6)
-    spot('foos', 3.4, zc - 1.35, 0, 3.4)
-    spot('foos', 3.4, zc + 0.15, Math.PI, 4.8)
+    // Two tables in the middle, a different pair every day.
+    this.day = this.today()
+    const lineup = lineupFor(this.day)
+    const tables: Record<Table, (x: number, z: number) => void> = {
+      pong: (x, z) => {
+        at(pingPong(), x, z)
+        spot('pong', x - 2.1, z, Math.PI / 2, x - 2.1)
+        spot('pong', x + 2.1, z, -Math.PI / 2, x + 2.1)
+        const ball = mesh(new THREE.SphereGeometry(0.05, 10, 8), mat('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.3 }), false)
+        ball.visible = false
+        g.add(ball)
+        this.pong = { ball, x, z }
+      },
+      foos: (x, z) => {
+        at(foosball(), x, z)
+        spot('foos', x, z - 0.75, 0, x)
+        spot('foos', x, z + 0.75, Math.PI, x + 1.4)
+      },
+      pool: (x, z) => {
+        at(poolTable(), x, z)
+        spot('pool', x - 1.6, z, Math.PI / 2, x - 1.6)
+        spot('pool', x + 1.6, z + 0.25, -Math.PI / 2, x + 1.6)
+      },
+      hockey: (x, z) => {
+        const h = airHockey()
+        at(h.group, x, z)
+        spot('hockey', x - 1.3, z, Math.PI / 2, x - 1.3)
+        spot('hockey', x + 1.3, z, -Math.PI / 2, x + 1.3)
+        this.hockey = { puck: h.puck, mallets: h.mallets }
+      },
+      board: (x, z) => {
+        at(boardGame(), x, z)
+        spot('board', x, z - 0.95, 0, x, 0.1)
+        spot('board', x - 0.95, z, Math.PI / 2, x - 0.95, 0.1)
+        spot('board', x + 0.95, z, -Math.PI / 2, x + 0.95, 0.1)
+        spot('board', x, z + 0.95, Math.PI, x + 1.6, 0.1)
+      },
+    }
+    tables[lineup.tables[0]](-3.4, zc - 0.6)
+    tables[lineup.tables[1]](3.4, zc - 0.6)
 
     // The games corner: the TV faces -x over the console, three bean bags face it.
     at(carpet(6, 6, '#8c7ad6'), x1 - 3, zc)
@@ -730,13 +796,19 @@ export class WorkspaceScene {
       spot(i < 2 ? 'game' : 'bean', x1 - 3.9, zc + dz, Math.PI / 2, x1 - 2.8, -0.02, 'game')
     })
 
-    // The coffee bar and the arcade machine along the front, facing back into the room.
+    // The coffee bar and the day's game (the arcade machine or darts) along the front, facing back into the room.
     at(coffeeBar(), x0 + 3, zf, Math.PI)
     spot('coffee', x0 + 2.4, zf - 1.05, 0, x0 + 2.2)
     spot('coffee', x0 + 3.7, zf - 1.05, 0, x0 + 2.2)
-    this.arcadeGlow = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ff4fd8', emissiveIntensity: 1.4 })
-    at(arcade(this.arcadeGlow), x1 - 3, zf, Math.PI)
-    spot('arcade', x1 - 3, zf - 0.95, 0, x1 - 2.8)
+    if (lineup.corner === 'arcade') {
+      this.arcadeGlow = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ff4fd8', emissiveIntensity: 1.4 })
+      at(arcade(this.arcadeGlow), x1 - 3, zf, Math.PI)
+      spot('arcade', x1 - 3, zf - 0.95, 0, x1 - 2.8)
+    } else {
+      at(dartboard(2.3), x1 - 3, zf, Math.PI)
+      spot('darts', x1 - 3.2, zf - 2.4, 0, x1 - 3.2)
+      spot('darts', x1 - 2.1, zf - 2.75, -0.3, x1 - 2.1)
+    }
 
     // A spot to stand around and chat, in a ring.
     for (let i = 0; i < 6; i++) {
@@ -990,7 +1062,7 @@ export class WorkspaceScene {
       data: p, fig, label, chip, bubble, bubbleUntil: 0, speech, saidAt: 0, speechUntil: 0, born, dying: null,
       summon: born > 0 ? this.summonFx(desk.pos, color, 46) : null,
       pos: desk.pos.clone(), face: desk.face, desk, mode: 'desk', dest: 'desk', path: [], trail: [], spot: null,
-      calmSince: born, restless: 0, leaving: null, gone: false, stride: 0, pad: null, book: null, react: null, reactedAt: p.result?.at || 0, phase: (hashOf(p.id) % 1000) / 160,
+      calmSince: born, restless: 0, leaving: null, gone: false, stride: 0, pad: null, cue: null, book: null, react: null, reactedAt: p.result?.at || 0, phase: (hashOf(p.id) % 1000) / 160,
     }
     if (actor.summon) this.say(actor, '✨', 2.5)
     this.people.set(p.id, actor)
@@ -1315,8 +1387,18 @@ export class WorkspaceScene {
     }
   }
 
-  /** The football on the big TV, the racing game on the other, the arcade and the ping pong ball. */
+  /** Today's day count; the common room's lineup follows it. */
+  private today() {
+    return dayNumber()
+  }
+
+  /** The football on the big TV, the racing game on the other, the arcade, the ping pong ball and the air hockey puck. */
   private stepCommon(t: number) {
+    // Past midnight: lay the room out again for the new day's lineup.
+    if (t >= this.dayCheck) {
+      this.dayCheck = t + 30
+      if (this.rebuild && this.today() !== this.day) this.rebuild()
+    }
     if (this.arcadeGlow) this.arcadeGlow.emissive.setHSL((t * 0.08) % 1, 0.8, 0.55)
     const f = this.football
     if (f && t >= f.next) {
@@ -1343,6 +1425,20 @@ export class WorkspaceScene {
         const u = (t * 0.7) % 2, k = u < 1 ? u : 2 - u
         p.ball.position.set(p.x - 1.35 + k * 2.7, 0.8 + Math.abs(Math.sin(k * Math.PI * 2)) * 0.32, p.z + Math.sin(t * 1.3) * 0.4)
       }
+    }
+    const h = this.hockey
+    if (h) {
+      // The puck bounces off the side rails on its way end to end; each mallet follows it near its own goal.
+      const playing = this.spots.some(s => s.kind === 'hockey' && s.taken && this.people.get(s.taken)?.mode === 'leisure')
+      const u = playing ? (t * 0.9) % 2 : 0.5, k = u < 1 ? u : 2 - u
+      const px = -0.78 + k * 1.56
+      const w = (t * 1.7) % 2, pz = playing ? ((w < 1 ? w : 2 - w) - 0.5) * 0.76 : 0
+      h.puck.position.x = px
+      h.puck.position.z = pz
+      h.mallets.forEach((m, i) => {
+        m.position.z = THREE.MathUtils.lerp(m.position.z, playing ? pz * 0.8 : 0, 0.15)
+        m.position.x = (i ? 1 : -1) * (0.82 - (Math.abs(px) > 0.6 && Math.sign(px) === (i ? 1 : -1) ? 0.08 : 0))
+      })
     }
   }
 
@@ -1444,6 +1540,13 @@ export class WorkspaceScene {
       fig.rig.add(a.pad)
     }
     if (a.pad) a.pad.visible = gaming
+    const shooting = a.mode === 'leisure' && a.spot?.kind === 'pool'
+    if (shooting && !a.cue) {
+      a.cue = cue()
+      a.cue.position.set(0.06, 0.78, 0.25)
+      fig.rig.add(a.cue)
+    }
+    if (a.cue) a.cue.visible = shooting
 
     if (a.leaving !== null) {
       // On their feet, waving goodbye with a little bounce.
@@ -1566,6 +1669,52 @@ export class WorkspaceScene {
         la.rotation.x = -1.35 + Math.sin(ph * 11) * 0.15
         ra.rotation.x = -1.35 + Math.sin(ph * 11 + 2) * 0.15
         fig.body.rotation.z = Math.sin(ph * 5) * 0.08
+        break
+      case 'pool': {
+        // Lining up a shot over the cue, then a stroke every few seconds.
+        const stroke = (ph % 5) > 4.2 ? Math.sin(((ph % 5) - 4.2) * Math.PI * 2.5) * 0.12 : 0
+        fig.body.rotation.x = 0.35
+        fig.head.rotation.x = 0.15
+        la.rotation.x = -1.35
+        ra.rotation.x = -0.9
+        la.rotation.z = 0.15
+        ra.rotation.z = 0.2
+        if (a.cue) {
+          a.cue.position.z = 0.25 + stroke
+          a.cue.rotation.x = 0.18
+        }
+        break
+      }
+      case 'hockey':
+        // One hand on the mallet, sliding it after the puck.
+        fig.body.rotation.x = 0.25
+        ra.rotation.x = -1.25
+        ra.rotation.z = 0.25 + Math.sin(t * 1.7 * Math.PI) * 0.2
+        la.rotation.x = -0.4
+        fig.rig.position.x = Math.sin(t * 1.7 * Math.PI) * 0.06
+        break
+      case 'board':
+        // Elbows on the table, and now and then a move.
+        fig.body.rotation.x = 0.15
+        la.rotation.x = -1.0
+        ra.rotation.x = (ph % 9) < 1.2 ? -1.45 + Math.sin(ph * 8) * 0.1 : -1.0
+        fig.head.rotation.x = 0.25 + Math.sin(ph * 0.6) * 0.05
+        fig.head.rotation.z = Math.sin(ph * 0.4) * 0.08
+        break
+      case 'darts':
+        if (s.face === 0) {
+          // On the line: aim, then a throw every few seconds.
+          const u = ph % 4
+          ra.rotation.x = u < 3 ? -2.0 : -2.0 + Math.sin((u - 3) * Math.PI) * 1.0
+          ra.rotation.z = 0.15
+          fig.head.rotation.x = -0.1
+        } else {
+          // Waiting their turn, arms folded.
+          la.rotation.x = ra.rotation.x = -0.9
+          la.rotation.z = 0.6
+          ra.rotation.z = -0.6
+          fig.head.rotation.z = Math.sin(ph * 0.7) * 0.06
+        }
         break
       case 'coffee':
         // A sip every few seconds.

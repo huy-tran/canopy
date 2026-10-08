@@ -927,6 +927,179 @@ export function arcade(screen: THREE.Material) {
   return g
 }
 
+/** A pool table along x: green felt in wooden rails, six pockets and the balls racked up. */
+export function poolTable() {
+  const g = new THREE.Group()
+  const wood = mat('#6e4529', { roughness: 0.6 })
+  g.add(rbox(2.3, 0.2, 1.25, wood, 0.6, 0.05))
+  const felt = mesh(boxGeo(2.05, 0.02, 1.0), mat('#2f8a57', { roughness: 1 }), false)
+  felt.position.y = 0.81
+  g.add(felt)
+  for (const z of [-0.56, 0.56]) {
+    const rail = rbox(2.3, 0.07, 0.13, wood, 0.8, 0.03)
+    rail.position.z = z
+    g.add(rail)
+  }
+  for (const x of [-1.09, 1.09]) {
+    const rail = rbox(0.13, 0.07, 1.25, wood, 0.8, 0.03)
+    rail.position.x = x
+    g.add(rail)
+  }
+  const pocket = mat('#141519')
+  for (const x of [-1.0, 0, 1.0]) {
+    for (const z of [-0.47, 0.47]) {
+      const p = mesh(geo('pool-pocket', () => new THREE.CylinderGeometry(0.06, 0.06, 0.012, 12)), pocket, false)
+      p.position.set(x, 0.825, z)
+      g.add(p)
+    }
+  }
+  for (const x of [-0.6, 0.6]) {
+    for (const z of [-0.45, 0.45]) {
+      const leg = rbox(0.14, 0.6, 0.14, wood, 0, 0.03)
+      leg.position.set(x * 1.4, leg.position.y, z)
+      g.add(leg)
+    }
+  }
+  // The rack, a triangle of five rows pointing at the cue ball.
+  const colors = ['#f2c94c', '#4f7cc9', '#e85f5c', '#8a5bd6', '#f08a3c', '#3f9b55', '#8a2d2d', '#141519']
+  const ball = geo('pool-ball', () => new THREE.SphereGeometry(0.035, 12, 10))
+  let n = 0
+  for (let row = 0; row < 5; row++) {
+    for (let i = 0; i <= row; i++) {
+      const b = mesh(ball, mat(colors[n++ % colors.length]!, { roughness: 0.3 }), false)
+      b.position.set(0.45 + row * 0.062, 0.855, (i - row / 2) * 0.072)
+      g.add(b)
+    }
+  }
+  const cue = mesh(ball, mat('#f7f7f8', { roughness: 0.3 }), false)
+  cue.position.set(-0.5, 0.855, 0)
+  g.add(cue)
+  return g
+}
+
+/** A pool cue, held in both hands along the arms. */
+export function cue() {
+  const g = new THREE.Group()
+  const shaft = mesh(geo('cue', () => new THREE.CylinderGeometry(0.008, 0.016, 1.3, 8)), mat('#d9b48a', { roughness: 0.5 }), false)
+  shaft.rotation.x = Math.PI / 2
+  g.add(shaft)
+  return g
+}
+
+/**
+ * An air hockey table along x: a white deck in blue rails with a goal at each end. `puck` and the
+ * two `mallets` (at -x and +x) are left loose for the scene to slide about.
+ */
+export function airHockey() {
+  const g = new THREE.Group()
+  g.add(rbox(2.0, 0.22, 1.05, mat('#2f4fa8', { roughness: 0.5 }), 0.58, 0.05))
+  const deck = mesh(boxGeo(1.84, 0.01, 0.9), mat('#f2f4f8', { roughness: 0.2 }), false)
+  deck.position.y = 0.805
+  g.add(deck)
+  const line = mat('#e85f5c')
+  const mid = mesh(boxGeo(0.015, 0.003, 0.9), line, false)
+  mid.position.y = 0.812
+  g.add(mid)
+  for (const x of [-0.93, 0.93]) {
+    const goal = mesh(boxGeo(0.02, 0.04, 0.32), mat('#141519'), false)
+    goal.position.set(x, 0.82, 0)
+    g.add(goal)
+  }
+  for (const x of [-0.85, 0.85]) {
+    for (const z of [-0.4, 0.4]) {
+      const leg = rbox(0.1, 0.58, 0.1, mat('#2b2e38'), 0, 0.02)
+      leg.position.set(x, leg.position.y, z)
+      g.add(leg)
+    }
+  }
+  const puck = mesh(geo('puck', () => new THREE.CylinderGeometry(0.05, 0.05, 0.015, 14)), mat('#e85f5c', { emissive: '#e85f5c', emissiveIntensity: 0.3 }), false)
+  puck.position.y = 0.818
+  g.add(puck)
+  const mallets = ['#f2c94c', '#4cc38a'].map((c, i) => {
+    const m = new THREE.Group()
+    m.add(mesh(geo('mallet', () => new THREE.CylinderGeometry(0.07, 0.07, 0.03, 14)), mat(c), false))
+    const knob = mesh(geo('mallet-knob', () => new THREE.CylinderGeometry(0.025, 0.03, 0.06, 10)), mat(c), false)
+    knob.position.y = 0.04
+    m.add(knob)
+    m.position.set(i ? 0.75 : -0.75, 0.825, 0)
+    g.add(m)
+    return m
+  })
+  return { group: g, puck, mallets }
+}
+
+/** A round table set for a board game, with a stool on each of its four sides. */
+export function boardGame() {
+  const g = new THREE.Group()
+  const wood = mat(WOOD, { roughness: 0.7 })
+  const top = mesh(geo('board-top', () => new THREE.CylinderGeometry(0.6, 0.6, 0.06, 28)), wood)
+  top.position.y = 0.72
+  g.add(top)
+  const stem = mesh(geo('board-stem', () => new THREE.CylinderGeometry(0.06, 0.06, 0.7, 10)), mat('#5a3d27'), false)
+  stem.position.y = 0.36
+  g.add(stem)
+  const foot = mesh(geo('board-foot', () => new THREE.CylinderGeometry(0.3, 0.32, 0.04, 20)), mat('#5a3d27'))
+  foot.position.y = 0.02
+  g.add(foot)
+  // The board, a checkerboard painted in two tones, with a few pieces out.
+  const board = rbox(0.62, 0.025, 0.62, mat('#f7f2e6', { roughness: 0.8 }), 0.75, 0.01)
+  g.add(board)
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      if ((i + j) % 2) continue
+      const sq = mesh(boxGeo(0.14, 0.004, 0.14), mat('#8a5bd6', { roughness: 0.8 }), false)
+      sq.position.set(-0.225 + i * 0.15, 0.777, -0.225 + j * 0.15)
+      g.add(sq)
+    }
+  }
+  ;[[-0.22, -0.08, '#e85f5c'], [0.08, 0.22, '#e85f5c'], [0.22, -0.22, '#4f7cc9'], [-0.08, 0.08, '#4f7cc9'], [0.08, -0.08, '#f2c94c']].forEach(([x, z, c]) => {
+    const piece = mesh(geo('board-piece', () => new THREE.CylinderGeometry(0.035, 0.045, 0.09, 10)), mat(c as string), false)
+    piece.position.set(x as number, 0.82, z as number)
+    g.add(piece)
+  })
+  const seat = mat('#e98a5b', { roughness: 0.9 })
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2
+    const stool = new THREE.Group()
+    stool.add(rbox(0.38, 0.1, 0.38, seat, 0.44, 0.05))
+    const leg = mesh(geo('stool-leg', () => new THREE.CylinderGeometry(0.04, 0.05, 0.44, 8)), mat('#4a4f5a', { metalness: 0.3, roughness: 0.4 }), false)
+    leg.position.y = 0.22
+    stool.add(leg)
+    stool.position.set(Math.sin(a) * 0.95, 0, Math.cos(a) * 0.95)
+    g.add(stool)
+  }
+  return g
+}
+
+/** A dartboard on a stand, facing +z, with a throwing line painted `line` in front of it. */
+export function dartboard(line: number) {
+  const g = new THREE.Group()
+  const post = mat('#3a3d48', { roughness: 0.5 })
+  g.add(rbox(0.7, 0.05, 0.45, post, 0, 0.02))
+  const pole = rbox(0.08, 1.9, 0.08, post, 0, 0.02)
+  pole.position.z = -0.12
+  g.add(pole)
+  const back = rbox(0.95, 0.95, 0.06, mat('#2b2e38', { roughness: 0.9 }), 1.25, 0.04)
+  back.position.z = -0.06
+  g.add(back)
+  ;[['#141519', 0.36], ['#e85f5c', 0.3], ['#f7f2e6', 0.26], ['#3f9b55', 0.16], ['#141519', 0.12], ['#e85f5c', 0.04]].forEach(([c, r], i) => {
+    const ring = mesh(geo(`dart-ring:${r}`, () => new THREE.CylinderGeometry(r as number, r as number, 0.02, 28)), mat(c as string, { roughness: 0.8 }), false)
+    ring.rotation.x = Math.PI / 2
+    ring.position.set(0, 1.72, -0.01 + i * 0.004)
+    g.add(ring)
+  })
+  for (const [x, y] of [[0.08, 0.06], [-0.12, -0.04], [0.02, -0.15]]) {
+    const dart = mesh(geo('dart', () => new THREE.CylinderGeometry(0.006, 0.006, 0.12, 6)), mat('#f2c94c'), false)
+    dart.rotation.x = Math.PI / 2
+    dart.position.set(x!, 1.72 + y!, 0.07)
+    g.add(dart)
+  }
+  const oche = mesh(boxGeo(0.9, 0.006, 0.05), mat('#f2c94c', { roughness: 0.6 }), false)
+  oche.position.set(0, 0.004, line)
+  g.add(oche)
+  return g
+}
+
 /** The coffee bar: a counter with an espresso machine and a row of mugs, facing +z. */
 export function coffeeBar() {
   const g = new THREE.Group()

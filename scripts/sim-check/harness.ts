@@ -15,6 +15,8 @@ const scene: any = new WorkspaceScene({
   onMenu: () => {},
   onFarewell: () => {},
 })
+// A day count, to lay the common room out for that day's lineup.
+if (q.has('day')) scene.today = () => Number(q.get('day'))
 
 const rooms = ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((name, i) => ({
   id: 'r' + i, name, hue: i * 85 + 20, stats: { sessions: 3, working: 2, waiting: 1, subagents: 1, today: '$1.20' },
@@ -59,6 +61,11 @@ setTimeout(() => {
   }
   const bravo = scene.rooms.get('r1').center as THREE.Vector3
   if (view === 'stage') at([5, 8, 33], [0, 0.8, 21])
+  else if (view === 'common') {
+    // The middle tables and the front corner's game, from the sofas' side of the room.
+    const x1 = (scene.bounds.w - 8) / 2
+    at([x1 - 1, 8, 24], [x1 - 6, 0.5, 12])
+  }
   else if (view === 'desks') at([bravo.x + 4, 6, bravo.z + 8], [bravo.x, 0.6, bravo.z])
   else if (view === 'react') at([bravo.x + 2, 4, bravo.z + 5], [bravo.x, 0.8, bravo.z])
   ;(window as any).simErrors = errors
