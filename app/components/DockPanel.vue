@@ -102,16 +102,6 @@ function remove() {
   V.forget(v.id)
 }
 
-function closeShell(id: string) {
-  const i = shells.value.findIndex(s => s.id === id)
-  S.close(id)
-  const rest = shells.value.filter(s => s.id !== id)
-  const next = rest[Math.min(i, rest.length - 1)]
-  if (next) ui.svcTab = next.id
-  else if (list.value[0]) ui.svcTab = list.value[0].id
-  else ui.logsOpen = false
-}
-
 const btn = 'h-[22px] flex-none whitespace-nowrap rounded px-2 py-0 text-[11px] font-normal'
 const tab = 'mono box-border flex h-6 max-w-[220px] min-w-0 shrink grow-0 basis-auto cursor-pointer items-center gap-1.5 whitespace-nowrap rounded px-[9px] text-[11px]'
 const iconBtn = 'grid size-[22px] flex-none place-items-center rounded p-0 text-[11px] text-(--fa) hover:bg-(--hov) hover:text-(--tx)'
@@ -175,7 +165,7 @@ const iconBtn = 'grid size-[22px] flex-none place-items-center rounded p-0 text-
             <span
               title="Close shell"
               class="grid size-4 flex-none place-items-center rounded-sm text-(--fa) hover:bg-(--hov) hover:text-(--tx)"
-              @click.stop="closeShell(s.id)"
+              @click.stop="ui.closeDockShell(s.id)"
             ><UIcon name="i-hugeicons-cancel-01" class="size-2.5" /></span>
           </div>
           <UDropdownMenu v-model:open="ui.shellPicker" :items="newShellItems" :content="pickerContent" :ui="{ content: 'w-[220px]' }">

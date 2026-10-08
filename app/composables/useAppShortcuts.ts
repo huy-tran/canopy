@@ -23,7 +23,7 @@ export function useAppShortcuts() {
   /** Mirrors the prototype: modals swallow shortcuts; the palettes only answer to their own keys. */
   function allowed(id: string) {
     if (ui.lightbox) return false
-    if (ui.projectModal || ui.settings || ui.about || ui.updOpen || ui.summary) return false
+    if (ui.projectModal || ui.settings || ui.about || ui.updOpen || ui.summary || ui.confirm) return false
     if (ui.explorer) return id === 'files'
     if (ui.palette) return id === 'jump' || id === 'commands'
     return true
@@ -61,7 +61,7 @@ export function useAppShortcuts() {
       c[`alt_${i}`] = {
         usingInput: true,
         handler: () => {
-          if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox) return
+          if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox || ui.confirm) return
           const p = P.ordered[i - 1]
           if (p) ui.selectProject(p.id)
         },

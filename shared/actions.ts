@@ -26,6 +26,8 @@ export const ACTIONS: ActionDef[] = [
   { id: 'promptAll', g: 'Sessions', label: 'Prompt several sessions at once', def: ['Ctrl+Shift+Enter'] },
   { id: 'share', g: 'Sessions', label: 'Share changes with the other repo', def: ['Ctrl+Shift+H'] },
   { id: 'details', g: 'Sessions', label: 'Session details', def: ['Ctrl+Shift+D'] },
+  { id: 'closeTerminal', g: 'Sessions', label: 'Close the active terminal', def: ['Ctrl+W'] },
+  { id: 'closeAll', g: 'Sessions', label: 'Close all terminals in this project', def: ['Ctrl+Shift+W'] },
   { id: 'strip', g: 'Sessions', label: 'Show or hide the image strip', def: ['Ctrl+Shift+M'] },
   { id: 'cycleLayout', g: 'Layout', label: 'Cycle layout: tabs, split, grid', def: ['Ctrl+Shift+L'] },
   { id: 'files', g: 'Files and dev servers', label: 'Files and git changes', def: ['Ctrl+Shift+F'] },

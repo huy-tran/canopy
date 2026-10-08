@@ -36,6 +36,7 @@ useAppShortcuts()
     <FileExplorerModal />
     <SettingsModal />
     <AboutModal />
+    <ConfirmModal />
     <DailySummaryModal />
     <UpdateModal />
     <ImageLightbox />

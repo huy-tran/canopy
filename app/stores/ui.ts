@@ -25,6 +25,8 @@ export const useUiStore = defineStore('ui', () => {
   const recaps = ref<Record<string, string>>({})
   /** Timesheet hours for those recaps: Claude's estimate and any value typed in. */
   const recapHours = ref<Record<string, RecapHours>>({})
+  /** A yes/no question before a bulk action. */
+  const confirm = ref<{ title: string; body: string; ok: string; run: () => void } | null>(null)
   const updOpen = ref(false)
   const upd = ref<UpdateState | null>(null)
   const details = ref(false)
@@ -211,6 +213,38 @@ export const useUiStore = defineStore('ui', () => {
   function closeSession(sid: string) {
     S.close(sid)
     focusLater()
+  }
+
+  /** Closes the shell in view while the dock panel has focus, else the focused pane. */
+  function closeTerminal() {
+    if ((document.activeElement as HTMLElement | null)?.closest('[data-dock-panel]')) {
+      const s = panelShell()
+      if (s) closeDockShell(s.id)
+      return
+    }
+    if (fid.value) closeSession(fid.value)
+  }
+
+  /** Closes every pane and docked shell in the selected project, after asking. */
+  function closeAll() {
+    const pid = P.sel
+    const n = pid ? S.sessions.filter(s => s.pid === pid).length : 0
+    if (!pid || !n) return
+    confirm.value = {
+      title: `Close all ${n} terminal${n === 1 ? '' : 's'}?`,
+      body: `Ends every Claude session and shell in ${P.byId(pid)?.name || 'this project'}.`,
+      ok: 'Close all',
+      run: () => {
+        S.sessions.filter(s => s.pid === pid).forEach(s => S.close(s.id))
+        if (P.sel === pid) {
+          svcTab.value = V.ofProject(cur.value)[0]?.id || null
+          if (!svcTab.value) logsOpen.value = false
+        }
+        focusLater()
+      },
+    }
+    palette.value = null
+    closeTransient()
   }
 
   async function openEditor() {
@@ -476,6 +510,24 @@ export const useUiStore = defineStore('ui', () => {
     openShell(s?.repoId, { kind, cwd: s?.cwd })
   }
 
+  /** Closes a docked shell and shows the next tab, hiding the panel when nothing is left. */
+  function closeDockShell(id: string) {
+    const ss = S.dockedOf(P.sel || '')
+    const i = ss.findIndex(s => s.id === id)
+    S.close(id)
+    const rest = ss.filter(s => s.id !== id)
+    const next = rest[Math.min(i, rest.length - 1)]
+    const svc = V.ofProject(cur.value)[0]
+    if (next) {
+      svcTab.value = next.id
+      setTimeout(() => focusTerminal(next.id), 60)
+    } else if (svc) svcTab.value = svc.id
+    else {
+      logsOpen.value = false
+      focusLater()
+    }
+  }
+
   function cycleShell(dir: number) {
     const ss = S.dockedOf(P.sel || '')
     if (!ss.length) return
@@ -586,6 +638,8 @@ export const useUiStore = defineStore('ui', () => {
       share: shareFocused,
       details: () => { details.value = !details.value },
       cycleLayout,
+      closeTerminal,
+      closeAll,
       strip: () => { stripOn.value = !stripOn.value },
       files: () => openExplorer(),
       editor: openEditor,
@@ -606,11 +660,11 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
-    newSession, startAll, closeSession, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
+    newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
   }
