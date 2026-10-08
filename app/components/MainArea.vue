@@ -15,7 +15,8 @@ const showPanel = computed(() => ui.panelShown)
 
 <template>
   <div class="flex h-full min-w-0 flex-col">
-    <div v-if="!cur" class="grid flex-1 place-items-center">
+    <SimulationView v-if="ui.sim" />
+    <div v-else-if="!cur" class="grid flex-1 place-items-center">
       <div class="flex flex-col items-center gap-3">
         <span class="text-[14px] font-semibold">No projects yet</span>
         <UButton color="primary" size="md" label="New project" @click="ui.openModal('add')" />

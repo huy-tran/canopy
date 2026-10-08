@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { HookEvent, Project, Repo, SavedSession, Session, ShellKind, UsageUpdate } from '#shared/types'
+import type { Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, Subagent, UsageUpdate } from '#shared/types'
 import { costOf, modelLabel } from '#shared/pricing'
 
 function relPath(cwd: string, file: string) {
@@ -31,6 +31,19 @@ export const useSessionsStore = defineStore('sessions', () => {
   const lastTool = new Map<string, { name: string; input: any }>()
   /** Longer permission text for notifications, per session. */
   const permAction = ref<Record<string, string>>({})
+  /** Subagents running under each session. */
+  const subagents = ref<Record<string, Subagent[]>>({})
+  /** Claude's latest line or tool call per session, from its transcript, for the workspace simulation. */
+  const chatter = ref<Record<string, Chatter>>({})
+
+  function setSubagents(sid: string, list: Subagent[]) {
+    const next = { ...subagents.value }
+    if (list.length) next[sid] = list
+    else delete next[sid]
+    subagents.value = next
+  }
+
+  const isSubagentTool = (name: unknown) => name === 'Task' || name === 'Agent'
 
   const byId = (id: string | null | undefined) => sessions.value.find(s => s.id === id) || null
   /** Panes of a project: Claude sessions and pane shells (docked shells live in the dock panel). */
@@ -147,6 +160,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     api.pty.kill(id)
     disposeTerminal(id)
     lastTool.delete(id)
+    setSubagents(id, [])
+    if (chatter.value[id]) {
+      const { [id]: _, ...rest } = chatter.value
+      chatter.value = rest
+    }
   }
 
   /** Restarts a session's terminal in a new folder, keeping the pane (used after merging a worktree). */
@@ -190,6 +208,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s) return
     const title = s.title === 'New session' && u.lastPrompt ? u.lastPrompt.slice(0, 200) : s.title
     patch(u.sid, { model: u.model ? modelLabel(u.model) : s.model, tokIn: u.tokIn, tokOut: u.tokOut, cacheR: u.cacheR, cacheW: u.cacheW, ctx: u.ctx, claudeId: u.claudeId || s.claudeId, title })
+    const text = u.latest === 'said' ? u.said : u.latest === 'doing' ? u.doing : ''
+    if (text && u.latest && text !== chatter.value[u.sid]?.text) chatter.value = { ...chatter.value, [u.sid]: { text, kind: u.latest, at: Date.now() } }
   }
 
   function onExit(id: string, code: number) {
@@ -200,6 +220,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       patch(id, { exited: true, endedAt: Date.now() })
       return
     }
+    setSubagents(id, [])
     writeToTerminal(id, `\r\n\x1b[2m[Claude Code exited · code ${code}]\x1b[0m\r\n`)
     patch(id, { exited: true, status: s.status === 'working' || s.status === 'waiting' ? 'done' : s.status, endedAt: s.endedAt || Date.now() })
   }
@@ -225,12 +246,19 @@ export const useSessionsStore = defineStore('sessions', () => {
         break
       }
       case 'PreToolUse': {
+        if (isSubagentTool(p.tool_name)) {
+          const i = p.tool_input || {}
+          const a: Subagent = { id: String(p.tool_use_id || uid('a')), type: String(i.subagent_type || 'general-purpose'), desc: String(i.description || ''), bg: !!i.run_in_background, at: now }
+          setSubagents(s.id, [...(subagents.value[s.id] || []), a])
+        }
         lastTool.set(s.id, { name: String(p.tool_name || ''), input: p.tool_input || {} })
         const f = p.tool_input?.file_path || p.tool_input?.notebook_path
         patch(s.id, { editing: f ? relPath(s.cwd, String(f)) : '', ...(s.status === 'waiting' ? { status: 'working', waitingSince: null, perm: false } : {}), lastAt: now })
         break
       }
       case 'PostToolUse': {
+        // A background subagent's tool call returns at once; it ends with SubagentStop instead.
+        if (isSubagentTool(p.tool_name)) setSubagents(s.id, (subagents.value[s.id] || []).filter(a => a.bg || a.id !== String(p.tool_use_id)))
         const f = p.tool_input?.file_path || p.tool_input?.notebook_path
         const rel = f ? relPath(s.cwd, String(f)) : ''
         patch(s.id, {
@@ -251,7 +279,16 @@ export const useSessionsStore = defineStore('sessions', () => {
         }
         break
       }
+      case 'SubagentStop': {
+        // Nothing ties this event to a tool call, so the oldest background subagent of that type ends.
+        const list = subagents.value[s.id] || []
+        const done = list.find(a => a.bg && a.type === p.agent_type) || list.find(a => a.bg)
+        if (done) setSubagents(s.id, list.filter(a => a !== done))
+        break
+      }
       case 'Stop': {
+        // Foreground subagents never outlive the turn.
+        setSubagents(s.id, (subagents.value[s.id] || []).filter(a => a.bg))
         const last = (e.lastText || '').trim()
         if (/\?\s*$/.test(last)) {
           const q = last.split(/(?<=[.!?])\s+/).filter(x => /\?$/.test(x)).pop() || last
@@ -294,7 +331,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   return {
-    sessions, focus, permAction, shells, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
+    sessions, focus, permAction, subagents, chatter, shells, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
     start, startShell, close, respawn, onUsage, onExit, onHook, addImage, removeImage, saved, reopen,
   }
 })

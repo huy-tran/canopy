@@ -28,6 +28,8 @@ export const useUiStore = defineStore('ui', () => {
   const updOpen = ref(false)
   const upd = ref<UpdateState | null>(null)
   const details = ref(false)
+  /** The workspace simulation fills the main area in place of the selected project. */
+  const sim = ref(false)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -86,6 +88,7 @@ export const useUiStore = defineStore('ui', () => {
 
   function selectProject(pid: string) {
     P.sel = pid
+    sim.value = false
     inbox.value = null
     bc.value = null
     closeTransient()
@@ -99,6 +102,7 @@ export const useUiStore = defineStore('ui', () => {
     if (!s) return
     if (bc.value && s.pid !== P.sel) bc.value = null
     P.sel = s.pid
+    sim.value = false
     palette.value = null
     newMenu.value = false
     if (inbox.value && inbox.value.sid !== sid) inbox.value = null
@@ -242,6 +246,7 @@ export const useUiStore = defineStore('ui', () => {
     if (!s) return
     inbox.value = { sid }
     P.sel = s.pid
+    sim.value = false
     palette.value = null
     bc.value = null
     newMenu.value = false
@@ -575,6 +580,7 @@ export const useUiStore = defineStore('ui', () => {
       paneRight: () => cycle(1),
       paneLeft: () => cycle(-1),
       toggleView,
+      simulation: () => { sim.value = !sim.value },
       newSession: () => newSession(),
       promptAll: openBc,
       share: shareFocused,
@@ -600,7 +606,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, inbox, bc, svcAdd,
+    width, now, palette, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,

@@ -60,8 +60,10 @@ export function writeSessionSettings(sid: string): string {
       UserPromptSubmit: hook,
       Notification: hook,
       Stop: hook,
-      PreToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash', hooks: hook[0]!.hooks }],
-      PostToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: hook[0]!.hooks }],
+      SubagentStop: hook,
+      // Task and Agent start subagents, which the workspace simulation shows.
+      PreToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|Task|Agent', hooks: hook[0]!.hooks }],
+      PostToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Task|Agent', hooks: hook[0]!.hooks }],
     },
   }
   const file = path.join(hooksDir(), `${sid}.json`)

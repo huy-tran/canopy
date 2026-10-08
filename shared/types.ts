@@ -213,6 +213,18 @@ export interface SavedSession {
   prompts: { t: string; at: number }[]
 }
 
+/** A subagent a Claude session started with its Task or Agent tool, alive until it finishes. */
+export interface Subagent {
+  /** The tool call that started it. */
+  id: string
+  /** Subagent type, such as "general-purpose" or "Explore". */
+  type: string
+  desc: string
+  /** Started in the background: it outlives its tool call and ends with SubagentStop. */
+  bg: boolean
+  at: number
+}
+
 /** Event forwarded from a Claude Code hook (posted by curl to the main process). */
 export interface HookEvent {
   sid: string
@@ -233,6 +245,17 @@ export interface UsageUpdate {
   ctx: number
   /** Last prompt in the transcript; titles resumed sessions. */
   lastPrompt: string
+  /** Claude's latest line of narration and latest tool call in plain words, and which came last. */
+  said?: string
+  doing?: string
+  latest?: 'said' | 'doing' | ''
+}
+
+/** What a session's character says over their head in the workspace simulation. */
+export interface Chatter {
+  text: string
+  kind: 'said' | 'doing'
+  at: number
 }
 
 export interface GitChange {

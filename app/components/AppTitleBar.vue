@@ -104,6 +104,15 @@ const items = computed<DropdownMenuItem[][]>(() => [
     </div>
 
     <div
+      :title="`Workspace simulation (${prefs.kl('simulation')})`"
+      class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
+      :class="ui.sim ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
+      @click.stop="ui.sim = !ui.sim"
+    >
+      <UIcon name="i-hugeicons-cube" class="size-3.5" />Workspace
+    </div>
+
+    <div
       :title="`Run a command (${prefs.kl('commands')})`"
       class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-(--ln) px-2 text-[11.5px] text-(--fa) hover:border-(--bb) hover:text-(--tx2)"
       @click.stop="ui.openPalette('cmd')"

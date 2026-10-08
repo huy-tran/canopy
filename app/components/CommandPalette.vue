@@ -60,6 +60,7 @@ const cmdItems = computed<PalItem[]>(() => {
   C('Layout: split', kl('cycleLayout'), () => ui.setLayout('split'))
   C('Layout: grid', kl('cycleLayout'), () => ui.setLayout('grid'))
   C('Toggle Terminals / Overview', kl('toggleView'), () => ui.toggleView())
+  C('Workspace simulation: open or close', kl('simulation'), () => { ui.sim = !ui.sim })
   C('Next session waiting on you', kl('nextWaiting'), () => ui.nextWaiting())
   C('New session in focused repo', kl('newSession'), () => ui.newSession())
   C('New project…', kl('newProject'), () => ui.openModal('add'))

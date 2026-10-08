@@ -23,6 +23,61 @@ interface Totals {
   ctx: number
   lastText: string
   lastPrompt: string
+  /** Claude's latest line of narration and latest tool call, for the workspace simulation. */
+  said: string
+  doing: string
+  /** Which of the two came last. */
+  latest: 'said' | 'doing' | ''
+}
+
+const base = (p: unknown) => String(p || '').split(/[\\/]/).pop() || ''
+const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s)
+
+/** The opening of what Claude wrote, without markdown: its first sentence, or more when that is very short. */
+function firstLine(text: string) {
+  const plain = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[*_#>`]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const sentences = plain.match(/[^.!?:]+[.!?:]+(?=\s|$)|[^.!?:]+$/g) || [plain]
+  let line = ''
+  for (const s of sentences) {
+    line = (line + ' ' + s.trim()).trim()
+    if (line.length >= 40) break
+  }
+  return clip(line.replace(/:$/, '…'), 120)
+}
+
+/** A tool call in plain words: "Editing schema.ts", "Running npm test", "Searching for postcode". */
+function describeTool(name: string, i: any = {}) {
+  switch (name) {
+    case 'Read': return `Reading ${base(i.file_path)}`
+    case 'Edit':
+    case 'MultiEdit': return `Editing ${base(i.file_path)}`
+    case 'Write': return `Writing ${base(i.file_path)}`
+    case 'NotebookEdit': return `Editing ${base(i.notebook_path)}`
+    case 'Bash': return i.description ? clip(String(i.description), 70) : `Running ${clip(String(i.command || '').split('\n')[0]!, 50)}`
+    case 'PowerShell': return i.description ? clip(String(i.description), 70) : 'Running a command'
+    case 'Grep': return `Searching for "${clip(String(i.pattern || ''), 40)}"`
+    case 'Glob': return `Looking for ${clip(String(i.pattern || ''), 40)}`
+    case 'WebSearch': return `Searching the web for "${clip(String(i.query || ''), 40)}"`
+    case 'WebFetch': {
+      try {
+        return `Reading ${new URL(String(i.url)).hostname}`
+      } catch {
+        return 'Reading a web page'
+      }
+    }
+    case 'Task':
+    case 'Agent': return `Sending a helper to ${clip(String(i.description || 'look into it').toLowerCase(), 50)}`
+    case 'TodoWrite': return 'Updating the plan'
+    default: {
+      const mcp = name.match(/^mcp__[^_]+(?:_[^_]+)*__(.+)$/)
+      return `Using ${(mcp ? mcp[1]! : name).replace(/_/g, ' ')}`
+    }
+  }
 }
 
 /** Sums usage per message id (Claude Code writes one line per content block, all carrying the same usage). */
@@ -47,6 +102,15 @@ function accumulate(lines: string[], byId: Map<string, any>, t: Totals) {
     }
     const text = Array.isArray(m.content) ? m.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim() : ''
     if (text) t.lastText = text
+    for (const c of Array.isArray(m.content) ? m.content : []) {
+      if (c.type === 'text' && c.text?.trim()) {
+        t.said = firstLine(c.text)
+        t.latest = 'said'
+      } else if (c.type === 'tool_use' && c.name) {
+        t.doing = describeTool(String(c.name), c.input)
+        t.latest = 'doing'
+      }
+    }
   }
 }
 
@@ -103,14 +167,15 @@ export function watchTranscript(sid: string, claudeId: string, file: string, emi
   if (old) clearInterval(old.timer)
   const w: Watch = {
     file, offset: 0, rest: '', byId: new Map(),
-    totals: { model: '', tokIn: 0, tokOut: 0, cacheR: 0, cacheW: 0, ctx: 0, lastText: '', lastPrompt: '' },
+    totals: { model: '', tokIn: 0, tokOut: 0, cacheR: 0, cacheW: 0, ctx: 0, lastText: '', lastPrompt: '', said: '', doing: '', latest: '' },
     timer: setInterval(() => tick(), 1500),
   }
   const tick = () => {
     if (!readNew(w)) return
     const t = totalsOf(w)
     const win = contextOf(w.totals.model)
-    emit({ sid, claudeId, model: w.totals.model, lastPrompt: w.totals.lastPrompt, ...t, ctx: win ? Math.min(100, (w.totals.ctx / win) * 100) : 0 })
+    const { model, lastPrompt, said, doing, latest } = w.totals
+    emit({ sid, claudeId, model, lastPrompt, said, doing, latest, ...t, ctx: win ? Math.min(100, (w.totals.ctx / win) * 100) : 0 })
   }
   watches.set(sid, w)
   tick()
