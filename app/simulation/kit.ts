@@ -976,3 +976,177 @@ export function stringLights(corners: THREE.Vector2[], height = 3.2) {
   })
   return g
 }
+
+// ---------------------------------------------------------------- the stage
+
+/** A guitar held across the body, neck to the player's left; a bass has a longer neck. */
+export function guitar(color: string, bass = false) {
+  const g = new THREE.Group()
+  const finish = mat(color, { roughness: 0.35, metalness: 0.1 })
+  const lower = mesh(geo('gtr-lower', () => new THREE.CylinderGeometry(0.2, 0.2, 0.08, 20)), finish, false)
+  lower.rotation.x = Math.PI / 2
+  lower.scale.set(1.1, 1, 1)
+  g.add(lower)
+  const upper = mesh(geo('gtr-upper', () => new THREE.CylinderGeometry(0.15, 0.15, 0.08, 20)), finish, false)
+  upper.rotation.x = Math.PI / 2
+  upper.position.x = 0.2
+  g.add(upper)
+  const guard = mesh(boxGeo(0.14, 0.12, 0.01), mat('#f4f1ec'), false)
+  guard.position.set(-0.04, -0.04, 0.045)
+  g.add(guard)
+  const len = bass ? 0.85 : 0.66
+  const neck = mesh(boxGeo(len, 0.06, 0.04), mat('#5a3d27', { roughness: 0.6 }), false)
+  neck.position.x = 0.3 + len / 2
+  g.add(neck)
+  const head = mesh(boxGeo(0.14, 0.09, 0.04), mat('#1d1b20'), false)
+  head.position.x = 0.3 + len + 0.07
+  g.add(head)
+  g.rotation.z = 0.42
+  return g
+}
+
+/** A drum kit facing +z: kick, snare, two toms, a hi-hat, a crash and the stool behind it all. */
+export function drumKit() {
+  const g = new THREE.Group()
+  const shell = mat('#c83d4a', { roughness: 0.35, metalness: 0.2 })
+  const skin = mat('#f4f1ec', { roughness: 0.8 })
+  const brass = mat('#e2b04a', { roughness: 0.3, metalness: 0.8 })
+  const chrome = mat('#cfd3da', { roughness: 0.3, metalness: 0.7 })
+  const stand = (x: number, y: number, z: number) => {
+    const s = mesh(geo('drum-stand', () => new THREE.CylinderGeometry(0.015, 0.015, 1, 6)), chrome, false)
+    s.scale.y = y
+    s.position.set(x, y / 2, z)
+    g.add(s)
+  }
+  const kick = mesh(geo('kick', () => new THREE.CylinderGeometry(0.36, 0.36, 0.34, 24)), shell)
+  kick.rotation.x = Math.PI / 2
+  kick.position.set(0, 0.36, 0.25)
+  g.add(kick)
+  const face = mesh(geo('kick-head', () => new THREE.CircleGeometry(0.33, 24)), skin, false)
+  face.position.set(0, 0.36, 0.425)
+  g.add(face)
+  const drum = (r: number, h: number, x: number, y: number, z: number, tilt: number) => {
+    const d = mesh(geo(`drum:${r}:${h}`, () => new THREE.CylinderGeometry(r, r, h, 20)), shell)
+    d.position.set(x, y, z)
+    d.rotation.x = tilt
+    g.add(d)
+    const top = mesh(geo(`drum-top:${r}`, () => new THREE.CylinderGeometry(r * 0.96, r * 0.96, 0.01, 20)), skin, false)
+    top.position.y = h / 2
+    d.add(top)
+    stand(x, y, z)
+  }
+  drum(0.17, 0.14, 0.32, 0.62, -0.05, 0.25)
+  drum(0.14, 0.16, -0.16, 0.86, 0.12, 0.45)
+  drum(0.14, 0.16, 0.16, 0.86, 0.12, 0.45)
+  const cymbal = (r: number, x: number, y: number, z: number) => {
+    const c = mesh(geo(`cymbal:${r}`, () => new THREE.CylinderGeometry(r, r * 0.2, 0.025, 24)), brass, false)
+    c.position.set(x, y, z)
+    c.rotation.x = 0.25
+    g.add(c)
+    stand(x, y, z)
+    return c
+  }
+  const hat = cymbal(0.17, -0.48, 0.85, -0.05)
+  const crash = cymbal(0.24, 0.55, 1.2, 0.2)
+  const stool = mesh(geo('stool', () => new THREE.CylinderGeometry(0.2, 0.2, 0.08, 16)), mat('#1d1b20'))
+  stool.position.set(0, 0.46, -0.55)
+  g.add(stool)
+  stand(0, 0.42, -0.55)
+  return { group: g, hat, crash }
+}
+
+/** A drumstick for a hand, pointing forwards from a figure's arm pivot. */
+export function drumstick() {
+  const s = mesh(geo('drumstick', () => new THREE.CylinderGeometry(0.012, 0.018, 0.42, 6)), mat('#e8d3a8'), false)
+  s.rotation.x = Math.PI / 2
+  s.position.set(0, -0.4, 0.18)
+  return s
+}
+
+/** A microphone on a stand facing +z, its mic tilted back towards whoever sings into it from behind. */
+export function micStand() {
+  const g = new THREE.Group()
+  const dark = mat('#2b2e38', { roughness: 0.4, metalness: 0.5 })
+  const base = mesh(geo('mic-base', () => new THREE.CylinderGeometry(0.18, 0.2, 0.03, 16)), dark)
+  base.position.y = 0.015
+  g.add(base)
+  const pole = mesh(geo('mic-pole', () => new THREE.CylinderGeometry(0.015, 0.015, 1.45, 6)), dark, false)
+  pole.position.y = 0.72
+  g.add(pole)
+  const mic = mesh(geo('mic', () => new THREE.CapsuleGeometry(0.035, 0.1, 4, 10)), mat('#cfd3da', { metalness: 0.6, roughness: 0.4 }), false)
+  mic.position.set(0, 1.5, -0.06)
+  mic.rotation.x = -1.1
+  g.add(mic)
+  return g
+}
+
+/** A guitar amp or PA speaker: a black cabinet with its cones, facing +z. */
+export function speaker(w = 0.8, h = 1, cones = 2) {
+  const g = new THREE.Group()
+  g.add(rbox(w, h, 0.5, mat('#1d1b20', { roughness: 0.8 }), 0, 0.04))
+  const grille = mat('#3a3d48', { roughness: 0.9 })
+  const r = Math.min(w, h / cones) * 0.36
+  for (let i = 0; i < cones; i++) {
+    const c = mesh(geo(`cone:${r2(r)}`, () => new THREE.CylinderGeometry(r, r * 0.6, 0.06, 18)), grille, false)
+    c.rotation.x = Math.PI / 2
+    c.position.set(0, (h / cones) * (i + 0.5), 0.26)
+    g.add(c)
+  }
+  const badge = mesh(boxGeo(w * 0.4, 0.05, 0.01), mat('#e2b04a', { emissive: '#e2b04a', emissiveIntensity: 0.4 }), false)
+  badge.position.set(0, h - 0.07, 0.255)
+  g.add(badge)
+  return g
+}
+
+/**
+ * A stage `w` x `d` and `h` high facing +z: a dark platform with a neon strip along its front edge
+ * and a lighting truss over it. The scene recolours the `beams` and swings the `cans` to the music.
+ */
+export function stage(w: number, d: number, h: number) {
+  const g = new THREE.Group()
+  g.add(rbox(w, h, d, mat('#2a2633', { roughness: 0.7 }), 0, 0.04))
+  const strip = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ff4fd8', emissiveIntensity: 2 })
+  const edge = mesh(boxGeo(w, 0.05, 0.03), strip, false)
+  edge.position.set(0, h - 0.06, d / 2 + 0.01)
+  g.add(edge)
+  // A step up at each end of the front.
+  for (const x of [-1, 1]) {
+    const step = rbox(0.9, h / 2, 0.5, mat('#3a3545'), 0, 0.03)
+    step.position.set(x * (w / 2 - 0.6), step.position.y, d / 2 + 0.25)
+    g.add(step)
+  }
+
+  const metal = mat('#3a3d48', { roughness: 0.4, metalness: 0.5 })
+  const top = 4.2
+  for (const x of [-w / 2 - 0.1, w / 2 + 0.1]) {
+    for (const z of [-d / 2, d / 2]) {
+      const post = rbox(0.14, top, 0.14, metal, 0, 0.03)
+      post.position.set(x, post.position.y, z)
+      g.add(post)
+    }
+  }
+  for (const z of [-d / 2, d / 2]) {
+    const bar = rbox(w + 0.34, 0.14, 0.14, metal, top - 0.14, 0.03)
+    bar.position.z = z
+    g.add(bar)
+  }
+  const beams: THREE.MeshBasicMaterial[] = []
+  const cans: THREE.Group[] = []
+  const n = Math.max(3, Math.round(w / 2))
+  for (let i = 0; i < n; i++) {
+    const can = new THREE.Group()
+    can.position.set(-w / 2 + (w / n) * (i + 0.5), top - 0.2, d / 2)
+    const body = mesh(geo('can', () => new THREE.CylinderGeometry(0.12, 0.16, 0.3, 12)), mat('#1d1b20'), false)
+    body.position.y = -0.1
+    can.add(body)
+    const material = new THREE.MeshBasicMaterial({ color: '#ff4fd8', transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+    const len = top - h
+    const cone = mesh(geo(`beam:${r2(len)}`, () => new THREE.ConeGeometry(0.9, len, 20, 1, true)), material, false)
+    cone.position.y = -len / 2 - 0.2
+    can.add(cone)
+    g.add(can)
+    beams.push(material)
+    cans.push(can)
+  }
+  return { group: g, beams, cans, strip }
+}

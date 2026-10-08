@@ -3,9 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import type { Status } from '#shared/types'
 import {
-  arcade, beanBag, bigScreen, blueprintGround, carpet, coffeeBar, consoleBench, controller, deskPod, disposeKit, disposeTree, doorArch,
-  type Figure, figure, floorLamp, floorText, FONT, foosball, hashOf, lightPillar, lightPool, lowWall, mat, mesh, oklch, type Pick,
-  pingPong, plant, type Role, runeCircle, type Seat, sofa, spark, stringLights, tag, tint, woodFloor,
+  arcade, beanBag, bigScreen, blueprintGround, carpet, coffeeBar, consoleBench, controller, deskPod, disposeKit, disposeTree, doorArch, drumKit, drumstick,
+  type Figure, figure, floorLamp, floorText, FONT, foosball, guitar, hashOf, lightPillar, lightPool, lowWall, mat, mesh, micStand, oklch, type Pick,
+  pingPong, plant, type Role, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
 } from './kit'
 
 /**
@@ -14,7 +14,8 @@ import {
  * is a developer or a designer: at their desk while Claude works or waits on you, off to the
  * common room for football, games, ping pong or a coffee while it is idle. Subagents are smaller
  * helpers standing behind the one who started them. New people are summoned in a rune circle;
- * a room's lights are on while it has a session open.
+ * a room's lights are on while it has a session open. In front of the common room a rock band
+ * plays on a stage, and idle people drift between the band, the games and the coffee.
  * Vue hands it the state with `sync()`; everything that moves is worked out here, every frame.
  */
 
@@ -48,6 +49,10 @@ export interface SceneOptions {
   container: HTMLElement
   onHover: (hover: SimHover | null) => void
   onSelect: (pick: Pick | null) => void
+  /** A right click on someone, at a point in the view. */
+  onMenu: (menu: SimHover) => void
+  /** Someone sent off with `farewell()` has said goodbye: their session can close now. */
+  onFarewell: (id: string) => void
 }
 
 const ROOM_D = 9
@@ -55,6 +60,14 @@ const HALL = 3.2
 const POD_Z = 0.2
 /** Depth of the common room in front of the first row of rooms. */
 const COMMON_D = 13
+/** Depth of the stage area in front of the common room. */
+const STAGE_D = 10
+const STAGE_H = 0.5
+/** One song and the break after it, in seconds. */
+const SONG = 34
+const ENCORE = 7
+/** The x of the two clear lanes through the common room and past either side of the stage. */
+const STAGE_LANE = 7.2
 const WALK_SPEED = 2.4
 /** Room lights with a real light source; more rooms than this make do with glowing lamps. */
 const MAX_ROOM_LIGHTS = 16
@@ -84,7 +97,7 @@ type RoomActor = {
   floor: ReturnType<typeof floorText>
 }
 
-type SpotKind = 'sofa' | 'bean' | 'game' | 'pong' | 'foos' | 'coffee' | 'arcade' | 'chat'
+type SpotKind = 'sofa' | 'bean' | 'game' | 'pong' | 'foos' | 'coffee' | 'arcade' | 'chat' | 'crowd'
 
 /** Somewhere in the common room to spend idle time. */
 type Spot = {
@@ -135,12 +148,31 @@ type PersonActor = {
   spot: Spot | null
   /** When the session last went idle or done: they wander off a moment later. */
   calmSince: number
+  /** When they get bored of their spot in the common room and go and do something else. */
+  restless: number
+  /** When they started saying goodbye before their session closes, and whether it has been closed. */
+  leaving: number | null
+  gone: boolean
   stride: number
   pad: THREE.Object3D | null
   phase: number
 }
 
 type Telly = { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; next: number }
+
+type BandPart = 'guitar' | 'bass' | 'drums' | 'vocals'
+
+/** The band on the stage, its lights and the dance floor in front of it. */
+type Band = {
+  members: { fig: Figure; part: BandPart; phase: number }[]
+  beams: THREE.MeshBasicMaterial[]
+  cans: THREE.Group[]
+  strip: THREE.MeshStandardMaterial
+  cymbals: THREE.Object3D[]
+  light: THREE.PointLight
+  wall: Telly
+  floor: Telly
+}
 
 const easeOutBack = (x: number) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
@@ -182,10 +214,14 @@ export class WorkspaceScene {
   private game: Telly | null = null
   private arcadeGlow: THREE.MeshStandardMaterial | null = null
   private pong: { ball: THREE.Mesh; x: number; z: number } | null = null
+  private band: Band | null = null
+  /** The person the camera keeps up with, and where they were last frame. */
+  private follow: { id: string; last: THREE.Vector3 } | null = null
   private firstSync = true
   private hovered: Pick | null = null
   private down: { x: number; y: number } | null = null
-  private fly: { fromPos: THREE.Vector3; toPos: THREE.Vector3; fromTarget: THREE.Vector3; toTarget: THREE.Vector3; start: number } | null = null
+  /** A camera flight; with `offset` it is to a person, tracking them as they move. */
+  private fly: { fromPos: THREE.Vector3; toPos: THREE.Vector3; fromTarget: THREE.Vector3; toTarget: THREE.Vector3; start: number; offset?: THREE.Vector3 } | null = null
 
   constructor(opts: SceneOptions) {
     this.opts = opts
@@ -277,9 +313,10 @@ export class WorkspaceScene {
 
   /** Fly back out to see the whole workspace. */
   resetView(animate = true) {
+    this.follow = null
     const size = Math.max(this.bounds.w, this.bounds.d)
     // A little towards the common room, which is where most of the fun is.
-    const target = v3(0, this.bounds.cz + 3)
+    const target = v3(0, this.bounds.cz + 1)
     const pos = new THREE.Vector3(size * 0.22, size * 0.55 + 6, target.z + size * 0.62 + 8)
     if (animate) this.flyTo(pos, target)
     else {
@@ -289,18 +326,35 @@ export class WorkspaceScene {
     }
   }
 
-  /** Fly the camera to a room or a person. */
+  /** Fly the camera to a room, or to a person and keep up with them as they walk about. */
   focus(pick: Pick) {
+    this.follow = null
     if (pick.kind === 'person') {
       const p = this.people.get(pick.id)
       if (!p) return
-      this.flyTo(p.pos.clone().add(new THREE.Vector3(4, 7, 8)), p.pos.clone())
+      const offset = new THREE.Vector3(4, 7, 8)
+      this.flyTo(p.pos.clone().add(offset), p.pos.clone())
+      this.fly!.offset = offset
+      this.follow = { id: pick.id, last: p.pos.clone() }
       return
     }
     const room = this.rooms.get(pick.id)
     if (!room) return
     const c = room.center
     this.flyTo(c.clone().add(new THREE.Vector3(0, 10 + room.width * 0.4, 9 + room.width * 0.45)), c.clone().add(new THREE.Vector3(0, 0, -0.6)))
+  }
+
+  /**
+   * Someone stops what they are doing, turns to the camera and waves goodbye; `onFarewell` fires
+   * when they are done, and they vanish once their session is gone.
+   */
+  farewell(id: string) {
+    const a = this.people.get(id)
+    if (!a || a.dying !== null || a.leaving !== null) return
+    a.leaving = this.clock.elapsedTime
+    a.path = []
+    a.speechUntil = 0
+    this.say(a, 'Goodbye! 👋', 4)
   }
 
   dispose() {
@@ -335,6 +389,7 @@ export class WorkspaceScene {
     this.game = null
     this.arcadeGlow = null
     this.pong = null
+    this.band = null
   }
 
   private add(o: THREE.Object3D) {
@@ -359,7 +414,7 @@ export class WorkspaceScene {
     const commonW = Math.max(maxW, 30)
     this.aisleX = maxW / 2 + 1.6
     const back = -Math.max(1, rows.length) * (ROOM_D + HALL) + HALL - 1
-    const front = HALL + COMMON_D + 1
+    const front = HALL + COMMON_D + STAGE_D + 1
     this.bounds = { w: Math.max(maxW, commonW) + 8, d: front - back + 2, cz: (front + back) / 2 }
 
     this.add(blueprintGround(Math.max(this.bounds.w, this.bounds.d) * 3)).position.z = this.bounds.cz
@@ -381,6 +436,7 @@ export class WorkspaceScene {
       }
     })
     this.buildCommon(commonW)
+    this.buildStage()
     for (const p of out) {
       p.spot = null
       if (p.mode === 'leisure' || (p.mode === 'walk' && p.dest === 'leisure')) this.goLeisure(p, true)
@@ -556,6 +612,77 @@ export class WorkspaceScene {
     this.add(g)
   }
 
+  /**
+   * The stage in front of the common room, facing out the way the camera looks in: the band
+   * (guitar, bass, drums and a singer), amps and a PA, a lighting truss and an LED wall behind
+   * them. The dance floor is in front, reached down the lanes either side of the stage.
+   */
+  private buildStage() {
+    const z0 = HALL + COMMON_D
+    const w = 11, d = 4
+    const st = stage(w, d, STAGE_H)
+    st.group.position.set(0, 0, z0 + 0.8 + d / 2)
+    const on = (o: THREE.Object3D, x: number, z: number, y = STAGE_H) => {
+      o.position.set(x, y, z)
+      st.group.add(o)
+      return o
+    }
+
+    const kit = drumKit()
+    on(kit.group, 0, -0.7)
+    const wall = bigScreen(6, 2.1, 1.2)
+    on(wall.group, 0, -1.75, STAGE_H + 1.2)
+    for (const x of [-1, 1]) {
+      on(speaker(0.9, 0.8, 1), x * 3.7, -1.2)
+      on(speaker(1, 1.9, 3), x * (w / 2 + 0.6), 1.3, 0)
+    }
+    on(micStand(), 0, 1.35)
+
+    const members: Band['members'] = []
+    const player = (part: BandPart, seed: number, role: Role, x: number, z: number) => {
+      const fig = figure({ seed, role })
+      on(fig.group, x, z)
+      if (part === 'guitar' || part === 'bass') {
+        const axe = guitar(part === 'bass' ? '#2f3443' : '#e85f5c', part === 'bass')
+        axe.position.set(-0.05, 0.6, 0.32)
+        fig.rig.add(axe)
+      }
+      if (part === 'drums') for (const arm of fig.arms) arm.add(drumstick())
+      members.push({ fig, part, phase: seed % 7 })
+    }
+    player('guitar', 1201, 'developer', -2.8, 0.3)
+    player('bass', 3407, 'designer', 2.8, 0.3)
+    player('drums', 5519, 'developer', 0, -1.25)
+    player('vocals', 7703, 'designer', 0, 0.85)
+
+    const light = new THREE.PointLight('#ff4fd8', 0, 0, 2)
+    light.position.set(0, 3.4, 1.5)
+    st.group.add(light)
+    this.add(st.group)
+
+    // The dance floor: a grid of tiles that light up to the beat.
+    const df = bigScreen(10, 3.6)
+    df.group.children[0]!.visible = false
+    df.face.rotation.x = -Math.PI / 2
+    df.face.position.set(0, 0.03, 0)
+    df.group.position.set(0, 0, z0 + 7.4)
+    this.add(df.group)
+
+    // Room to rock out in two loose rows on the dance floor, facing the stage.
+    for (const [row, z] of [[0, z0 + 6.4], [1, z0 + 7.9]] as const) {
+      for (let i = 0; i < 7; i++) {
+        const x = -3.9 + i * 1.3 + (row ? 0.65 : 0) + Math.sin(i * 7.1 + row) * 0.15
+        this.spots.push({ kind: 'crowd', x, z, face: Math.PI, sit: null, lane: x < 0 ? -STAGE_LANE : STAGE_LANE, taken: null })
+      }
+    }
+
+    this.band = {
+      members, beams: st.beams, cans: st.cans, strip: st.strip, cymbals: [kit.hat, kit.crash], light,
+      wall: { canvas: wall.canvas, texture: wall.texture, next: 0 },
+      floor: { canvas: df.canvas, texture: df.texture, next: -2 },
+    }
+  }
+
   private paintRoom(room: RoomActor) {
     const s = room.data.stats
     const key = JSON.stringify([room.data.name, s])
@@ -669,7 +796,7 @@ export class WorkspaceScene {
       } else if (actor.dying !== null) {
         continue
       }
-      if (p.status !== actor.data.status) {
+      if (p.status !== actor.data.status && actor.leaving === null) {
         if (p.status === 'done') this.say(actor, '✓', 4)
         if (p.status === 'working' && actor.data.status !== 'working') this.say(actor, '💬', 2.5)
         if (calm(p.status) && !calm(actor.data.status)) actor.calmSince = t
@@ -713,7 +840,7 @@ export class WorkspaceScene {
       data: p, fig, label, chip, bubble, bubbleUntil: 0, speech, saidAt: 0, speechUntil: 0, born, dying: null,
       summon: born > 0 ? this.summonFx(desk.pos, color, 46) : null,
       pos: desk.pos.clone(), face: desk.face, desk, mode: 'desk', dest: 'desk', path: [], trail: [], spot: null,
-      calmSince: born, stride: 0, pad: null, phase: (hashOf(p.id) % 1000) / 160,
+      calmSince: born, restless: 0, leaving: null, gone: false, stride: 0, pad: null, phase: (hashOf(p.id) % 1000) / 160,
     }
     if (actor.summon) this.say(actor, '✨', 2.5)
     this.people.set(p.id, actor)
@@ -771,11 +898,18 @@ export class WorkspaceScene {
     a.spot = null
   }
 
-  /** A free spot in the common room, picked at random; the chat ring when the fun stuff is taken. */
-  private claim(a: PersonActor): Spot {
+  /**
+   * A free spot in the common room or by the stage: a random activity, then a random spot for it,
+   * so the dance floor's many spots do not crowd out the rest. Something other than `not` if it can.
+   */
+  private claim(a: PersonActor, not?: SpotKind): Spot {
     const free = this.spots.filter(s => !s.taken)
-    const fun = free.filter(s => s.kind !== 'chat')
-    const pool = fun.length && Math.random() < 0.85 ? fun : free
+    const kinds = [...new Set(free.map(s => s.kind))]
+    const fresh = kinds.filter(k => k !== not)
+    const fun = fresh.filter(k => k !== 'chat')
+    const choice = fun.length && Math.random() < 0.85 ? fun : fresh.length ? fresh : kinds
+    const kind = choice[Math.floor(Math.random() * choice.length)]
+    const pool = free.filter(s => s.kind === kind)
     let s = pool[Math.floor(Math.random() * pool.length)]
     if (!s) {
       // Everywhere is taken: hang about near the middle.
@@ -814,6 +948,8 @@ export class WorkspaceScene {
       a.mode = 'leisure'
       a.pos.set(spot.x, 0, spot.z)
       a.face = spot.face
+      // Staggered, so the room does not all get up at once.
+      a.restless = this.clock.elapsedTime + 5 + Math.random() * 30
       return
     }
     if (a.mode === 'walk') {
@@ -824,6 +960,24 @@ export class WorkspaceScene {
       a.path = this.route(a, spot)
     }
     a.trail = [a.pos.clone()]
+    a.mode = 'walk'
+    a.dest = 'leisure'
+  }
+
+  /**
+   * Bored of this spot: off to do something else. Back up the lane to the walkway and down another.
+   * The trail starts with the whole way here from the desk, so a call back to work retraces it.
+   */
+  private wander(a: PersonActor) {
+    const old = a.spot
+    if (!old) return
+    const spot = this.claim(a, old.kind)
+    this.release(a)
+    a.spot = spot
+    spot.taken = a.data.id
+    const walkZ = HALL / 2
+    a.trail = this.route(a, old)
+    a.path = [v3(old.lane, old.z), v3(old.lane, walkZ), v3(spot.lane, walkZ), v3(spot.lane, spot.z), v3(spot.x, spot.z)]
     a.mode = 'walk'
     a.dest = 'leisure'
   }
@@ -920,10 +1074,12 @@ export class WorkspaceScene {
     this.frame = requestAnimationFrame(this.loop)
     const dt = Math.min(0.05, this.clock.getDelta())
     const t = this.clock.elapsedTime
-    this.stepFly(t)
     this.stepRooms(t, dt)
     this.stepCommon(t)
+    this.stepBand(t)
     this.stepPeople(t, dt)
+    this.stepFly(t)
+    this.stepFollow()
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
     this.labels.render(this.scene, this.camera)
@@ -982,15 +1138,27 @@ export class WorkspaceScene {
   private stepPeople(t: number, dt: number) {
     for (const a of [...this.people.values()]) {
       const { fig } = a
-      if (a.dying === null && !a.data.parentId) {
+      if (a.leaving !== null) {
+        // Saying goodbye: turned to the camera, then the session closes and they vanish.
+        const cam = this.camera.position
+        a.face = Math.atan2(cam.x - a.pos.x, cam.z - a.pos.z)
+        if (!a.gone && t - a.leaving > 2.2) {
+          a.gone = true
+          this.opts.onFarewell(a.data.id)
+        }
+      } else if (a.dying === null && !a.data.parentId) {
         const wantOut = calm(a.data.status)
         if (wantOut && a.mode === 'desk' && !a.summon && t - a.calmSince > 3.5) this.goLeisure(a)
         else if (!wantOut && (a.mode === 'leisure' || (a.mode === 'walk' && a.dest === 'leisure'))) this.goDesk(a)
+        else if (a.mode === 'leisure' && t > a.restless) this.wander(a)
       }
-      if (a.mode === 'walk') {
+      if (a.leaving !== null) {
+        // Stays where they are.
+      } else if (a.mode === 'walk') {
         if (this.walk(a, dt)) {
           a.mode = a.dest
           a.face = a.dest === 'desk' ? a.desk.face : a.spot?.face ?? a.face
+          a.restless = t + (a.spot?.kind === 'chat' ? 12 : 20) + Math.random() * 30
         }
       } else if (a.mode === 'desk') {
         // Glide to a new seat when the desks are rearranged.
@@ -1031,7 +1199,7 @@ export class WorkspaceScene {
       this.pose(a, t)
       const talking = t < a.speechUntil && a.mode === 'desk' && a.data.status === 'working' && a.dying === null
       a.speech.style.display = talking ? '' : 'none'
-      const waiting = a.data.status === 'waiting' && t >= a.bubbleUntil
+      const waiting = a.data.status === 'waiting' && t >= a.bubbleUntil && a.leaving === null
       a.bubble.style.display = t < a.bubbleUntil || waiting ? '' : 'none'
       if (waiting) a.bubble.textContent = '!'
       a.bubble.classList.toggle('sim-bubble-wait', waiting)
@@ -1065,6 +1233,17 @@ export class WorkspaceScene {
       fig.rig.add(a.pad)
     }
     if (a.pad) a.pad.visible = gaming
+
+    if (a.leaving !== null) {
+      // On their feet, waving goodbye with a little bounce.
+      stand()
+      ra.rotation.x = -2.8
+      ra.rotation.z = 0.35 + Math.sin((t - a.leaving) * 11) * 0.4
+      la.rotation.x = -0.1
+      fig.head.rotation.z = Math.sin((t - a.leaving) * 5.5) * 0.1
+      fig.rig.position.y = Math.abs(Math.sin((t - a.leaving) * 5.5)) * 0.04
+      return
+    }
 
     if (a.mode === 'walk') {
       stand()
@@ -1157,10 +1336,165 @@ export class WorkspaceScene {
         ra.rotation.x = -1.2 + Math.sin(ph * 17 + 1) * 0.14
         fig.body.rotation.z = Math.sin(ph * 2.3) * 0.08
         break
+      case 'crowd':
+        this.rockOut(a, t)
+        break
       default:
+        if (Math.sin(ph * 0.17) > 0.55) {
+          // A look at the phone between chats.
+          la.rotation.x = ra.rotation.x = -1.3
+          la.rotation.z = 0.4
+          ra.rotation.z = -0.4
+          fig.head.rotation.x = 0.35
+          break
+        }
         // Chatting: hands talk now and then, heads nod.
         la.rotation.x = Math.sin(ph * 0.9) > 0.6 ? -1 + Math.sin(ph * 6) * 0.2 : 0.05
         fig.head.rotation.x = Math.sin(ph * 1.8) * 0.08
+    }
+  }
+
+  /** Where the band is: playing a song, on the beat, or in the break between songs cheering. */
+  private gig(t: number) {
+    const at = t % (SONG + ENCORE)
+    const beat = t * 2.2
+    return { playing: at < SONG, at, beat, song: Math.floor(t / (SONG + ENCORE)) }
+  }
+
+  /** On the dance floor: each in their own way while the band plays, everyone cheering between songs. */
+  private rockOut(a: PersonActor, t: number) {
+    const { fig } = a
+    const [la, ra] = fig.arms
+    const { playing, beat } = this.gig(t)
+    const ph = t + a.phase
+    const hop = Math.abs(Math.sin(beat * Math.PI))
+    if (!playing) {
+      // Clapping and whooping.
+      la.rotation.x = ra.rotation.x = -1.5
+      const clap = Math.abs(Math.sin(ph * 9)) * 0.5
+      la.rotation.z = -0.1 - clap
+      ra.rotation.z = 0.1 + clap
+      fig.head.rotation.x = -0.15
+      return
+    }
+    switch (Math.floor(a.phase * 3 + a.data.id.length) % 4) {
+      case 0:
+        // Fist pumping on the beat.
+        fig.rig.position.y = hop * 0.14
+        ra.rotation.x = -2.5 - hop * 0.4
+        la.rotation.x = -0.4
+        break
+      case 1:
+        // Headbanging.
+        fig.head.rotation.x = 0.1 + Math.sin(beat * Math.PI * 2) * 0.35
+        fig.body.rotation.x = 0.05 + Math.sin(beat * Math.PI * 2) * 0.1
+        la.rotation.x = ra.rotation.x = -0.5
+        break
+      case 2:
+        // Both hands up, swaying side to side.
+        la.rotation.x = ra.rotation.x = -2.9
+        la.rotation.z = -0.3
+        ra.rotation.z = 0.3
+        fig.body.rotation.z = Math.sin(beat * Math.PI * 0.5) * 0.14
+        fig.rig.position.x = Math.sin(beat * Math.PI * 0.5) * 0.12
+        break
+      default:
+        // Jumping up and down.
+        fig.rig.position.y = hop * 0.28
+        la.rotation.x = -0.6 - hop * 0.8
+        ra.rotation.x = -0.6 - hop * 0.8
+    }
+  }
+
+  /** The band playing, their lights, the LED wall and the dance floor. */
+  private stepBand(t: number) {
+    const b = this.band
+    if (!b) return
+    const { playing, at, beat, song } = this.gig(t)
+    const pulse = playing ? Math.abs(Math.sin(beat * Math.PI)) : 0
+    const hue = (t * 0.06 + Math.floor(beat / 4) * 0.13) % 1
+    b.beams.forEach((m, i) => {
+      m.color.setHSL((hue + i * 0.18) % 1, 0.9, 0.6)
+      m.opacity = playing ? 0.09 + pulse * 0.1 : 0.04
+    })
+    b.cans.forEach((c, i) => {
+      c.rotation.z = playing ? Math.sin(t * 1.1 + i * 1.3) * 0.38 : 0
+      c.rotation.x = playing ? -0.25 + Math.sin(t * 0.8 + i) * 0.2 : -0.1
+    })
+    b.strip.emissive.setHSL(hue, 0.9, 0.55)
+    b.light.color.setHSL(hue, 0.85, 0.6)
+    b.light.intensity = playing ? 14 + pulse * 14 : 5
+    const crash = playing && Math.floor(beat) % 8 === 0 ? 1 - (beat % 1) : 0
+    b.cymbals[0]!.rotation.z = Math.sin(beat * Math.PI * 2) * 0.06 * (playing ? 1 : 0)
+    b.cymbals[1]!.rotation.z = crash * 0.25
+
+    for (const m of b.members) {
+      const { fig } = m
+      const [right, left] = fig.arms
+      fig.rig.position.set(0, 0, 0)
+      fig.body.rotation.set(0, 0, 0)
+      fig.head.rotation.set(0, 0, 0)
+      right.rotation.set(0, 0, -0.12)
+      left.rotation.set(0, 0, 0.12)
+      fig.legs[0].rotation.x = fig.legs[1].rotation.x = 0
+      if (m.part === 'drums') {
+        fig.rig.position.set(0, 0.06, -0.08)
+        fig.legs[0].rotation.x = fig.legs[1].rotation.x = -1.45
+      }
+      if (!playing) {
+        // Taking a bow, then waving to the crowd.
+        if (at - SONG < 1.6) {
+          fig.body.rotation.x = 0.4
+          fig.head.rotation.x = 0.3
+        } else {
+          right.rotation.x = -2.8
+          right.rotation.z = -0.3 - Math.sin(t * 9 + m.phase) * 0.35
+        }
+        continue
+      }
+      const ph = beat * Math.PI
+      switch (m.part) {
+        case 'guitar':
+        case 'bass': {
+          const fast = m.part === 'guitar' ? 2 : 1
+          right.rotation.x = -0.75 + Math.sin(ph * fast) * 0.3
+          right.rotation.z = 0.25
+          left.rotation.x = -1.1
+          left.rotation.z = 0.75 + Math.sin(t * 1.3 + m.phase) * 0.1
+          fig.head.rotation.x = 0.15 + Math.abs(Math.sin(ph)) * (m.part === 'guitar' ? 0.3 : 0.12)
+          fig.body.rotation.z = Math.sin(ph * 0.5) * 0.08
+          // A big jump now and then on the guitar solo.
+          if (m.part === 'guitar' && at > SONG * 0.6 && at < SONG * 0.75) fig.rig.position.y = Math.abs(Math.sin(ph)) * 0.25
+          break
+        }
+        case 'drums':
+          right.rotation.x = -1.0 + Math.sin(ph * 2) * 0.4
+          left.rotation.x = -1.0 + Math.sin(ph * 2 + Math.PI) * 0.4
+          if (crash > 0.6) right.rotation.x = -1.8
+          fig.head.rotation.x = 0.1 + Math.abs(Math.sin(ph)) * 0.2
+          break
+        case 'vocals':
+          left.rotation.x = -1.5
+          left.rotation.z = -0.35
+          right.rotation.x = Math.sin(t * 0.7 + song) > 0.3 ? -2.6 + Math.sin(ph) * 0.2 : -0.7 + Math.sin(ph * 0.5) * 0.3
+          fig.head.rotation.x = -0.15 + Math.sin(ph) * 0.08
+          fig.body.rotation.z = Math.sin(ph * 0.5) * 0.12
+          fig.rig.position.y = Math.abs(Math.sin(ph)) * 0.05
+      }
+    }
+
+    const w = b.wall
+    if (t >= w.next) {
+      w.next = t + 1 / 15
+      drawLedWall(w.canvas, t, playing, at, song, pulse)
+      w.texture.needsUpdate = true
+    }
+    const f = b.floor
+    const tick = playing ? Math.floor(beat) : -1
+    if (tick !== f.next) {
+      f.next = tick
+      drawDanceFloor(f.canvas, tick, hue)
+      f.texture.needsUpdate = true
     }
   }
 
@@ -1175,9 +1509,32 @@ export class WorkspaceScene {
     if (!f) return
     const p = clamp01((t - f.start) / 0.9)
     const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2
+    const who = f.offset && this.follow ? this.people.get(this.follow.id) : null
+    if (who) {
+      // Aim at where they are now, not where they were when the flight began.
+      f.toTarget.copy(who.pos)
+      f.toPos.copy(who.pos).add(f.offset!)
+      this.follow!.last.copy(who.pos)
+    }
     this.camera.position.lerpVectors(f.fromPos, f.toPos, e)
     this.controls.target.lerpVectors(f.fromTarget, f.toTarget, e)
     if (p >= 1) this.fly = null
+  }
+
+  /** Keeps the camera on the person being followed: it moves with them, still free to turn and zoom. */
+  private stepFollow() {
+    const f = this.follow
+    if (!f || this.fly) return
+    const who = this.people.get(f.id)
+    if (!who) {
+      this.follow = null
+      return
+    }
+    const delta = who.pos.clone().sub(f.last)
+    if (delta.lengthSq() < 1e-8) return
+    this.camera.position.add(delta)
+    this.controls.target.add(delta)
+    f.last.copy(who.pos)
   }
 
   private fit() {
@@ -1220,6 +1577,8 @@ export class WorkspaceScene {
   private onPointerDown = (e: PointerEvent) => {
     this.down = { x: e.clientX, y: e.clientY }
     this.fly = null
+    // Panning away lets them go; turning round them with the right button keeps up with them.
+    if (e.button !== 2) this.follow = null
     if (this.hovered) this.opts.onHover(null)
     this.hovered = null
   }
@@ -1227,7 +1586,14 @@ export class WorkspaceScene {
   private onPointerUp = (e: PointerEvent) => {
     const d = this.down
     this.down = null
-    if (!d || e.button !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return
+    if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return
+    if (e.button === 2) {
+      const pick = this.pickAt(e)
+      const rect = this.renderer.domElement.getBoundingClientRect()
+      if (pick?.kind === 'person') this.opts.onMenu({ pick, x: e.clientX - rect.left, y: e.clientY - rect.top })
+      return
+    }
+    if (e.button !== 0) return
     const pick = this.pickAt(e)
     this.opts.onSelect(pick)
     if (pick) this.focus(pick)
@@ -1355,4 +1721,69 @@ function drawRacing(c: HTMLCanvasElement, t: number) {
   x.textBaseline = 'top'
   x.fillStyle = '#ffffff'
   x.fillText(`LAP ${Math.floor(t / 20) % 3 + 1}/3`, 28, 22)
+}
+
+// ---------------------------------------------------------------- the stage
+
+const BAND = 'THE SUBAGENTS'
+const SONGS = ['Merge Conflict', 'Stack Overflow', 'Null Pointer Blues', 'Hotfix Friday', 'Infinite Loop', 'Rebase Me Baby', 'Works On My Machine']
+
+/** The LED wall behind the band: their name over a pulsing equaliser while they play, thanks between songs. */
+function drawLedWall(c: HTMLCanvasElement, t: number, playing: boolean, at: number, song: number, pulse: number) {
+  const x = c.getContext('2d')!
+  const W = c.width, H = c.height
+  x.fillStyle = '#0b0912'
+  x.fillRect(0, 0, W, H)
+  const hue = (t * 22) % 360
+  x.textAlign = 'center'
+  x.textBaseline = 'middle'
+  if (playing) {
+    const bars = 32, bw = W / bars
+    for (let i = 0; i < bars; i++) {
+      const v = (0.25 + 0.75 * Math.abs(Math.sin(t * (2 + (i % 5) * 0.7) + i * 1.7))) * (0.55 + pulse * 0.45)
+      const h = v * H * 0.62
+      const g = x.createLinearGradient(0, H, 0, H - h)
+      g.addColorStop(0, `hsl(${(hue + i * 6) % 360} 90% 55%)`)
+      g.addColorStop(1, `hsl(${(hue + 60 + i * 6) % 360} 90% 70%)`)
+      x.fillStyle = g
+      x.fillRect(i * bw + 3, H - h, bw - 6, h)
+    }
+    x.shadowColor = `hsl(${hue} 90% 60%)`
+    x.shadowBlur = 30
+    x.fillStyle = '#ffffff'
+    x.font = `800 ${92 + pulse * 8}px ${FONT}`
+    x.fillText(BAND, W / 2, H * 0.3, W - 60)
+    x.shadowBlur = 0
+    x.font = `600 36px ${FONT}`
+    x.fillStyle = 'rgba(255,255,255,.75)'
+    x.fillText(`♪ ${SONGS[song % SONGS.length]}`, W / 2, H * 0.3 + 78)
+  } else {
+    x.shadowColor = '#ff4fd8'
+    x.shadowBlur = 30
+    x.fillStyle = '#ffffff'
+    x.font = `800 ${100 + Math.sin(t * 6) * 6}px ${FONT}`
+    x.fillText(at - SONG < ENCORE / 2 ? 'THANK YOU!' : 'ONE MORE!', W / 2, H * 0.45, W - 60)
+    x.shadowBlur = 0
+    x.font = `600 34px ${FONT}`
+    x.fillStyle = 'rgba(255,255,255,.7)'
+    x.fillText(`Next up: ${SONGS[(song + 1) % SONGS.length]}`, W / 2, H * 0.45 + 90)
+  }
+}
+
+/** The dance floor's tiles: a new pattern of lit squares on every beat, dark between songs. */
+function drawDanceFloor(c: HTMLCanvasElement, tick: number, hue: number) {
+  const x = c.getContext('2d')!
+  const W = c.width, H = c.height
+  const cols = 10, rows = 4
+  const tw = W / cols, th = H / rows
+  x.fillStyle = '#100d18'
+  x.fillRect(0, 0, W, H)
+  for (let r = 0; r < rows; r++) {
+    for (let i = 0; i < cols; i++) {
+      const lit = tick >= 0 && ((i * 7 + r * 13 + tick * 5) % 11) < 4
+      const h = ((hue * 360 + ((i + r + tick) % 4) * 60) % 360)
+      x.fillStyle = lit ? `hsl(${h} 85% 55%)` : `hsl(${h} 30% 16%)`
+      x.fillRect(i * tw + 4, r * th + 4, tw - 8, th - 8)
+    }
+  }
 }

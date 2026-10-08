@@ -55,15 +55,56 @@ onMounted(() => {
     onHover: (h) => { hover.value = h },
     onSelect: (p) => {
       picked.value = p
+      menu.value = null
       // A person opens their session, or a subagent the session that started it, in a modal.
       if (p?.kind === 'person') {
         const who = people.value.find(x => x.id === p.id)
         if (who) talkTo.value = who.parentId || who.id
       }
     },
+    onMenu: (m) => {
+      hover.value = null
+      menu.value = { id: m.pick.id, x: m.x, y: m.y }
+    },
+    onFarewell: id => S.close(id),
   })
   scene.sync(rooms.value, people.value)
 })
+
+/** A session clicked in the sidebar: fly to its character and keep up with them. */
+function jumpTo(sid: string) {
+  if (!people.value.some(p => p.id === sid)) return
+  picked.value = { kind: 'person', id: sid }
+  scene?.focus(picked.value)
+}
+
+watch(() => ui.simTarget, (t) => {
+  if (t) jumpTo(t.sid)
+})
+
+// ---------- Right-click menu on a person ----------
+
+const menu = ref<{ id: string; x: number; y: number } | null>(null)
+const menuPerson = computed(() => (menu.value ? people.value.find(p => p.id === menu.value!.id) || null : null))
+
+function menuOpen() {
+  const p = menuPerson.value
+  menu.value = null
+  if (p) talkTo.value = p.parentId || p.id
+}
+
+function menuTerminals() {
+  const p = menuPerson.value
+  menu.value = null
+  if (p) openSession(p.parentId || p.id)
+}
+
+/** They wave goodbye, then the session closes and they vanish. */
+function menuClose() {
+  const p = menuPerson.value
+  menu.value = null
+  if (p && !p.parentId) scene?.farewell(p.id)
+}
 
 onBeforeUnmount(() => {
   scene?.dispose()
@@ -140,13 +181,33 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
           {{ totals.rooms }} rooms · {{ totals.lit }} lit · {{ totals.sessions }} sessions<template v-if="totals.subagents"> · {{ totals.subagents }} subagents</template>
         </span>
       </div>
-      <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · hover a big screen for its overview</div>
+      <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · right-click someone for options · hover a big screen for its overview</div>
     </div>
 
     <div class="absolute right-3 top-3 flex gap-1.5">
       <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-home-01" label="Whole workspace" @click="picked = null; scene?.resetView()" />
       <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-cancel-01" title="Back to terminals" @click="ui.sim = false" />
     </div>
+
+    <SimulationWeather class="absolute bottom-3 right-3" />
+
+    <template v-if="menu && menuPerson">
+      <div class="absolute inset-0 z-20" @pointerdown="menu = null" @contextmenu.prevent="menu = null" />
+      <div
+        class="absolute z-30 w-[190px] rounded-lg border border-(--ln) bg-(--win) p-1 text-(--tx) shadow-xl"
+        :style="{ left: Math.min(menu.x, (el?.clientWidth ?? 9999) - 198) + 'px', top: Math.min(menu.y, (el?.clientHeight ?? 9999) - 130) + 'px' }"
+        @keydown.esc="menu = null"
+      >
+        <div class="flex items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-[11.5px] font-semibold">
+          <span class="h-2 w-2 rounded-full" :style="{ background: SC[menuPerson.status] }" />
+          {{ menuPerson.name }}
+          <span class="font-normal text-(--fa)">{{ menuPerson.parentId ? 'Subagent' : menuPerson.role === 'designer' ? 'Designer' : 'Developer' }}</span>
+        </div>
+        <button class="sim-menu-item" @click="menuOpen">{{ menuPerson.parentId ? `Talk to ${castFor(menuPerson.parentId)?.name}` : 'Talk to them' }}</button>
+        <button class="sim-menu-item" @click="menuTerminals">Open in terminals</button>
+        <button v-if="!menuPerson.parentId" class="sim-menu-item text-(--red)" @click="menuClose">Close</button>
+      </div>
+    </template>
 
     <div v-if="hoverScreen" class="pointer-events-none absolute z-10" :style="cardAt(300, 340)">
       <SimulationOverview :pid="hoverScreen" />
@@ -231,4 +292,6 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
 .sim-say-doing::before { content: '⚙ '; font-style: normal; }
 .sim-say-doing::after { border-top-color: rgba(20, 18, 28, .85); }
 @keyframes sim-pop { from { transform: scale(.6); opacity: 0; } }
+.sim-menu-item { display: flex; width: 100%; align-items: center; height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; }
+.sim-menu-item:hover { background: var(--hov); }
 </style>

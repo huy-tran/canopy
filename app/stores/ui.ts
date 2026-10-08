@@ -32,6 +32,8 @@ export const useUiStore = defineStore('ui', () => {
   const details = ref(false)
   /** The workspace simulation fills the main area in place of the selected project. */
   const sim = ref(false)
+  /** A Claude session whose character the simulation flies to and follows; `at` makes a repeat click count. */
+  const simTarget = ref<{ sid: string; at: number } | null>(null)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -111,6 +113,13 @@ export const useUiStore = defineStore('ui', () => {
     S.setFocus(s.pid, sid)
     P.patch(s.pid, { view: 'terminals', expanded: true })
     focusLater()
+  }
+
+  /** In the workspace simulation, flies to a Claude session's character; anywhere else, opens the session. */
+  function showSession(sid: string) {
+    const s = S.byId(sid)
+    if (sim.value && s?.kind === 'claude' && !s.exited) simTarget.value = { sid, at: Date.now() }
+    else focusSession(sid)
   }
 
   function nextWaiting() {
@@ -660,10 +669,10 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
-    toast, focusLater, selectProject, focusSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
+    toast, focusLater, selectProject, focusSession, showSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
