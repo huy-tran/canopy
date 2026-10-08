@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- A GitHub view runs gh-tui inside Canopy: open it with the GitHub button in the title bar or Ctrl Shift G. It keeps running while closed, so it opens instantly where you left it. Its own Ctrl shortcuts, such as Ctrl K, reach it. Change the app it runs in Settings > General.
+- Canopy tells you when someone requests your review on a pull request. It checks GitHub every 5 minutes, shows how many reviews are waiting on the GitHub button, and reminds you every hour while any are left. Clicking a notification opens the GitHub view. Change or turn these off in Settings > Notifications.
+- On a PC without gh-tui, the GitHub view shows how to install it (and the GitHub CLI, if that's missing too) in place of an error. It also finds gh-tui installed as github-tui. If the GitHub CLI is missing or signed out, Canopy says so once and marks the GitHub button.
+
 ## [0.16.0] - 2026-10-08
 
 - The 3D World's common room has a new lineup every day: two of ping pong, foosball, pool, air hockey and a board game in the middle, and the arcade machine or darts at the front.

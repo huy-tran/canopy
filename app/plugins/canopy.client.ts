@@ -106,13 +106,16 @@ export default defineNuxtPlugin({
     }, { immediate: true })
 
     configureTerminals({
-      isAppKey: (e) => {
+      isAppKey: (e, sid) => {
         const cb = comboOf(e)
         if (!cb) return false
         if (/^Alt\+[1-9]$/.test(cb)) return true
-        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim'))
+        const id = matchAction(prefs.keys, cb)
+        // gh-tui's own keys are Ctrl plus a letter (Ctrl K palette, Ctrl R re-run...): those reach it, bar its toggle and quit.
+        if (sid === GH_TERM && /^Ctrl\+[A-Z]$/.test(cb) && id !== 'github' && id !== 'quit') return false
+        return !!id || (ui.sim && !!matchAction(prefs.keys, cb, 'sim'))
       },
-      onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
+      onImagePaste: (sid, f) => { if (sid !== GH_TERM && S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
       onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },
       onImageClick: (sid, n) => ui.openLightbox(sid, n),
       onFocus: (sid) => {
@@ -125,10 +128,10 @@ export default defineNuxtPlugin({
     // ---------- Main process events ----------
     api.session.onHook(e => S.onHook(e))
     api.session.onUsage(u => S.onUsage(u))
-    api.pty.onExit((id, code) => S.onExit(id, code))
+    api.pty.onExit((id, code) => (id === GH_TERM ? ui.onGithubExit(code) : S.onExit(id, code)))
     api.svc.onData((id, d) => V.onData(id, d))
     api.svc.onStatus((id, s, code) => V.onStatus(id, s, code))
-    api.sys.onNotifyClick(sid => ui.focusSession(sid))
+    api.sys.onNotifyClick(sid => (sid === GH_TERM ? ui.openGithub() : ui.focusSession(sid)))
     api.sys.onNotifyAction?.((sid, key) => ui.answer(sid, key))
     api.upd.onStatus((s) => { ui.upd = s })
     api.upd.state().then((s) => { if (s) ui.upd = s })
@@ -145,6 +148,12 @@ export default defineNuxtPlugin({
     const pollUsage = () => api.usage().then((u) => { ui.usage = u }).catch(() => {})
     pollUsage()
     setInterval(pollUsage, 120_000)
+
+    // ---------- Pull requests waiting for my review ----------
+    const R = useReviewsStore()
+    R.start()
+    // Approving or merging in the GitHub view clears them sooner than the next check.
+    watch(() => ui.gh, (on) => { if (!on) setTimeout(R.poll, 2000) })
 
     // ---------- Git status for the selected project's sessions and repos ----------
     const pollGit = () => {

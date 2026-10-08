@@ -11,6 +11,17 @@ onMounted(async () => {
   api.win.onMaximized((v) => { maximized.value = v })
 })
 
+const R = useReviewsStore()
+const ghTitle = computed(() => {
+  const n = R.prs.length
+  const waiting = R.problem === 'missing'
+    ? ' · review notifications are off: the GitHub CLI (gh) isn\'t installed'
+    : R.problem === 'auth'
+      ? ' · review notifications are off: run gh auth login'
+      : R.error ? ` · could not check reviews: ${R.error}` : n ? ` · ${n} waiting for your review` : ''
+  return `GitHub (${prefs.kl('github')})${waiting}`
+})
+
 const updReady = computed(() => ui.upd?.status === 'ready')
 const updDownloading = computed(() => ui.upd?.status === 'downloading')
 
@@ -110,6 +121,17 @@ const items = computed<DropdownMenuItem[][]>(() => [
       @click.stop="ui.sim = !ui.sim"
     >
       <UIcon name="i-hugeicons-cube" class="size-3.5" />3D World
+    </div>
+
+    <div
+      :title="ghTitle"
+      class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
+      :class="ui.gh ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
+      @click.stop="ui.runAction('github')"
+    >
+      <UIcon name="i-hugeicons-github" class="size-3.5" />GitHub
+      <span v-if="R.problem" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
+      <span v-else-if="R.prs.length" class="mono rounded-lg bg-(--ambf) px-1.5 text-[10.5px] font-bold text-[#131417]">{{ R.prs.length }}</span>
     </div>
 
     <div

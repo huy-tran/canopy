@@ -16,6 +16,32 @@ export interface ShellInfo {
   exe: string
 }
 
+/** A pull request waiting for the user's review. */
+export interface ReviewRequest {
+  url: string
+  number: number
+  title: string
+  /** owner/name */
+  repo: string
+  author: string
+  createdAt: number
+}
+
+/** Why gh could not be used: not installed, not signed in, or anything else (such as being offline). */
+export type GhProblem = 'missing' | 'auth' | 'other'
+
+/** What the GitHub view found on this PC before starting its terminal app. */
+export interface ToolCheck {
+  /** The command line to run, or null when none of the tried commands is installed. */
+  cmd: string | null
+  /** The commands looked for, in order. */
+  tried: string[]
+  /** gh itself is installed. */
+  gh: boolean
+  /** The gh dash extension is installed, an alternative to gh-tui. */
+  ghDash: boolean
+}
+
 export interface Service {
   id: string
   cmd: string
@@ -143,6 +169,12 @@ export interface Prefs {
   panelSize: { bottom: number; right: number }
   /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
   summonKey: string
+  /** Terminal app shown in the GitHub view, such as gh-tui or gh dash. Unset means gh-tui. */
+  githubCmd?: string
+  /** Notify when someone requests the user's review on a pull request. */
+  reviewNotify: boolean
+  /** Remind again every this many minutes while reviews are still waiting; 0 is off. */
+  reviewRemind: number
   /** Opacity of the session window in the workspace simulation, 30-90: the characters always show through it. */
   simGlass?: number
   /** City for the workspace simulation's weather; empty uses the city in the system time zone. */

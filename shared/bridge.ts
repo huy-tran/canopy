@@ -1,5 +1,5 @@
 // The API the preload script exposes as window.canopy.
-import type { AppInfo, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, PlanUsage, RepoInfo, UpdateState, UsageUpdate, ShellInfo, ShellKind } from './types'
+import type { AppInfo, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhProblem, PlanUsage, RepoInfo, ReviewRequest, ToolCheck, UpdateState, UsageUpdate, ShellInfo, ShellKind } from './types'
 
 type Off = () => void
 
@@ -11,6 +11,8 @@ export interface CanopyApi {
   pty: {
     spawn(o: { id: string; cwd: string; cmd: string; cols: number; rows: number }): Promise<{ pid: number }>
     shell(o: { id: string; cwd: string; kind: ShellKind; cols: number; rows: number }): Promise<{ pid: number }>
+    /** A full-screen terminal app run from the home folder, such as gh-tui in the GitHub view. */
+    tool(o: { id: string; cmd: string; dark: boolean; cols: number; rows: number }): Promise<{ pid: number }>
     write(id: string, data: string): void
     resize(id: string, cols: number, rows: number): void
     kill(id: string): Promise<void>
@@ -55,6 +57,12 @@ export interface CanopyApi {
   }
   history(repos: { id: string; path: string }[]): Promise<HistorySession[]>
   usage(): Promise<PlanUsage | null>
+  gh: {
+    /** Open pull requests waiting for the user's review, via the gh CLI. */
+    reviews(): Promise<{ ok: boolean; prs: ReviewRequest[]; error?: string; problem?: GhProblem }>
+    /** Finds the GitHub view's terminal app: the custom command, or gh-tui and then github-tui. */
+    findTool(custom: string): Promise<ToolCheck>
+  }
   sys: {
     openExternal(url: string): Promise<void>
     showInFolder(path: string): Promise<void>

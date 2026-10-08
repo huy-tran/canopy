@@ -61,6 +61,7 @@ const cmdItems = computed<PalItem[]>(() => {
   C('Layout: grid', kl('cycleLayout'), () => ui.setLayout('grid'))
   C('Toggle Terminals / Overview', kl('toggleView'), () => ui.toggleView())
   C('3D World: open or close', kl('simulation'), () => { ui.sim = !ui.sim })
+  C('GitHub: open or close', kl('github'), () => ui.runAction('github'))
   C('Next session waiting on you', kl('nextWaiting'), () => ui.nextWaiting())
   C('New session in focused repo', kl('newSession'), () => ui.newSession())
   C('New project…', kl('newProject'), () => ui.openModal('add'))

@@ -6,9 +6,10 @@ import Store from 'electron-store'
 import electronUpdater from 'electron-updater'
 import type { HookEvent, Persisted, UpdateState } from '../shared/types'
 import { clearSessionSettings, startHookServer, stopHookServer } from './services/hooks'
-import { bufferOf, killAllSessions, killSession, resizeSession, spawnSession, spawnShell, writeSession } from './services/pty'
+import { bufferOf, killAllSessions, killSession, resizeSession, spawnSession, spawnShell, spawnTool, writeSession } from './services/pty'
 import { dayActivity, lastAssistantText, projectHistory, unwatchTranscript, watchTranscript } from './services/transcript'
 import { runClaude } from './services/claude'
+import { findTool, reviewRequests } from './services/github'
 import * as git from './services/git'
 import { startService, stopAllServices, stopService } from './services/devservers'
 import { planUsage } from './services/usage'
@@ -231,6 +232,11 @@ function registerIpc() {
     const shell = shells.find(s => s.kind === o.kind) || shells[0]!
     return spawnShell({ ...o, shell }, (id, d) => send('pty:data', id, d), (id, code) => send('pty:exit', id, code))
   })
+  handle('pty:tool', (o: { id: string; cmd: string; dark: boolean; cols: number; rows: number }) => {
+    // gh-tui's theme follows the terminal colours, unless one is set in the environment.
+    const env: Record<string, string> = process.env.GITHUB_TUI_THEME ? {} : { GITHUB_TUI_THEME: o.dark ? 'dark' : 'light' }
+    return spawnTool({ ...o, cwd: app.getPath('home'), env }, (id, d) => send('pty:data', id, d), (id, code) => send('pty:exit', id, code))
+  })
   handle('pty:kill', (id: string) => {
     unwatchTranscript(id)
     killSession(id)
@@ -285,6 +291,8 @@ function registerIpc() {
   })
   handle('claude:run', (prompt: string) => runClaude(prompt))
   handle('usage', () => planUsage())
+  handle('gh:reviews', () => reviewRequests())
+  handle('gh:findTool', (custom: string) => findTool(custom))
 
   handle('sys:openExternal', (url: string) => shell.openExternal(url))
   handle('sys:showInFolder', (p: string) => showInFolder(p))

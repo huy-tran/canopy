@@ -22,6 +22,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'paneLeft', g: 'Navigate', label: 'Focus the pane to the left', def: ['Ctrl+Alt+←'] },
   { id: 'toggleView', g: 'Navigate', label: 'Switch Terminals / Overview', def: ['Ctrl+Shift+O'] },
   { id: 'simulation', g: 'Navigate', label: 'Open or close the 3D World', def: ['Ctrl+Shift+Home'] },
+  { id: 'github', g: 'Navigate', label: 'Open or close GitHub', def: ['Ctrl+Shift+G'] },
   { id: 'newSession', g: 'Sessions', label: 'New session in the focused repo', def: ['Ctrl+Shift+T'] },
   { id: 'promptAll', g: 'Sessions', label: 'Prompt several sessions at once', def: ['Ctrl+Shift+Enter'] },
   { id: 'share', g: 'Sessions', label: 'Share changes with the other repo', def: ['Ctrl+Shift+H'] },

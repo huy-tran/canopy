@@ -30,6 +30,18 @@ const editor = computed({
         @update:model-value="v => prefs.set({ startCmd: String(v) })"
       />
     </SettingsRow>
+    <SettingsRow label="GitHub view command" sub="The terminal app the GitHub view runs. Takes effect when it next starts." wrap>
+      <UInput
+        :model-value="prefs.prefs.githubCmd || ''"
+        placeholder="gh-tui"
+        variant="none"
+        :ui="{
+          root: 'w-[220px]',
+          base: 'mono h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12px] text-(--tx)',
+        }"
+        @change="(e: Event) => prefs.set({ githubCmd: (e.target as HTMLInputElement).value.trim() })"
+      />
+    </SettingsRow>
     <SettingsRow label="Weather location" sub="For the weather in the 3D World. Leave empty to use the city in your time zone." wrap>
       <UInput
         :model-value="prefs.prefs.weatherCity || ''"

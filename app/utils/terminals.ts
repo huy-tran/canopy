@@ -8,7 +8,7 @@ import { api } from './bridge'
 
 export interface TermHooks {
   /** True when the key event is an app shortcut and must not reach the terminal. */
-  isAppKey(e: KeyboardEvent): boolean
+  isAppKey(e: KeyboardEvent, sid: string): boolean
   onImagePaste(sid: string, file: File): void
   onImageHover(sid: string, n: number | null, x: number, y: number): void
   onImageClick(sid: string, n: number): void
@@ -40,6 +40,9 @@ interface Entry {
   /** The GPU renderer, held only while the terminal is in a pane. */
   gl: WebglAddon | null
 }
+
+/** The terminal of the GitHub view: one for the whole app, not tied to a project. */
+export const GH_TERM = 'github'
 
 const entries = new Map<string, Entry>()
 if (import.meta.dev && typeof window !== 'undefined') (window as any).__canopyTerms = entries
@@ -188,7 +191,7 @@ export function ensureTerminal(sid: string): Entry {
   term.onResize(({ cols, rows }) => api.pty.resize(sid, cols, rows))
   term.attachCustomKeyEventHandler((ev) => {
     if (ev.type !== 'keydown') return true
-    if (hooks?.isAppKey(ev)) return false
+    if (hooks?.isAppKey(ev, sid)) return false
     // Let the browser fire a paste event so text and screenshots both work.
     if (ev.ctrlKey && !ev.altKey && !ev.shiftKey && ev.code === 'KeyV') return false
     if (ev.ctrlKey && !ev.altKey && !ev.shiftKey && ev.code === 'KeyC' && term.hasSelection()) {

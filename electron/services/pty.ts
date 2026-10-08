@@ -50,17 +50,25 @@ export function spawnSession(o: SpawnOpts, onData: (id: string, d: string) => vo
     env: { ...cleanEnv(), CANOPY_SESSION: o.id, FORCE_COLOR: '1', COLORTERM: 'truecolor' },
     useConpty: true,
   })
+  return track(o.id, p, onData, (id, code) => {
+    removeSessionSettings(id)
+    onExit(id, code)
+  })
+}
+
+/** Registers a pty under an id, keeping recent output for replay and streaming it on. `liveOnly` drops the exit of a killed or replaced pty. */
+function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void, liveOnly = false) {
   const t: Term = { p, buf: [] }
-  terms.set(o.id, t)
+  terms.set(id, t)
   p.onData((d) => {
     t.buf.push(d)
     if (t.buf.length > 4000) t.buf.splice(0, t.buf.length - 4000)
-    onData(o.id, d)
+    onData(id, d)
   })
   p.onExit(({ exitCode }) => {
-    if (terms.get(o.id) === t) terms.delete(o.id)
-    removeSessionSettings(o.id)
-    onExit(o.id, exitCode)
+    const live = terms.get(id) === t
+    if (live) terms.delete(id)
+    if (live || !liveOnly) onExit(id, exitCode)
   })
   return { pid: p.pid }
 }
@@ -84,18 +92,22 @@ export function spawnShell(o: { id: string; cwd: string; shell: ShellInfo; cols:
     env: { ...cleanEnv(), CHERE_INVOKING: '1', COLORTERM: 'truecolor' },
     useConpty: true,
   })
-  const t: Term = { p, buf: [] }
-  terms.set(o.id, t)
-  p.onData((d) => {
-    t.buf.push(d)
-    if (t.buf.length > 4000) t.buf.splice(0, t.buf.length - 4000)
-    onData(o.id, d)
+  return track(o.id, p, onData, onExit)
+}
+
+/** A full-screen terminal app such as gh-tui: no Claude hooks, and no shell left behind when it quits. */
+export function spawnTool(o: SpawnOpts & { env?: Record<string, string> }, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
+  killSession(o.id)
+  const shell = process.env.ComSpec || 'cmd.exe'
+  const p = pty.spawn(shell, `/d /s /c "${o.cmd}"`, {
+    name: 'xterm-256color',
+    cols: Math.max(20, o.cols || 120),
+    rows: Math.max(5, o.rows || 30),
+    cwd: o.cwd,
+    env: { ...cleanEnv(), COLORTERM: 'truecolor', ...o.env },
+    useConpty: true,
   })
-  p.onExit(({ exitCode }) => {
-    if (terms.get(o.id) === t) terms.delete(o.id)
-    onExit(o.id, exitCode)
-  })
-  return { pid: p.pid }
+  return track(o.id, p, onData, onExit, true)
 }
 
 export function writeSession(id: string, data: string) {

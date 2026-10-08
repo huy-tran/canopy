@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { DockPanelState, Layout, PlanUsage, RecapHours, Session, UpdateState, ShellKind } from '#shared/types'
+import type { DockPanelState, Layout, PlanUsage, RecapHours, Session, ToolCheck, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
 export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'notifications' | 'keys'
@@ -36,6 +36,19 @@ export const useUiStore = defineStore('ui', () => {
   const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number; talk?: boolean } | null>(null)
   /** Bumped by the shortcut that opens or closes the session window of the character in view. */
   const simTalk = ref(0)
+  /** The GitHub view (gh-tui) fills the main area in place of the selected project, like the simulation. */
+  const gh = ref(false)
+  /** Whether the GitHub app is running; it keeps running while the view is closed, so reopening is instant. */
+  const ghRun = ref<'off' | 'checking' | 'running' | 'exited' | 'missing'>('off')
+  /** What the last start found: the command it ran, or what it looked for when nothing was installed. */
+  const ghCheck = ref<ToolCheck | null>(null)
+  watch(sim, (on) => { if (on) gh.value = false })
+  watch(gh, (on) => {
+    if (!on) return
+    sim.value = false
+    // Not installed last time: look again, in case it has been installed since.
+    if (ghRun.value === 'off' || ghRun.value === 'missing') startGithub()
+  })
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -80,7 +93,7 @@ export const useUiStore = defineStore('ui', () => {
 
   function focusLater() {
     setTimeout(() => {
-      const id = fid.value
+      const id = gh.value ? GH_TERM : fid.value
       if (id && !palette.value && !projectModal.value && !settings.value && !explorer.value) focusTerminal(id)
     }, 30)
   }
@@ -95,6 +108,7 @@ export const useUiStore = defineStore('ui', () => {
   function selectProject(pid: string) {
     P.sel = pid
     sim.value = false
+    gh.value = false
     inbox.value = null
     bc.value = null
     closeTransient()
@@ -109,6 +123,7 @@ export const useUiStore = defineStore('ui', () => {
     if (bc.value && s.pid !== P.sel) bc.value = null
     P.sel = s.pid
     sim.value = false
+    gh.value = false
     palette.value = null
     newMenu.value = false
     if (inbox.value && inbox.value.sid !== sid) inbox.value = null
@@ -324,6 +339,45 @@ export const useUiStore = defineStore('ui', () => {
     toast({ title: `Merged ${from} into ${base}`, body: 'Worktree removed. The session now runs in the main folder.', hue: p.hue })
   }
 
+  // ---------- GitHub view ----------
+
+  /** Looks for the terminal app first, so a PC without it gets install steps instead of a shell error. */
+  async function startGithub() {
+    ghRun.value = 'checking'
+    const check = await api.gh.findTool(prefsStore.prefs.githubCmd || '')
+    ghCheck.value = check
+    if (!check.cmd) {
+      ghRun.value = 'missing'
+      return
+    }
+    const cmd = check.cmd
+    ghRun.value = 'running'
+    writeToTerminal(GH_TERM, '\x1b[2J\x1b[3J\x1b[H')
+    const { cols, rows } = terminalSize(GH_TERM)
+    api.pty.tool({ id: GH_TERM, cmd, dark: prefsStore.terminalDark, cols, rows }).catch((e) => {
+      ghRun.value = 'exited'
+      writeToTerminal(GH_TERM, `\x1b[31mCould not start "${cmd}": ${String(e?.message || e)}\x1b[0m\r\n`)
+    })
+    setTimeout(() => { if (gh.value) focusTerminal(GH_TERM) }, 30)
+  }
+
+  function onGithubExit(code: number) {
+    ghRun.value = 'exited'
+    writeToTerminal(GH_TERM, `\r\n\x1b[2m[${ghCheck.value?.cmd || 'gh-tui'} exited · code ${code}]\x1b[0m\r\n`)
+  }
+
+  function openGithub() {
+    gh.value = true
+    palette.value = null
+    focusLater()
+  }
+
+  async function restartGithub() {
+    if (ghRun.value === 'checking') return
+    await api.pty.kill(GH_TERM)
+    await startGithub()
+  }
+
   // ---------- Inbox ----------
 
   function inboxGo(sid: string) {
@@ -332,6 +386,7 @@ export const useUiStore = defineStore('ui', () => {
     inbox.value = { sid }
     P.sel = s.pid
     sim.value = false
+    gh.value = false
     palette.value = null
     bc.value = null
     newMenu.value = false
@@ -684,6 +739,10 @@ export const useUiStore = defineStore('ui', () => {
       paneLeft: () => cycle(-1),
       toggleView,
       simulation: () => { sim.value = !sim.value },
+      github: () => {
+        gh.value = !gh.value
+        focusLater()
+      },
       simTalk: () => { simTalk.value++ },
       newSession: () => newSession(),
       promptAll: openBc,
@@ -712,12 +771,13 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, ghRun, ghCheck, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
+    onGithubExit, openGithub, restartGithub,
   }
 })

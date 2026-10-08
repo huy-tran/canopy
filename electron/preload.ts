@@ -16,6 +16,7 @@ const api: CanopyApi = {
   pty: {
     spawn: inv('pty:spawn') as any,
     shell: inv('pty:shell') as any,
+    tool: inv('pty:tool') as any,
     write: (id, d) => ipcRenderer.send('pty:write', id, d),
     resize: (id, c, r) => ipcRenderer.send('pty:resize', id, c, r),
     kill: inv('pty:kill') as any,
@@ -45,6 +46,7 @@ const api: CanopyApi = {
   svc: { start: inv('svc:start') as any, stop: inv('svc:stop') as any, onData: on('svc:data'), onStatus: on('svc:status') },
   history: inv('history') as any,
   usage: inv('usage') as any,
+  gh: { reviews: inv('gh:reviews') as any, findTool: inv('gh:findTool') as any },
   sys: {
     openExternal: inv('sys:openExternal') as any,
     showInFolder: inv('sys:showInFolder') as any,

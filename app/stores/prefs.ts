@@ -34,6 +34,8 @@ export const DEFAULT_PREFS: Prefs = {
   panelDock: 'bottom',
   panelSize: { bottom: 260, right: 460 },
   summonKey: 'Alt+Space',
+  reviewNotify: true,
+  reviewRemind: 60,
 }
 
 /** The session window in the workspace simulation is always a little see-through: 90% at most, 90% unless set. */
