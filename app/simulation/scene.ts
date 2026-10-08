@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
-import type { Status } from '#shared/types'
+import type { Act, Status, ToolResult } from '#shared/types'
+import type { Sky } from '~/composables/useWeather'
 import {
-  arcade, beanBag, bigScreen, blueprintGround, carpet, coffeeBar, consoleBench, controller, deskPod, disposeKit, disposeTree, doorArch, drumKit, drumstick,
+  arcade, beanBag, bigScreen, blueprintGround, book, carpet, coffeeBar, consoleBench, controller, deskPod, disposeKit, disposeTree, doorArch, drumKit, drumstick,
   type Figure, figure, floorLamp, floorText, FONT, foosball, guitar, hashOf, lightPillar, lightPool, lowWall, mat, mesh, micStand, oklch, type Pick,
   pingPong, plant, type Role, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
 } from './kit'
@@ -41,6 +42,9 @@ export interface SimPerson {
   title: string
   /** Claude's latest line or tool call, said over their head while they work. */
   line: { text: string; kind: 'said' | 'doing'; at: number } | null
+  /** The kind of tool Claude is using, acted out at the desk, and how its latest command went. */
+  act: Act | ''
+  result: ToolResult | null
 }
 
 export interface SimHover { pick: Pick; x: number; y: number }
@@ -72,6 +76,15 @@ const WALK_SPEED = 2.4
 /** Room lights with a real light source; more rooms than this make do with glowing lamps. */
 const MAX_ROOM_LIGHTS = 16
 const BACKGROUND = new THREE.Color('#1b1924')
+
+/** The lighting at night, at dusk and dawn, and in the day: the scene blends between them by the hour. */
+const LIGHT = {
+  night: { bg: new THREE.Color('#0d0c15'), hemi: new THREE.Color('#8a8fd6'), hemiI: 0.2, sun: new THREE.Color('#9fb4ff'), sunI: 0.16 },
+  dusk: { bg: BACKGROUND, hemi: new THREE.Color('#d6d0ff'), hemiI: 0.5, sun: new THREE.Color('#ffd9b0'), sunI: 0.75 },
+  day: { bg: new THREE.Color('#4d6684'), hemi: new THREE.Color('#eef3ff'), hemiI: 0.8, sun: new THREE.Color('#fff3df'), sunI: 1.2 },
+}
+/** How much each kind of weather dims the sun. */
+const OVERCAST: Record<Sky, number> = { clear: 1, cloudy: 0.5, fog: 0.55, rain: 0.4, snow: 0.6, storm: 0.25 }
 const STATUS_COLOR: Record<Status, string> = { working: '#5b9cff', waiting: '#f5b544', done: '#4cc38a', idle: '#9aa0ab' }
 const ROLE_LABEL: Record<Role, string> = { developer: 'Dev', designer: 'Design' }
 
@@ -155,6 +168,10 @@ type PersonActor = {
   gone: boolean
   stride: number
   pad: THREE.Object3D | null
+  book: THREE.Object3D | null
+  /** A reaction to a command finishing: cheering at passing tests, smoke at a failure, until `until`. */
+  react: { ok: boolean; test: boolean; until: number } | null
+  reactedAt: number
   phase: number
 }
 
@@ -196,6 +213,7 @@ export class WorkspaceScene {
   private readonly raycaster = new THREE.Raycaster()
   private readonly pointer = new THREE.Vector2()
   private readonly sun: THREE.DirectionalLight
+  private readonly hemi: THREE.HemisphereLight
   private readonly resize: ResizeObserver
   private frame = 0
 
@@ -255,7 +273,8 @@ export class WorkspaceScene {
     this.controls.panSpeed = 1.2
 
     // Early evening: a soft sky and a low warm sun, so the rooms with their lights on stand out.
-    this.scene.add(new THREE.HemisphereLight('#d6d0ff', '#4b3f38', 0.5))
+    this.hemi = new THREE.HemisphereLight('#d6d0ff', '#4b3f38', 0.5)
+    this.scene.add(this.hemi)
     this.sun = new THREE.DirectionalLight('#ffd9b0', 0.75)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
@@ -263,7 +282,7 @@ export class WorkspaceScene {
     this.sun.shadow.normalBias = 0.03
     this.scene.add(this.sun, this.sun.target)
     this.scene.add(this.floor)
-    this.scene.background = BACKGROUND
+    this.scene.background = BACKGROUND.clone()
 
     const canvas = this.renderer.domElement
     canvas.addEventListener('pointermove', this.onPointerMove)
@@ -345,6 +364,129 @@ export class WorkspaceScene {
   }
 
   /**
+   * The local hour, today's sunrise and sunset, and the weather: the light follows the day from a
+   * dark night through dusk to bright day, and rain, snow, fog or a storm falls over the floor.
+   */
+  setSky(o: { hour: number; sunrise: number; sunset: number; sky: Sky | null }) {
+    const changed = o.sky !== this.sky.sky
+    this.sky = o
+    this.applySky()
+    if (changed) this.makeWeather()
+  }
+
+  private sky: { hour: number; sunrise: number; sunset: number; sky: Sky | null } = { hour: 18.5, sunrise: 6, sunset: 18, sky: null }
+  private weather: { kind: Sky; obj: THREE.LineSegments | THREE.Points; drift: Float32Array } | null = null
+  private flash = { next: 0, until: 0 }
+  private hemiBase = 0.5
+
+  /** How light it is: 0 at night, 0.5 at sunrise and sunset, 1 in the day, an hour's twilight either side. */
+  private daylight() {
+    const { hour: h, sunrise, sunset } = this.sky
+    const ramp = (x: number) => clamp01((x + 1) / 2)
+    return Math.min(ramp(h - sunrise), ramp(sunset - h))
+  }
+
+  private applySky() {
+    const d = this.daylight()
+    const [a, b, k] = d < 0.5 ? [LIGHT.night, LIGHT.dusk, d * 2] : [LIGHT.dusk, LIGHT.day, (d - 0.5) * 2]
+    const dim = this.sky.sky ? OVERCAST[this.sky.sky] : 1
+    const bg = (this.scene.background as THREE.Color | null) instanceof THREE.Color ? this.scene.background as THREE.Color : new THREE.Color()
+    bg.copy(a.bg).lerp(b.bg, k).multiplyScalar(0.55 + 0.45 * dim)
+    this.scene.background = bg
+    this.hemi.color.copy(a.hemi).lerp(b.hemi, k)
+    this.hemiBase = (a.hemiI + (b.hemiI - a.hemiI) * k) * (0.75 + 0.25 * dim)
+    this.hemi.intensity = this.hemiBase
+    this.sun.color.copy(a.sun).lerp(b.sun, k)
+    this.sun.intensity = (a.sunI + (b.sunI - a.sunI) * k) * dim
+    // The sun crosses the sky through the day; at night the moon sits high in the east.
+    const s = Math.max(this.bounds.w, this.bounds.d)
+    const { hour, sunrise, sunset } = this.sky
+    const p = clamp01((hour - sunrise) / Math.max(1, sunset - sunrise))
+    const up = d > 0 ? Math.max(0.3, Math.sin(Math.PI * p)) : 0.9
+    const across = d > 0 ? Math.cos(Math.PI * p) : 0.4
+    this.sun.position.set(across * s * 0.8, s * (0.3 + 0.7 * up), this.bounds.cz + s * 0.55)
+    this.sun.target.position.set(0, 0, this.bounds.cz)
+    this.scene.fog = this.sky.sky === 'fog' ? new THREE.Fog(bg.clone(), s * 0.5, s * 1.9) : null
+  }
+
+  /** Rain as falling streaks, snow as drifting flakes, over the whole floor. */
+  private makeWeather() {
+    if (this.weather) {
+      this.scene.remove(this.weather.obj)
+      this.weather.obj.geometry.dispose()
+      ;(this.weather.obj.material as THREE.Material).dispose()
+      this.weather = null
+    }
+    const kind = this.sky.sky
+    if (kind !== 'rain' && kind !== 'storm' && kind !== 'snow') return
+    const { w, d, cz } = this.bounds
+    const n = Math.round(Math.min(2600, Math.max(500, w * d * (kind === 'snow' ? 0.5 : 0.9))))
+    const drift = new Float32Array(n)
+    const rand = () => [(Math.random() - 0.5) * w, Math.random() * 14, cz + (Math.random() - 0.5) * d] as const
+    if (kind === 'snow') {
+      const pos = new Float32Array(n * 3)
+      for (let i = 0; i < n; i++) {
+        pos.set(rand(), i * 3)
+        drift[i] = Math.random() * Math.PI * 2
+      }
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+      const obj = new THREE.Points(g, new THREE.PointsMaterial({ map: spark(), color: '#ffffff', size: 0.32, transparent: true, depthWrite: false, opacity: 0.95 }))
+      this.scene.add(obj)
+      this.weather = { kind, obj, drift }
+      return
+    }
+    const pos = new Float32Array(n * 6)
+    for (let i = 0; i < n; i++) {
+      const [x, y, z] = rand()
+      pos.set([x, y, z, x + 0.04, y + 0.45, z], i * 6)
+      drift[i] = 0.8 + Math.random() * 0.4
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const obj = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#b9cdf5', transparent: true, opacity: 0.4, depthWrite: false }))
+    obj.frustumCulled = false
+    this.scene.add(obj)
+    this.weather = { kind, obj, drift }
+  }
+
+  private stepWeather(t: number, dt: number) {
+    const wx = this.weather
+    if (wx) {
+      const pos = wx.obj.geometry.getAttribute('position') as THREE.BufferAttribute
+      const arr = pos.array as Float32Array
+      if (wx.kind === 'snow') {
+        for (let i = 0; i < wx.drift.length; i++) {
+          const j = i * 3
+          arr[j]! += Math.sin(t * 0.8 + wx.drift[i]!) * 0.3 * dt
+          arr[j + 1]! -= 1.1 * dt
+          if (arr[j + 1]! < 0) arr[j + 1]! += 14
+        }
+      } else {
+        for (let i = 0; i < wx.drift.length; i++) {
+          const j = i * 6
+          const fall = 16 * wx.drift[i]! * dt
+          arr[j + 1]! -= fall
+          arr[j + 4]! -= fall
+          if (arr[j + 1]! < 0) {
+            arr[j + 1]! += 14
+            arr[j + 4]! += 14
+          }
+        }
+      }
+      pos.needsUpdate = true
+    }
+    // Lightning in a storm: a double flash every so often.
+    if (this.sky.sky !== 'storm') return
+    if (t > this.flash.next) {
+      this.flash.until = t + 0.35
+      this.flash.next = t + 7 + Math.random() * 10
+    }
+    const on = t < this.flash.until && (this.flash.until - t > 0.25 || this.flash.until - t < 0.12)
+    this.hemi.intensity = on ? 2.2 : this.hemiBase
+  }
+
+  /**
    * Someone stops what they are doing, turns to the camera and waves goodbye; `onFarewell` fires
    * when they are done, and they vanish once their session is gone.
    */
@@ -366,6 +508,13 @@ export class WorkspaceScene {
     canvas.removeEventListener('pointerup', this.onPointerUp)
     canvas.removeEventListener('pointerleave', this.onPointerLeave)
     for (const p of [...this.people.values()]) this.removePerson(p)
+    this.sky.sky = null
+    this.makeWeather()
+    for (const p of this.puffs) {
+      this.scene.remove(p.points)
+      p.points.geometry.dispose()
+      ;(p.points.material as THREE.Material).dispose()
+    }
     this.clearBuilt()
     this.controls.dispose()
     this.renderer.dispose()
@@ -443,8 +592,8 @@ export class WorkspaceScene {
     }
 
     const s = Math.max(this.bounds.w, this.bounds.d)
-    this.sun.position.set(-s * 0.4, s * 0.9, this.bounds.cz + s * 0.55)
-    this.sun.target.position.set(0, 0, this.bounds.cz)
+    this.applySky()
+    this.makeWeather()
     const cam = this.sun.shadow.camera
     cam.left = cam.bottom = -s * 0.75
     cam.right = cam.top = s * 0.75
@@ -805,6 +954,7 @@ export class WorkspaceScene {
       actor.desk = desk
       this.paintChip(actor)
       this.speak(actor, t)
+      this.react(actor, t)
     }
     for (const actor of this.people.values()) {
       if (!seen.has(actor.data.id) && actor.dying === null) {
@@ -840,7 +990,7 @@ export class WorkspaceScene {
       data: p, fig, label, chip, bubble, bubbleUntil: 0, speech, saidAt: 0, speechUntil: 0, born, dying: null,
       summon: born > 0 ? this.summonFx(desk.pos, color, 46) : null,
       pos: desk.pos.clone(), face: desk.face, desk, mode: 'desk', dest: 'desk', path: [], trail: [], spot: null,
-      calmSince: born, restless: 0, leaving: null, gone: false, stride: 0, pad: null, phase: (hashOf(p.id) % 1000) / 160,
+      calmSince: born, restless: 0, leaving: null, gone: false, stride: 0, pad: null, book: null, react: null, reactedAt: p.result?.at || 0, phase: (hashOf(p.id) % 1000) / 160,
     }
     if (actor.summon) this.say(actor, '✨', 2.5)
     this.people.set(p.id, actor)
@@ -874,6 +1024,59 @@ export class WorkspaceScene {
     a.speech.textContent = line.text
     a.speech.classList.toggle('sim-say-doing', line.kind === 'doing')
     a.speechUntil = t + (line.kind === 'said' ? 8 : 4.5)
+  }
+
+  /**
+   * Reacts to a command finishing while Claude works: cheers when tests pass, a puff of smoke and a
+   * groan when tests or a command fail. Old results, from before the view opened, are ignored.
+   */
+  private react(a: PersonActor, t: number) {
+    const r = a.data.result
+    if (!r || r.at === a.reactedAt) return
+    a.reactedAt = r.at
+    if (Date.now() - r.at > 20_000 || a.leaving !== null || (r.ok && !r.test)) return
+    a.react = { ok: r.ok, test: r.test, until: t + 3.2 }
+    if (r.ok) this.say(a, 'Tests pass! ✅', 3.2)
+    else {
+      this.say(a, r.test ? 'Tests failed 💥' : 'Oops 💥', 3.2)
+      this.puff(a)
+    }
+  }
+
+  private puffs: { points: THREE.Points; vel: THREE.Vector3[]; born: number }[] = []
+
+  /** A little cloud of smoke rising off someone's head. */
+  private puff(a: PersonActor) {
+    const n = 18
+    const at = a.pos.clone().setY(a.data.parentId ? 1.6 : 2)
+    const positions = new Float32Array(n * 3)
+    const vel: THREE.Vector3[] = []
+    for (let i = 0; i < n; i++) {
+      positions.set([at.x + (Math.random() - 0.5) * 0.4, at.y + Math.random() * 0.2, at.z + (Math.random() - 0.5) * 0.4], i * 3)
+      vel.push(new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.6 + Math.random() * 0.8, (Math.random() - 0.5) * 0.5))
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const points = new THREE.Points(geometry, new THREE.PointsMaterial({ map: spark(), color: '#6b6f7a', size: 0.55, transparent: true, depthWrite: false }))
+    this.scene.add(points)
+    this.puffs.push({ points, vel, born: this.clock.elapsedTime })
+  }
+
+  private stepPuffs(t: number, dt: number) {
+    this.puffs = this.puffs.filter((p) => {
+      const age = (t - p.born) / 2.2
+      const pos = p.points.geometry.getAttribute('position') as THREE.BufferAttribute
+      p.vel.forEach((v, i) => pos.setXYZ(i, pos.getX(i) + v.x * dt, pos.getY(i) + v.y * dt, pos.getZ(i) + v.z * dt))
+      pos.needsUpdate = true
+      const m = p.points.material as THREE.PointsMaterial
+      m.opacity = 0.85 * (1 - age)
+      m.size = 0.55 + age * 0.6
+      if (age < 1) return true
+      this.scene.remove(p.points)
+      p.points.geometry.dispose()
+      m.dispose()
+      return false
+    })
   }
 
   /** A short speech bubble over someone's head. */
@@ -1070,14 +1273,28 @@ export class WorkspaceScene {
 
   // ------------------------------------------------------------ frame
 
-  private loop = () => {
+  private quiet = false
+  private drawnAt = 0
+
+  /** Something covers the view, such as the session modal: draw a few frames a second instead of every one. */
+  setQuiet(quiet: boolean) {
+    this.quiet = quiet
+  }
+
+  private loop = (now = 0) => {
     this.frame = requestAnimationFrame(this.loop)
-    const dt = Math.min(0.05, this.clock.getDelta())
+    // The browser stops frames for a hidden window. Behind other apps or under a modal, nobody needs 60 a second.
+    const every = this.quiet ? 100 : document.hasFocus() ? 0 : 50
+    if (now - this.drawnAt < every) return
+    this.drawnAt = now
+    const dt = Math.min(0.12, this.clock.getDelta())
     const t = this.clock.elapsedTime
     this.stepRooms(t, dt)
     this.stepCommon(t)
     this.stepBand(t)
     this.stepPeople(t, dt)
+    this.stepPuffs(t, dt)
+    this.stepWeather(t, dt)
     this.stepFly(t)
     this.stepFollow()
     this.controls.update()
@@ -1256,9 +1473,39 @@ export class WorkspaceScene {
       return
     }
 
+    const reading = a.mode === 'desk' && a.data.status === 'working' && !a.data.parentId && (a.data.act === 'read' || a.data.act === 'plan') && !(a.react && a.react.until > t)
+    if (reading && !a.book) {
+      a.book = book()
+      a.book.position.set(0, 0.82, 0.42)
+      a.book.rotation.x = -0.7
+      fig.rig.add(a.book)
+    }
+    if (a.book) a.book.visible = reading
+
     if (a.mode === 'desk') {
       if (a.desk.seated) sit(0.1)
       else stand()
+      const r = a.react && a.react.until > t ? a.react : null
+      if (r && r.ok) {
+        // Tests pass: both arms up, bouncing in the chair.
+        la.rotation.x = ra.rotation.x = -2.9 + Math.sin(ph * 12) * 0.15
+        la.rotation.z = -0.35
+        ra.rotation.z = 0.35
+        fig.rig.position.y += Math.abs(Math.sin(ph * 9)) * 0.1
+        fig.head.rotation.x = -0.2
+        return
+      }
+      if (r) {
+        // Something failed: head in hands, shaking it.
+        la.rotation.x = ra.rotation.x = -2.2
+        la.rotation.z = 0.5
+        ra.rotation.z = -0.5
+        fig.head.rotation.x = 0.25
+        fig.head.rotation.y = Math.sin(ph * 10) * 0.25
+        fig.body.rotation.x = 0.15
+        return
+      }
+      if (a.data.status === 'working' && !a.data.parentId && this.acting(a, ph)) return
       switch (a.data.status) {
         case 'working':
           // Busy hands on the keyboard, or on the tablet for a subagent.
@@ -1351,6 +1598,61 @@ export class WorkspaceScene {
         // Chatting: hands talk now and then, heads nod.
         la.rotation.x = Math.sin(ph * 0.9) > 0.6 ? -1 + Math.sin(ph * 6) * 0.2 : 0.05
         fig.head.rotation.x = Math.sin(ph * 1.8) * 0.08
+    }
+  }
+
+  /**
+   * At the desk, acting out the tool Claude is using: reading a book while it reads files, leaning in
+   * to the terminal for commands, fingers crossed while tests run, chin in hand on the web, pointing
+   * a helper off on their way. False for plain typing, which the working pose covers.
+   */
+  private acting(a: PersonActor, ph: number) {
+    const { fig } = a
+    const [la, ra] = fig.arms
+    switch (a.data.act) {
+      case 'read':
+      case 'plan':
+        la.rotation.x = ra.rotation.x = -1.25
+        la.rotation.z = 0.3
+        ra.rotation.z = -0.3
+        fig.head.rotation.x = 0.32
+        // A page turn now and then, or a scribble when planning.
+        if (a.data.act === 'plan') ra.rotation.x = -1.35 + Math.sin(ph * 14) * 0.08
+        else if (Math.sin(ph * 0.9) > 0.92) ra.rotation.z = -0.9
+        fig.head.rotation.y = Math.sin(ph * 0.7) * 0.08
+        return true
+      case 'run':
+        // Leaning in, typing fast.
+        fig.body.rotation.x = 0.18
+        fig.head.rotation.x = 0.22
+        la.rotation.x = -1.2 + Math.sin(ph * 24) * 0.12
+        ra.rotation.x = -1.2 + Math.sin(ph * 24 + 1.7) * 0.12
+        return true
+      case 'test':
+        // Hands together, watching the screen, a nervous bounce.
+        la.rotation.x = ra.rotation.x = -1.35
+        la.rotation.z = 0.45
+        ra.rotation.z = -0.45
+        fig.head.rotation.x = 0.05
+        fig.rig.position.y += Math.abs(Math.sin(ph * 6)) * 0.03
+        return true
+      case 'web':
+        // Chin in one hand, scrolling with the other.
+        la.rotation.x = -2.3
+        la.rotation.z = 0.55
+        ra.rotation.x = -1.1 + Math.sin(ph * 3) * 0.05
+        fig.head.rotation.z = -0.15
+        fig.head.rotation.x = 0.1
+        return true
+      case 'delegate':
+        // Pointing a helper off to do something.
+        ra.rotation.x = -1.6 + Math.sin(ph * 2) * 0.1
+        ra.rotation.z = 0.25
+        la.rotation.x = -0.3
+        fig.head.rotation.y = 0.4
+        return true
+      default:
+        return false
     }
   }
 

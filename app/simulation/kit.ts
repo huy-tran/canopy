@@ -1150,3 +1150,20 @@ export function stage(w: number, d: number, h: number) {
   }
   return { group: g, beams, cans, strip }
 }
+
+/** An open book, held in both hands while Claude reads files. */
+export function book() {
+  const g = new THREE.Group()
+  const cover = mat('#3f6b70', { roughness: 0.8 })
+  const pages = mat('#f7f2e6', { roughness: 1 })
+  for (const side of [-1, 1]) {
+    const half = new THREE.Group()
+    half.add(rbox(0.2, 0.015, 0.28, cover, 0, 0.005))
+    const leaf = rbox(0.18, 0.03, 0.26, pages, 0.012, 0.005)
+    half.add(leaf)
+    half.children.forEach(c => { c.position.x = side * 0.1 })
+    half.rotation.z = side * -0.25
+    g.add(half)
+  }
+  return g
+}

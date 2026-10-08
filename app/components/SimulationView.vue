@@ -2,6 +2,8 @@
 // The workspace simulation: every project as a room and every Claude session and subagent as a
 // person in it, drawn in 3D by WorkspaceScene.
 import type { Session } from '#shared/types'
+import { useEventListener } from '@vueuse/core'
+import { skyOf, useWeather } from '~/composables/useWeather'
 import { castFor, castOf } from '~/simulation/cast'
 import { type Pick, type SimHover, type SimPerson, type SimRoom, WorkspaceScene } from '~/simulation/scene'
 
@@ -23,10 +25,10 @@ const people = computed<SimPerson[]>(() => {
   const cast = castOf([...ss.map(s => s.id), ...subs.map(x => x.a.id)])
   return [
     ...ss.map(s => ({
-      id: s.id, roomId: s.pid, parentId: null, name: cast.get(s.id)!.name, role: cast.get(s.id)!.role, status: s.status, title: s.title, line: S.chatter[s.id] || null,
+      id: s.id, roomId: s.pid, parentId: null, name: cast.get(s.id)!.name, role: cast.get(s.id)!.role, status: s.status, title: s.title, line: S.chatter[s.id] || null, act: S.activity[s.id]?.act || ('' as const), result: S.activity[s.id]?.result || null,
     })),
     ...subs.map(({ s, a }) => ({
-      id: a.id, roomId: s.pid, parentId: s.id, name: cast.get(a.id)!.name, role: cast.get(a.id)!.role, status: 'working' as const, title: a.desc || a.type, line: null,
+      id: a.id, roomId: s.pid, parentId: s.id, name: cast.get(a.id)!.name, role: cast.get(a.id)!.role, status: 'working' as const, title: a.desc || a.type, line: null, act: '' as const, result: null,
     })),
   ]
 })
@@ -69,23 +71,64 @@ onMounted(() => {
     onFarewell: id => S.close(id),
   })
   scene.sync(rooms.value, people.value)
+  paintSky()
 })
 
-/** A session clicked in the sidebar: fly to its character and keep up with them. */
-function jumpTo(sid: string) {
-  if (!people.value.some(p => p.id === sid)) return
-  picked.value = { kind: 'person', id: sid }
-  scene?.focus(picked.value)
-}
-
+/** A session or project clicked in the sidebar: fly to their character, and keep up with them, or to the room. */
 watch(() => ui.simTarget, (t) => {
-  if (t) jumpTo(t.sid)
+  if (!t) return
+  if (t.kind === 'person' && !people.value.some(p => p.id === t.id)) return
+  if (t.kind === 'room' && !rooms.value.some(r => r.id === t.id)) return
+  menu.value = null
+  const pick: Pick = { kind: t.kind, id: t.id }
+  picked.value = pick
+  scene?.focus(pick)
 })
+
+/** Tab and Shift Tab fly between the sessions waiting on you, while nothing else has the keyboard. */
+useEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || menu.value) return
+  const t = e.target as HTMLElement | null
+  if (t?.closest('input, textarea, [contenteditable], .xterm, [role="dialog"]')) return
+  e.preventDefault()
+  ui.simNextWaiting(e.shiftKey ? -1 : 1)
+})
+
+// ---------- Day, night and the weather ----------
+
+const { weather } = useWeather()
+
+/** The light follows the local time and the sky the weather outside, updated every minute. */
+function paintSky() {
+  const d = new Date()
+  const w = weather.value
+  scene?.setSky({
+    hour: d.getHours() + d.getMinutes() / 60,
+    sunrise: w?.sunrise ?? 6,
+    sunset: w?.sunset ?? 18,
+    sky: w ? skyOf(w.code, w.day).sky : null,
+  })
+}
+watch([() => Math.floor(ui.now / 60_000), weather], paintSky)
+
+// Draw less while the session modal covers the view.
+watch(() => !!talkTo.value, q => scene?.setQuiet(q))
 
 // ---------- Right-click menu on a person ----------
 
 const menu = ref<{ id: string; x: number; y: number } | null>(null)
 const menuPerson = computed(() => (menu.value ? people.value.find(p => p.id === menu.value!.id) || null : null))
+
+/** The session the menu is for, while it waits on you. */
+const menuWaiting = computed(() => {
+  const s = menuPerson.value && !menuPerson.value.parentId ? S.byId(menuPerson.value.id) : null
+  return s?.status === 'waiting' ? s : null
+})
+
+// Answered: the menu has done its job.
+watch(() => menuPerson.value?.status, (now, was) => {
+  if (was === 'waiting' && now !== 'waiting') menu.value = null
+})
 
 function menuOpen() {
   const p = menuPerson.value
@@ -177,6 +220,19 @@ async function addSession(pid: string, repoId: string) {
 
 const addItems = computed(() => (pickedRoom.value?.repos || []).map(r => ({ label: r.label, onSelect: () => addSession(pickedRoom.value!.id, r.id) })))
 
+/** After asking, everyone in the room waves goodbye together, then their sessions close. */
+function closeRoom(pid: string) {
+  const ids = people.value.filter(p => p.roomId === pid && !p.parentId).map(p => p.id)
+  if (!ids.length) return
+  const name = P.byId(pid)?.name || 'this project'
+  ui.confirm = {
+    title: `Close all ${ids.length} session${ids.length === 1 ? '' : 's'}?`,
+    body: `Ends every Claude session in ${name}. Shells and dev servers keep running.`,
+    ok: 'Close all',
+    run: () => ids.forEach(id => scene?.farewell(id)),
+  }
+}
+
 function openProject(pid: string, view: 'terminals' | 'overview') {
   ui.selectProject(pid)
   P.patch(pid, { view })
@@ -195,7 +251,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
           {{ totals.rooms }} rooms · {{ totals.lit }} lit · {{ totals.sessions }} sessions<template v-if="totals.subagents"> · {{ totals.subagents }} subagents</template>
         </span>
       </div>
-      <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · right-click someone for options · hover a big screen for its overview</div>
+      <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · right-click someone for options · Tab to visit whoever is waiting on you</div>
     </div>
 
     <div class="absolute right-3 top-3 flex gap-1.5">
@@ -209,14 +265,19 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       <!-- Windows fires contextmenu after the release that opened the menu, onto this overlay: it must not close it. -->
       <div class="absolute inset-0 z-20" @pointerdown="menu = null" @contextmenu.prevent />
       <div
-        class="absolute z-30 w-[190px] rounded-lg border border-(--ln) bg-(--win) p-1 text-(--tx) shadow-xl"
-        :style="{ left: Math.min(menu.x, (el?.clientWidth ?? 9999) - 198) + 'px', top: Math.min(menu.y, (el?.clientHeight ?? 9999) - 130) + 'px' }"
+        class="absolute z-30 min-w-[190px] max-w-[320px] rounded-lg border border-(--ln) bg-(--win) p-1 text-(--tx) shadow-xl"
+        :style="{ left: Math.min(menu.x, (el?.clientWidth ?? 9999) - 328) + 'px', top: Math.min(menu.y, (el?.clientHeight ?? 9999) - (menuWaiting ? 210 : 130)) + 'px' }"
         @keydown.esc="menu = null"
       >
         <div class="flex items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-[11.5px] font-semibold">
           <span class="h-2 w-2 rounded-full" :style="{ background: SC[menuPerson.status] }" />
           {{ menuPerson.name }}
           <span class="font-normal text-(--fa)">{{ menuPerson.parentId ? 'Subagent' : menuPerson.role === 'designer' ? 'Designer' : 'Developer' }}</span>
+        </div>
+        <!-- Waiting on you: what Claude is asking, with its choices to answer right here. -->
+        <div v-if="menuWaiting" class="mx-1 mb-1 rounded-md bg-(--ambf)/15 px-2 py-1.5">
+          <div class="line-clamp-3 text-[11.5px] text-(--tx2)">{{ menuWaiting.waitWhat || 'Waiting for input' }}</div>
+          <AnswerButtons :sid="menuWaiting.id" class="mt-1.5 flex-wrap" />
         </div>
         <button class="sim-menu-item" @click="menuOpen">{{ menuPerson.parentId ? `Talk to ${castFor(menuPerson.parentId)?.name}` : 'Talk to them' }}</button>
         <button class="sim-menu-item" @click="menuTerminals">Open in terminals</button>
@@ -259,6 +320,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
         </template>
         <UButton size="xs" color="neutral" variant="outline" class="bg-transparent text-white ring-white/20 hover:bg-white/10" label="Open terminals" @click="openProject(pickedRoom.id, 'terminals')" />
         <UButton size="xs" color="neutral" variant="outline" class="bg-transparent text-white ring-white/20 hover:bg-white/10" label="Overview" @click="openProject(pickedRoom.id, 'overview')" />
+        <UButton v-if="pickedCount" size="xs" color="neutral" variant="outline" class="bg-transparent text-[#ff8a80] ring-[#ff8a80]/40 hover:bg-[#ff8a80]/15" label="Close all" @click="closeRoom(pickedRoom.id)" />
       </div>
     </div>
 

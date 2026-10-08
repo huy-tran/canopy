@@ -147,6 +147,8 @@ export interface Prefs {
   panelSize: { bottom: number; right: number }
   /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
   summonKey: string
+  /** City for the workspace simulation's weather; empty uses the city in the system time zone. */
+  weatherCity?: string
   /** File explorer layout, remembered between openings. */
   explorer?: ExplorerLayout
 }
@@ -249,6 +251,24 @@ export interface UsageUpdate {
   said?: string
   doing?: string
   latest?: 'said' | 'doing' | ''
+  /** The kind of tool Claude is using now, and how its latest command turned out. */
+  act?: Act | ''
+  result?: ToolResult | null
+}
+
+/** What a character in the workspace simulation acts out while Claude uses a tool. */
+export type Act = 'read' | 'write' | 'run' | 'test' | 'web' | 'plan' | 'delegate'
+
+/** A finished command: whether it failed, whether it ran tests, and when it was logged. */
+export interface ToolResult {
+  ok: boolean
+  test: boolean
+  at: number
+}
+
+export interface Activity {
+  act: Act | ''
+  result: ToolResult | null
 }
 
 /** What a session's character says over their head in the workspace simulation. */

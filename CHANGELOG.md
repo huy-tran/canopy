@@ -2,6 +2,17 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+- Right-click a character waiting on you to see what Claude is asking and answer it right there.
+- In the workspace simulation, clicking a project in the sidebar flies to its room instead of leaving the view.
+- Tab and Shift Tab fly between the sessions waiting on you, oldest first. Ctrl Shift J does the same while the workspace is open.
+- A room's card has a Close all button: everyone in the room waves goodbye, then their sessions close.
+- The workspace follows the time of day, from bright daylight to a dark night lit by the rooms' lamps, and the weather outside: rain, snow, fog and thunderstorms.
+- Characters act out what Claude is doing: reading a book while it reads files, leaning in to run commands, fingers crossed while tests run, chin in hand on the web. They cheer when tests pass and fume when something fails.
+- Set the city for the weather in Settings > General. It still defaults to the city in your time zone.
+- The workspace draws fewer frames while Canopy is in the background or a session window covers it, to save battery.
+
 ## [0.11.0] - 2026-10-08
 
 - Click a room in the workspace simulation to add a session to that project without leaving the view. With more than one repo, pick which one.

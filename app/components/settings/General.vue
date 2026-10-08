@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Editor } from '#shared/types'
+import { zoneCity } from '~/composables/useWeather'
 
 const prefs = usePrefsStore()
 
@@ -27,6 +28,18 @@ const editor = computed({
           base: 'mono h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12px] text-(--tx)',
         }"
         @update:model-value="v => prefs.set({ startCmd: String(v) })"
+      />
+    </SettingsRow>
+    <SettingsRow label="Weather location" sub="For the weather in the workspace simulation. Leave empty to use the city in your time zone." wrap>
+      <UInput
+        :model-value="prefs.prefs.weatherCity || ''"
+        :placeholder="zoneCity || 'City'"
+        variant="none"
+        :ui="{
+          root: 'w-[220px]',
+          base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12px] text-(--tx)',
+        }"
+        @change="(e: Event) => prefs.set({ weatherCity: (e.target as HTMLInputElement).value.trim() })"
       />
     </SettingsRow>
     <SettingsToggle label="Start Canopy when Windows starts" k="launchLogin" />

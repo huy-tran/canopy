@@ -32,8 +32,8 @@ export const useUiStore = defineStore('ui', () => {
   const details = ref(false)
   /** The workspace simulation fills the main area in place of the selected project. */
   const sim = ref(false)
-  /** A Claude session whose character the simulation flies to and follows; `at` makes a repeat click count. */
-  const simTarget = ref<{ sid: string; at: number } | null>(null)
+  /** A character or room the simulation flies the camera to; `at` makes a repeat click count. */
+  const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number } | null>(null)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -118,11 +118,28 @@ export const useUiStore = defineStore('ui', () => {
   /** In the workspace simulation, flies to a Claude session's character; anywhere else, opens the session. */
   function showSession(sid: string) {
     const s = S.byId(sid)
-    if (sim.value && s?.kind === 'claude' && !s.exited) simTarget.value = { sid, at: Date.now() }
+    if (sim.value && s?.kind === 'claude' && !s.exited) simTarget.value = { kind: 'person', id: sid, at: Date.now() }
     else focusSession(sid)
   }
 
+  /** In the workspace simulation, flies to a project's room; anywhere else, selects the project. */
+  function showProject(pid: string) {
+    if (!sim.value) return selectProject(pid)
+    P.sel = pid
+    simTarget.value = { kind: 'room', id: pid, at: Date.now() }
+  }
+
+  /** In the workspace simulation, flies to the next (or previous) session waiting on you, oldest first. */
+  function simNextWaiting(dir = 1) {
+    const w = waitList.value.filter(s => s.kind === 'claude' && !s.exited)
+    if (!w.length) return
+    const cur = simTarget.value?.kind === 'person' ? w.findIndex(s => s.id === simTarget.value!.id) : -1
+    const i = cur < 0 ? (dir > 0 ? 0 : w.length - 1) : (cur + dir + w.length) % w.length
+    simTarget.value = { kind: 'person', id: w[i]!.id, at: Date.now() }
+  }
+
   function nextWaiting() {
+    if (sim.value) return simNextWaiting()
     if (inbox.value) return inboxSkip()
     const w = waitList.value
     if (!w.length) return
@@ -672,7 +689,7 @@ export const useUiStore = defineStore('ui', () => {
     width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
-    toast, focusLater, selectProject, focusSession, showSession, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
+    toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,

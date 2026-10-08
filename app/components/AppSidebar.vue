@@ -207,7 +207,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             draggable="true"
             @dragstart="onDragStart($event, p)"
             @dragend="onDragEnd"
-            @click="ui.selectProject(p.id)"
+            @click="ui.showProject(p.id)"
           >
             <span class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(p.hue) }" />
             <span class="grid h-5 w-[14px] place-items-center" :class="{ invisible: !countOf(p.id) }" :style="{ color: ptx(p.hue) }" @click.stop="toggleExpanded(p)"><UIcon :name="isOpen(p) ?'i-hugeicons-arrow-down-01' : 'i-hugeicons-arrow-right-01'" class="size-3" /></span>

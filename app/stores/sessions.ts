@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, Subagent, UsageUpdate } from '#shared/types'
+import type { Activity, Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, Subagent, UsageUpdate } from '#shared/types'
 import { costOf, modelLabel } from '#shared/pricing'
 
 function relPath(cwd: string, file: string) {
@@ -35,6 +35,8 @@ export const useSessionsStore = defineStore('sessions', () => {
   const subagents = ref<Record<string, Subagent[]>>({})
   /** Claude's latest line or tool call per session, from its transcript, for the workspace simulation. */
   const chatter = ref<Record<string, Chatter>>({})
+  /** The kind of tool each session is using and how its latest command went, from its transcript. */
+  const activity = ref<Record<string, Activity>>({})
 
   function setSubagents(sid: string, list: Subagent[]) {
     const next = { ...subagents.value }
@@ -161,6 +163,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     disposeTerminal(id)
     lastTool.delete(id)
     setSubagents(id, [])
+    if (activity.value[id]) {
+      const { [id]: _, ...rest } = activity.value
+      activity.value = rest
+    }
     if (chatter.value[id]) {
       const { [id]: _, ...rest } = chatter.value
       chatter.value = rest
@@ -210,6 +216,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     patch(u.sid, { model: u.model ? modelLabel(u.model) : s.model, tokIn: u.tokIn, tokOut: u.tokOut, cacheR: u.cacheR, cacheW: u.cacheW, ctx: u.ctx, claudeId: u.claudeId || s.claudeId, title })
     const text = u.latest === 'said' ? u.said : u.latest === 'doing' ? u.doing : ''
     if (text && u.latest && text !== chatter.value[u.sid]?.text) chatter.value = { ...chatter.value, [u.sid]: { text, kind: u.latest, at: Date.now() } }
+    const was = activity.value[u.sid]
+    if (u.act !== undefined && (was?.act !== u.act || was?.result?.at !== u.result?.at)) activity.value = { ...activity.value, [u.sid]: { act: u.act, result: u.result || null } }
   }
 
   function onExit(id: string, code: number) {
@@ -331,7 +339,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   return {
-    sessions, focus, permAction, subagents, chatter, shells, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
+    sessions, focus, permAction, subagents, chatter, activity, shells, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
     start, startShell, close, respawn, onUsage, onExit, onHook, addImage, removeImage, saved, reopen,
   }
 })

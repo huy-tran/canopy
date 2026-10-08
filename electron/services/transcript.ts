@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { DaySession, HistorySession, UsageUpdate } from '../../shared/types'
+import type { Act, DaySession, HistorySession, ToolResult, UsageUpdate } from '../../shared/types'
 import { contextOf, costOf } from '../../shared/pricing'
 
 export const claudeDir = () => path.join(os.homedir(), '.claude')
@@ -28,6 +28,31 @@ interface Totals {
   doing: string
   /** Which of the two came last. */
   latest: 'said' | 'doing' | ''
+  /** The kind of the latest tool call, and how the latest command turned out. */
+  act: Act | ''
+  result: ToolResult | null
+  /** Commands in flight, by tool call id: whether each runs tests. */
+  runs: Map<string, boolean>
+}
+
+const TEST_CMD = /\b(test|tests|jest|vitest|mocha|pytest|phpunit|pest|rspec|playwright|cargo test|go test|dotnet test)\b/i
+
+/** The kind of a tool call, for what the workspace simulation acts out. */
+function actOf(name: string, i: any = {}): Act {
+  switch (name) {
+    case 'Read':
+    case 'Grep':
+    case 'Glob':
+    case 'LS': return 'read'
+    case 'Bash':
+    case 'PowerShell': return TEST_CMD.test(String(i.command || '')) ? 'test' : 'run'
+    case 'WebFetch':
+    case 'WebSearch': return 'web'
+    case 'TodoWrite': return 'plan'
+    case 'Task':
+    case 'Agent': return 'delegate'
+    default: return 'write'
+  }
 }
 
 const base = (p: unknown) => String(p || '').split(/[\\/]/).pop() || ''
@@ -92,6 +117,14 @@ function accumulate(lines: string[], byId: Map<string, any>, t: Totals) {
     }
     const pt = promptText(e)
     if (pt) t.lastPrompt = pt
+    if (e.type === 'user' && Array.isArray(e.message?.content)) {
+      // A command's output comes back as a tool result, marked as an error when it failed.
+      for (const c of e.message.content) {
+        if (c?.type !== 'tool_result' || !t.runs.has(c.tool_use_id)) continue
+        t.result = { ok: !c.is_error, test: t.runs.get(c.tool_use_id)!, at: Date.parse(e.timestamp) || Date.now() }
+        t.runs.delete(c.tool_use_id)
+      }
+    }
     if (e.type !== 'assistant' || !e.message) continue
     const m = e.message
     if (m.model && m.model !== '<synthetic>') t.model = m.model
@@ -109,6 +142,8 @@ function accumulate(lines: string[], byId: Map<string, any>, t: Totals) {
       } else if (c.type === 'tool_use' && c.name) {
         t.doing = describeTool(String(c.name), c.input)
         t.latest = 'doing'
+        t.act = actOf(String(c.name), c.input)
+        if (c.id && (t.act === 'run' || t.act === 'test')) t.runs.set(c.id, t.act === 'test')
       }
     }
   }
@@ -167,15 +202,15 @@ export function watchTranscript(sid: string, claudeId: string, file: string, emi
   if (old) clearInterval(old.timer)
   const w: Watch = {
     file, offset: 0, rest: '', byId: new Map(),
-    totals: { model: '', tokIn: 0, tokOut: 0, cacheR: 0, cacheW: 0, ctx: 0, lastText: '', lastPrompt: '', said: '', doing: '', latest: '' },
+    totals: { model: '', tokIn: 0, tokOut: 0, cacheR: 0, cacheW: 0, ctx: 0, lastText: '', lastPrompt: '', said: '', doing: '', latest: '', act: '', result: null, runs: new Map() },
     timer: setInterval(() => tick(), 1500),
   }
   const tick = () => {
     if (!readNew(w)) return
     const t = totalsOf(w)
     const win = contextOf(w.totals.model)
-    const { model, lastPrompt, said, doing, latest } = w.totals
-    emit({ sid, claudeId, model, lastPrompt, said, doing, latest, ...t, ctx: win ? Math.min(100, (w.totals.ctx / win) * 100) : 0 })
+    const { model, lastPrompt, said, doing, latest, act, result } = w.totals
+    emit({ sid, claudeId, model, lastPrompt, said, doing, latest, act, result, ...t, ctx: win ? Math.min(100, (w.totals.ctx / win) * 100) : 0 })
   }
   watches.set(sid, w)
   tick()
