@@ -163,6 +163,20 @@ function openSession(sid: string) {
   ui.focusSession(sid)
 }
 
+/**
+ * A new Claude session in a room, without leaving the workspace: they are summoned at a desk.
+ * In a repo that already has a session it gets its own worktree, as the New session button does.
+ */
+async function addSession(pid: string, repoId: string) {
+  const p = P.byId(pid)
+  const r = p?.repos.find(x => x.id === repoId)
+  if (!p || !r) return
+  const s = await S.start(p, r, { wt: S.sessions.some(x => x.repoId === r.id && !x.wt) })
+  if (s) S.setFocus(p.id, s.id)
+}
+
+const addItems = computed(() => (pickedRoom.value?.repos || []).map(r => ({ label: r.label, onSelect: () => addSession(pickedRoom.value!.id, r.id) })))
+
 function openProject(pid: string, view: 'terminals' | 'overview') {
   ui.selectProject(pid)
   P.patch(pid, { view })
@@ -192,7 +206,8 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
     <SimulationWeather class="absolute bottom-3 right-3" />
 
     <template v-if="menu && menuPerson">
-      <div class="absolute inset-0 z-20" @pointerdown="menu = null" @contextmenu.prevent="menu = null" />
+      <!-- Windows fires contextmenu after the release that opened the menu, onto this overlay: it must not close it. -->
+      <div class="absolute inset-0 z-20" @pointerdown="menu = null" @contextmenu.prevent />
       <div
         class="absolute z-30 w-[190px] rounded-lg border border-(--ln) bg-(--win) p-1 text-(--tx) shadow-xl"
         :style="{ left: Math.min(menu.x, (el?.clientWidth ?? 9999) - 198) + 'px', top: Math.min(menu.y, (el?.clientHeight ?? 9999) - 130) + 'px' }"
@@ -227,24 +242,30 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       </div>
     </div>
 
-    <div v-if="pickedRoom && !pickedPerson" class="absolute bottom-3 left-3 w-[280px] rounded-xl border border-(--ln) bg-(--win) p-3 text-(--tx) shadow-2xl">
+    <div v-if="pickedRoom && !pickedPerson" class="absolute bottom-3 left-3 min-w-[240px] rounded-xl border border-white/10 bg-black/45 px-3.5 py-3 text-white backdrop-blur">
       <div class="flex items-center gap-2 text-[13px] font-semibold">
         <span class="h-2.5 w-2.5 rounded-[3px]" :style="{ background: pcol(pickedRoom.hue) }" />
         {{ pickedRoom.name }}
       </div>
-      <div class="mt-1 text-[11.5px] text-(--mu)">
+      <div class="mt-1 text-[11.5px] text-white/55">
         {{ pickedCount ? `${pickedCount} session${pickedCount === 1 ? '' : 's'} running` : 'No sessions running. The lights are off.' }}
       </div>
-      <div class="mt-2.5 flex gap-1.5">
-        <UButton size="xs" color="primary" label="Open terminals" @click="openProject(pickedRoom.id, 'terminals')" />
-        <UButton size="xs" color="neutral" variant="subtle" label="Overview" @click="openProject(pickedRoom.id, 'overview')" />
+      <div class="mt-2.5 flex flex-nowrap gap-1.5 whitespace-nowrap">
+        <template v-if="pickedRoom.repos.length">
+          <UButton v-if="pickedRoom.repos.length === 1" size="xs" color="primary" icon="i-hugeicons-add-01" label="Add session" @click="addSession(pickedRoom.id, pickedRoom.repos[0]!.id)" />
+          <UDropdownMenu v-else :items="addItems" :content="{ align: 'start', side: 'top', sideOffset: 4 }" :ui="{ content: 'w-[200px]' }">
+            <UButton size="xs" color="primary" icon="i-hugeicons-add-01" trailing-icon="i-hugeicons-arrow-up-01" label="Add session" />
+          </UDropdownMenu>
+        </template>
+        <UButton size="xs" color="neutral" variant="outline" class="bg-transparent text-white ring-white/20 hover:bg-white/10" label="Open terminals" @click="openProject(pickedRoom.id, 'terminals')" />
+        <UButton size="xs" color="neutral" variant="outline" class="bg-transparent text-white ring-white/20 hover:bg-white/10" label="Overview" @click="openProject(pickedRoom.id, 'overview')" />
       </div>
     </div>
 
-    <!-- Not dismissible: Esc belongs to the terminal, where it interrupts Claude. -->
+    <!-- A click outside closes it, Esc does not: Esc belongs to the terminal, where it interrupts Claude. -->
     <UModal
       v-model:open="talkOpen"
-      :dismissible="false"
+      :content="{ onEscapeKeyDown: (e: KeyboardEvent) => e.preventDefault() }"
       :close="false"
       :ui="{
         overlay: 'bg-black/45',
