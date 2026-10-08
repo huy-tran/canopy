@@ -4,6 +4,11 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The terminal in the 3D World's session window is see-through again. In 0.14.0 only the frame around it was.
+- The cards over the 3D World (a character's card, the right-click menu and a project's screen card) are see-through and blurred, like the session window.
+- The weather card in the 3D World shows Celsius and km/h.
+- The workspace simulation is now called the 3D World: in the title bar, the command palette, the shortcut list, the view itself and Settings.
+
 ## [0.14.0] - 2026-10-08
 
 - The window is always solid: the Window opacity and Background effect settings are gone. Cards over the workspace simulation no longer turn see-through.

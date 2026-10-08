@@ -66,7 +66,7 @@ const pastCount = computed(() => (cache.value[props.pid]?.list || []).length)
 </script>
 
 <template>
-  <div v-if="project" class="w-[300px] overflow-hidden rounded-xl border border-(--ln) bg-(--win) text-(--tx) shadow-2xl">
+  <div v-if="project" class="w-[300px] sim-card overflow-hidden rounded-xl border border-(--ln) text-(--tx) shadow-2xl">
     <div class="h-1" :style="{ background: pcol(project.hue) }" />
     <div class="flex items-center gap-2 px-3.5 pb-2 pt-3">
       <span class="h-2.5 w-2.5 flex-none rounded-[3px]" :style="{ background: pcol(project.hue) }" />

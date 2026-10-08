@@ -21,7 +21,6 @@ export type Weather = {
 export type Sky = 'clear' | 'cloudy' | 'fog' | 'rain' | 'snow' | 'storm'
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
-const fahrenheit = /-US$/.test(Intl.NumberFormat().resolvedOptions().locale)
 
 /** The city in the system time zone: "Australia/Brisbane" is Brisbane, "UTC" and the like are nowhere. */
 export const zoneCity = tz.includes('/') ? tz.split('/').pop()!.replace(/_/g, ' ') : ''
@@ -76,8 +75,8 @@ export function useWeather() {
         daily: 'temperature_2m_max,temperature_2m_min,sunrise,sunset',
         timezone: 'auto',
         forecast_days: '1',
-        temperature_unit: fahrenheit ? 'fahrenheit' : 'celsius',
-        wind_speed_unit: fahrenheit ? 'mph' : 'kmh',
+        temperature_unit: 'celsius',
+        wind_speed_unit: 'kmh',
       })
       const f = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`).then(r => r.json())
       const c = f.current
@@ -86,7 +85,7 @@ export function useWeather() {
         city: want,
         w: {
           place: hit.name, temp: c.temperature_2m, feels: c.apparent_temperature, code: c.weather_code, day: !!c.is_day,
-          wind: c.wind_speed_10m, hi: f.daily.temperature_2m_max[0], lo: f.daily.temperature_2m_min[0], unit: fahrenheit ? 'mph' : 'km/h',
+          wind: c.wind_speed_10m, hi: f.daily.temperature_2m_max[0], lo: f.daily.temperature_2m_min[0], unit: 'km/h',
           sunrise: hoursOf(f.daily.sunrise?.[0], 6), sunset: hoursOf(f.daily.sunset?.[0], 18),
         },
       }

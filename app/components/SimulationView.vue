@@ -119,11 +119,6 @@ watch([() => Math.floor(ui.now / 60_000), weather], paintSky)
 /** How solid the session window is, in %: never fully, so the characters always show through it and its terminal. */
 const glass = computed(() => simGlassOf(prefs.prefs))
 
-watch(() => talkTo.value, (sid, was) => {
-  if (was && was !== sid) setSeeThrough(was, false)
-  if (sid) setSeeThrough(sid, true)
-})
-
 /** The shortcut opens the session of the character in view (or the one a subagent works for), or closes the open one. */
 watch(() => ui.simTalk, () => {
   if (talkTo.value) {
@@ -217,6 +212,12 @@ const talkProject = computed(() => (talkSession.value ? P.byId(talkSession.value
 const talkCast = computed(() => (talkTo.value ? castFor(talkTo.value) : undefined))
 const talkHelpers = computed(() => (talkTo.value ? S.subagents[talkTo.value]?.length || 0 : 0))
 
+// Declared after talkTo: the watch reads it straight away, and before its declaration that throws.
+watch(() => talkTo.value, (sid, was) => {
+  if (was && was !== sid) setSeeThrough(was, false)
+  if (sid) setSeeThrough(sid, true)
+})
+
 const pickedPerson = computed(() => (picked.value?.kind === 'person' ? people.value.find(p => p.id === picked.value!.id) || null : null))
 const pickedRoom = computed(() => {
   const pick = picked.value
@@ -282,7 +283,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
     <div class="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
       <div class="pointer-events-auto flex items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 py-2 text-white backdrop-blur">
         <BrandMark :size="16" simple />
-        <span class="font-brand text-[13px] font-semibold">Canopy workspace</span>
+        <span class="font-brand text-[13px] font-semibold">3D World</span>
         <span class="text-[11px] text-white/55">
           {{ totals.rooms }} rooms · {{ totals.lit }} lit · {{ totals.sessions }} sessions<template v-if="totals.subagents"> · {{ totals.subagents }} subagents</template>
         </span>
@@ -291,7 +292,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
     </div>
 
     <div class="absolute right-3 top-3 flex gap-1.5">
-      <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-home-01" label="Whole workspace" @click="picked = null; scene?.resetView()" />
+      <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-home-01" label="Whole world" @click="picked = null; scene?.resetView()" />
       <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-cancel-01" title="Back to terminals" @click="ui.sim = false" />
     </div>
 
@@ -301,7 +302,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       <!-- Windows fires contextmenu after the release that opened the menu, onto this overlay: it must not close it. -->
       <div class="absolute inset-0 z-20" @pointerdown="menu = null" @contextmenu.prevent />
       <div
-        class="absolute z-30 min-w-[190px] max-w-[320px] rounded-lg border border-(--ln) bg-(--win) p-1 text-(--tx) shadow-xl"
+        class="absolute z-30 min-w-[190px] max-w-[320px] sim-card rounded-lg border border-(--ln) p-1 text-(--tx) shadow-xl"
         :style="{ left: Math.min(menu.x, (el?.clientWidth ?? 9999) - 328) + 'px', top: Math.min(menu.y, (el?.clientHeight ?? 9999) - (menuWaiting ? 210 : 130)) + 'px' }"
         @keydown.esc="menu = null"
       >
@@ -325,7 +326,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       <SimulationOverview :pid="hoverScreen" />
     </div>
 
-    <div v-else-if="hoverPerson" class="pointer-events-none absolute z-10 w-[240px] rounded-lg border border-(--ln) bg-(--win) px-3 py-2 text-(--tx) shadow-xl" :style="cardAt(240, 110)">
+    <div v-else-if="hoverPerson" class="pointer-events-none absolute z-10 w-[240px] sim-card rounded-lg border border-(--ln) px-3 py-2 text-(--tx) shadow-xl" :style="cardAt(240, 110)">
       <div class="flex items-center gap-1.5 text-[12.5px] font-semibold">
         <span class="h-2 w-2 rounded-full" :style="{ background: SC[hoverPerson.status] }" />
         {{ hoverPerson.name }}
@@ -419,6 +420,8 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
    The terminal pane sets its own colours under .dark, so they are cleared there too. */
 .sim-glass, .sim-glass .dark { --term: transparent; --chrome: transparent; --head: transparent; }
 .sim-glass { background: color-mix(in oklch, var(--modal) var(--glass), transparent); backdrop-filter: blur(2px); }
+/* Cards over the scene (hover cards, the right-click menu), see-through like the session window. */
+.sim-card { background: color-mix(in oklch, var(--modal) 72%, transparent); backdrop-filter: blur(12px); }
 .sim-menu-item { display: flex; width: 100%; align-items: center; height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; }
 .sim-menu-item:hover { background: var(--hov); }
 </style>

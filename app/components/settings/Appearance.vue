@@ -36,7 +36,7 @@ const waitStyle = computed({
     <SettingsRow label="Theme" sub="System follows your Windows setting." wrap>
       <Seg v-model="theme" :items="THEMES" size="lg" />
     </SettingsRow>
-    <SettingsRow label="Session window in the workspace" sub="How solid a session you open in the workspace simulation is. The characters always show through a little." wrap>
+    <SettingsRow label="Session window in the 3D World" sub="How solid a session you open in the 3D World is. The characters always show through a little." wrap>
       <div class="flex w-[280px] max-w-full flex-none items-center gap-3">
         <USlider v-model="simGlass" :min="30" :max="SIM_GLASS_MAX" :step="5" size="sm" class="flex-1" />
         <span class="mono w-9 text-right text-[11.5px] text-(--tx2)">{{ simGlass }}%</span>

@@ -30,7 +30,7 @@ const editor = computed({
         @update:model-value="v => prefs.set({ startCmd: String(v) })"
       />
     </SettingsRow>
-    <SettingsRow label="Weather location" sub="For the weather in the workspace simulation. Leave empty to use the city in your time zone." wrap>
+    <SettingsRow label="Weather location" sub="For the weather in the 3D World. Leave empty to use the city in your time zone." wrap>
       <UInput
         :model-value="prefs.prefs.weatherCity || ''"
         :placeholder="zoneCity || 'City'"
