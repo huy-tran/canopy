@@ -25,6 +25,8 @@ npm run dev        # Nuxt dev server on :3456 plus Electron
 npm run build      # nuxt generate + bundle electron/ to dist-electron/
 npm run dist       # build and package a Windows installer into release/
 npm run typecheck  # renderer (vue-tsc) and main process (tsc)
+npm run sim:check  # screenshot the workspace simulation with made-up data into .sim-check/
+npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, commit, tag, push
 ```
 
 ## How the real integrations work

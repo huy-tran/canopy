@@ -24,6 +24,8 @@
     "build": "nuxt generate && node scripts/build-electron.mjs",
     "dist": "npm run build && electron-builder --win",
     "typecheck": "nuxt typecheck && tsc -p tsconfig.electron.json",
+    "sim:check": "node scripts/sim-check.mjs",
+    "release": "node scripts/release.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
