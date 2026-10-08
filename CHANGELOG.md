@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-08
+
 - Right-click a character waiting on you to see what Claude is asking and answer it right there.
 - In the workspace simulation, clicking a project in the sidebar flies to its room instead of leaving the view.
 - Tab and Shift Tab fly between the sessions waiting on you, oldest first. Ctrl Shift J does the same while the workspace is open.
@@ -123,6 +125,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.12.0]: https://github.com/huy-tran/canopy/releases/tag/v0.12.0
 [0.11.0]: https://github.com/huy-tran/canopy/releases/tag/v0.11.0
 [0.10.0]: https://github.com/huy-tran/canopy/releases/tag/v0.10.0
 [0.9.0]: https://github.com/huy-tran/canopy/releases/tag/v0.9.0
