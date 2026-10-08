@@ -74,7 +74,7 @@ onMounted(() => {
   paintSky()
 })
 
-/** A session or project clicked in the sidebar: fly to their character, and keep up with them, or to the room. */
+/** A session or project clicked in the sidebar: fly to their character, and keep up with them, or to the room. A double click opens the session too. */
 watch(() => ui.simTarget, (t) => {
   if (!t) return
   if (t.kind === 'person' && !people.value.some(p => p.id === t.id)) return
@@ -83,6 +83,7 @@ watch(() => ui.simTarget, (t) => {
   const pick: Pick = { kind: t.kind, id: t.id }
   picked.value = pick
   scene?.focus(pick)
+  if (t.talk && t.kind === 'person') talkTo.value = t.id
 })
 
 /** Tab and Shift Tab fly between the sessions waiting on you, while nothing else has the keyboard. */

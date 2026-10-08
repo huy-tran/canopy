@@ -156,6 +156,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
         :key="s.id"
         class="flex cursor-pointer flex-col rounded-md px-1.5 hover:bg-(--hov)"
         @click="ui.showSession(s.id)"
+        @dblclick="ui.showSession(s.id, true)"
       >
         <div class="flex h-[30px] items-center gap-2">
           <span class="h-2 w-2 flex-none rounded-xs" :style="{ background: pcol(P.byId(s.pid)?.hue ?? 0) }" />
@@ -245,6 +246,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             class="flex h-[30px] cursor-pointer items-center gap-2 rounded-md pl-7 pr-1.5 hover:bg-(--hov)"
             :style="{ background: sessBg(s, p) }"
             @click.stop="ui.showSession(s.id)"
+            @dblclick.stop="ui.showSession(s.id, true)"
           >
             <UIcon v-if="s.kind === 'shell'" name="i-hugeicons-command-line" class="size-3 flex-none text-(--mu)" />
             <span v-else class="h-1.5 w-1.5 flex-none rounded-full" :style="{ background: SC[s.status] }" />

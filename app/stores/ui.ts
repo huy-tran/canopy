@@ -33,7 +33,7 @@ export const useUiStore = defineStore('ui', () => {
   /** The workspace simulation fills the main area in place of the selected project. */
   const sim = ref(false)
   /** A character or room the simulation flies the camera to; `at` makes a repeat click count. */
-  const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number } | null>(null)
+  const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number; talk?: boolean } | null>(null)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -115,10 +115,13 @@ export const useUiStore = defineStore('ui', () => {
     focusLater()
   }
 
-  /** In the workspace simulation, flies to a Claude session's character; anywhere else, opens the session. */
-  function showSession(sid: string) {
+  /**
+   * In the workspace simulation, flies to a Claude session's character, and with `talk` (a double
+   * click) opens its session there too; anywhere else, opens the session.
+   */
+  function showSession(sid: string, talk = false) {
     const s = S.byId(sid)
-    if (sim.value && s?.kind === 'claude' && !s.exited) simTarget.value = { kind: 'person', id: sid, at: Date.now() }
+    if (sim.value && s?.kind === 'claude' && !s.exited) simTarget.value = { kind: 'person', id: sid, at: Date.now(), talk }
     else focusSession(sid)
   }
 
@@ -146,7 +149,26 @@ export const useUiStore = defineStore('ui', () => {
     focusSession((w.find(s => s.id !== fid.value) || w[0]!).id)
   }
 
+  /**
+   * In the workspace simulation, steps the camera through the characters in sidebar order: all of
+   * them, or only those in the room of the one in view (or the selected project's).
+   */
+  function simCycle(dir: number, inRoom: boolean) {
+    const t = simTarget.value
+    const at = t?.kind === 'person' ? S.byId(t.id) : null
+    const room = at?.pid || (t?.kind === 'room' ? t.id : P.sel)
+    const ss = P.ordered
+      .filter(p => !inRoom || p.id === room)
+      .flatMap(p => S.ofProject(p.id))
+      .filter(s => s.kind === 'claude' && !s.exited)
+    if (!ss.length) return
+    const i = at ? ss.findIndex(s => s.id === at.id) : -1
+    const next = i < 0 ? (dir > 0 ? ss[0]! : ss[ss.length - 1]!) : ss[(i + dir + ss.length) % ss.length]!
+    simTarget.value = { kind: 'person', id: next.id, at: Date.now() }
+  }
+
   function cycle(dir: number) {
+    if (sim.value) return simCycle(dir, true)
     const ss = S.ofProject(P.sel || '')
     if (!ss.length) return
     const i = ss.findIndex(s => s.id === fid.value)
@@ -158,6 +180,7 @@ export const useUiStore = defineStore('ui', () => {
    * and wrapping at either end. Falls back to stepping through projects while no session is open anywhere.
    */
   function cycleProject(dir: number) {
+    if (sim.value) return simCycle(dir, false)
     const ps = P.ordered
     if (!ps.length) return
     const ss = ps.flatMap(p => S.ofProject(p.id))

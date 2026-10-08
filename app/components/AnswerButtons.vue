@@ -16,7 +16,7 @@ const size = computed(() => (props.compact ? 'h-5 px-1.5 text-[10.5px]' : 'h-[22
 </script>
 
 <template>
-  <div v-if="options.length" class="flex flex-none items-center gap-1" @click.stop>
+  <div v-if="options.length" class="flex flex-none items-center gap-1" @click.stop @dblclick.stop>
     <UTooltip v-for="(o, i) in options" :key="o.key" :text="`${o.key}. ${o.text}`">
       <UButton
         :color="i === 0 ? 'primary' : 'neutral'"

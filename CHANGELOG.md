@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- In the workspace simulation, double-click a session in the sidebar to open it right there, without chasing its character.
+
+- In the workspace simulation, Ctrl Tab and Ctrl Shift Tab fly between everyone's characters, and Alt ] and Alt [ between those in the same room, instead of leaving the view.
+
 ## [0.12.0] - 2026-10-08
 
 - Right-click a character waiting on you to see what Claude is asking and answer it right there.
