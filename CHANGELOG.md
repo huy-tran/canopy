@@ -2,6 +2,16 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-10-08
+
+- A 3D workspace simulation shows all your projects at once. Open it with the Workspace button in the title bar or Ctrl Shift Home.
+- Each project is a room in its colour, with its name over the door. Its lights are on while it has a session open and off when it has none.
+- Each Claude session is a developer or a designer with their own name, and each subagent a smaller helper beside them. New ones are summoned in a circle of light.
+- People work at their desks while Claude works, wave when Claude needs you, and say what Claude is writing or doing in a speech bubble.
+- Idle sessions wander off to the common room for football on the big TV, games, ping pong, foosball, the arcade or a coffee, and walk back when Claude gets busy again.
+- Hover a room's big screen for that project's overview: spend today, this week and all time, the last 14 days, and who is in the room.
+- Click someone to open their session in a window over the workspace and work with Claude without leaving it.
+
 ## [0.7.0] - 2026-10-07
 
 - 11 coding fonts come with Canopy for the terminal: JetBrains Mono, Cascadia Code, Fira Code, Geist Mono, IBM Plex Mono, Source Code Pro, Roboto Mono, Ubuntu Mono, Inconsolata, Victor Mono and Red Hat Mono. Pick them in Settings > Terminal without installing anything.
@@ -81,6 +91,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.8.0]: https://github.com/huy-tran/canopy/releases/tag/v0.8.0
 [0.7.0]: https://github.com/huy-tran/canopy/releases/tag/v0.7.0
 [0.6.0]: https://github.com/huy-tran/canopy/releases/tag/v0.6.0
 [0.5.0]: https://github.com/huy-tran/canopy/releases/tag/v0.5.0
