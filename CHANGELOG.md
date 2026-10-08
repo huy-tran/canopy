@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-08
+
 - The 3D World's common room has a new lineup every day: two of ping pong, foosball, pool, air hockey and a board game in the middle, and the arcade machine or darts at the front.
 
 ## [0.15.0] - 2026-10-08
@@ -155,6 +157,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.16.0]: https://github.com/huy-tran/canopy/releases/tag/v0.16.0
 [0.15.0]: https://github.com/huy-tran/canopy/releases/tag/v0.15.0
 [0.14.0]: https://github.com/huy-tran/canopy/releases/tag/v0.14.0
 [0.13.1]: https://github.com/huy-tran/canopy/releases/tag/v0.13.1
