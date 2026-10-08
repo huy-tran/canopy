@@ -97,9 +97,9 @@
 :root,
 .dark {
   --bg: var(--ui-color-neutral-950);
-  --chrome: color-mix(in oklch, var(--ui-color-neutral-900) var(--alpha), transparent);
-  --head: color-mix(in oklch, color-mix(in oklch, var(--ui-color-neutral-900) 50%, var(--ui-color-neutral-950)) var(--alpha), transparent);
-  --term: color-mix(in oklch, color-mix(in oklch, var(--ui-color-neutral-950) 72%, black) var(--alpha), transparent);
+  --chrome: var(--ui-color-neutral-900);
+  --head: color-mix(in oklch, var(--ui-color-neutral-900) 50%, var(--ui-color-neutral-950));
+  --term: color-mix(in oklch, var(--ui-color-neutral-950) 72%, black);
   --modal: var(--ui-color-neutral-900);
   --ln: var(--ui-color-neutral-800);
   --ln2: color-mix(in oklch, var(--ui-color-neutral-800) 55%, var(--ui-color-neutral-900));
@@ -164,9 +164,9 @@
  */
 .light {
   --bg: oklch(98.5% 0.002 248);
-  --chrome: color-mix(in oklch, oklch(95.5% 0.006 248) var(--alpha), transparent);
-  --head: color-mix(in oklch, oklch(97.2% 0.004 248) var(--alpha), transparent);
-  --term: color-mix(in oklch, oklch(99.6% 0.001 248) var(--alpha), transparent);
+  --chrome: oklch(95.5% 0.006 248);
+  --head: oklch(97.2% 0.004 248);
+  --term: oklch(99.6% 0.001 248);
   --modal: #fff;
   --ln: oklch(88% 0.008 248);
   --ln2: oklch(91.5% 0.006 248);
@@ -223,14 +223,9 @@
   --delbg: oklch(0.56 0.17 25 / 0.10);
 }
 
-/* Window transparency: --alpha is set from Settings. Translucent windows drop the solid backdrop. */
+/* The window's backdrop. */
 :root {
-  --alpha: 100%;
   --win: var(--bg);
-}
-
-:root.translucent {
-  --win: transparent;
 }
 
 /* Nerd Font icons, placed after every terminal font so status line icons render with any font. */

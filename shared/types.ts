@@ -6,7 +6,6 @@ export type View = 'terminals' | 'overview'
 export type Editor = 'VS Code' | 'Cursor' | 'PhpStorm' | 'Zed'
 export type ThemePref = 'dark' | 'light' | 'system'
 export type WaitStyle = 'both' | 'highlight' | 'badge'
-export type WindowBlur = 'acrylic' | 'mica'
 export type PanelDock = 'bottom' | 'right'
 export type ShellKind = 'pwsh' | 'powershell' | 'gitbash' | 'wsl' | 'cmd'
 
@@ -134,9 +133,6 @@ export interface Prefs {
   skipViewing: boolean
   sound: boolean
   dnd: boolean
-  /** Window background opacity, 50-100. Below 100 the window shows the blur effect behind it. */
-  opacity: number
-  blur: WindowBlur
   /** Terminal colours: always dark (Claude Code's default theme), or follow the app theme. */
   termTheme: 'dark' | 'app'
   /** Default plain shell for new shell terminals. */
@@ -147,7 +143,7 @@ export interface Prefs {
   panelSize: { bottom: number; right: number }
   /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
   summonKey: string
-  /** Opacity of the session window in the workspace simulation, 30-100; below 100 the characters show through it. */
+  /** Opacity of the session window in the workspace simulation, 30-90: the characters always show through it. */
   simGlass?: number
   /** City for the workspace simulation's weather; empty uses the city in the system time zone. */
   weatherCity?: string

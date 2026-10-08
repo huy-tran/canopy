@@ -4,6 +4,7 @@
 import type { Session } from '#shared/types'
 import { useEventListener } from '@vueuse/core'
 import { skyOf, useWeather } from '~/composables/useWeather'
+import { simGlassOf } from '~/stores/prefs'
 import { castFor, castOf } from '~/simulation/cast'
 import { type Pick, type SimHover, type SimPerson, type SimRoom, WorkspaceScene } from '~/simulation/scene'
 
@@ -115,15 +116,12 @@ watch([() => Math.floor(ui.now / 60_000), weather], paintSky)
 
 // ---------- The session window: see-through, toggled by a shortcut ----------
 
-/** How solid the session window is, in %: below 100 the characters show through it and its terminal. */
-const glass = computed(() => prefs.prefs.simGlass ?? 75)
+/** How solid the session window is, in %: never fully, so the characters always show through it and its terminal. */
+const glass = computed(() => simGlassOf(prefs.prefs))
 
-// Draw less while a solid session window covers the view; a see-through one keeps the scene moving.
-watch([() => !!talkTo.value, glass], ([open, g]) => scene?.setQuiet(open && g >= 100))
-
-watch([() => talkTo.value, glass], ([sid, g], [was]) => {
+watch(() => talkTo.value, (sid, was) => {
   if (was && was !== sid) setSeeThrough(was, false)
-  if (sid) setSeeThrough(sid, g < 100)
+  if (sid) setSeeThrough(sid, true)
 })
 
 /** The shortcut opens the session of the character in view (or the one a subagent works for), or closes the open one. */
@@ -368,16 +366,15 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       :content="{ onEscapeKeyDown: (e: KeyboardEvent) => e.preventDefault() }"
       :close="false"
       :ui="{
-        overlay: glass < 100 ? 'bg-black/10' : 'bg-black/45',
-        content: `flex h-[min(78vh,760px)] w-[min(92vw,1100px)] max-w-none flex-col overflow-hidden ${glass < 100 ? 'bg-transparent' : 'bg-(--modal)'} border border-(--bb) rounded-xl shadow-(--shadow) ring-0 divide-y-0`,
+        overlay: 'bg-black/10',
+        content: 'flex h-[min(78vh,760px)] w-[min(92vw,1100px)] max-w-none flex-col overflow-hidden bg-transparent border border-(--bb) rounded-xl shadow-(--shadow) ring-0 divide-y-0',
       }"
     >
       <template #content>
         <div
           v-if="talkSession && talkProject"
-          class="flex min-h-0 flex-1 flex-col"
-          :class="{ 'sim-glass': glass < 100 }"
-          :style="glass < 100 ? { '--glass': glass + '%' } : undefined"
+          class="sim-glass flex min-h-0 flex-1 flex-col"
+          :style="{ '--glass': glass + '%' }"
         >
           <div class="flex h-11 flex-none items-center gap-2.5 border-b border-(--ln) px-3.5">
             <span class="h-2 w-2 flex-none rounded-full" :style="{ background: SC[talkSession.status] }" />

@@ -85,14 +85,13 @@ export default defineNuxtPlugin({
         cursor: p.cursor,
         cursorBlink: p.cursorBlink ?? true,
         scrollback: Math.max(100, parseInt(p.scrollback, 10) || 5000),
-        transparent: (p.opacity ?? 100) < 100,
         theme: { background: css('--term'), foreground: fg, cursor: fg, selection: prefs.terminalDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)', ansi: prefs.terminalDark ? undefined : LIGHT_ANSI },
       }
     }
     setTerminalOptions(termOptions())
     watch(() => {
       const p = prefs.prefs
-      return [p.termFont, p.termSize, p.termLineHeight, p.termWeight, p.termWeightBold, p.termLetterSpacing, p.termBrightness, p.termContrast, p.termBoldBright, p.cursor, p.cursorBlink, p.scrollback, p.opacity, prefs.resolvedTheme, prefs.terminalDark]
+      return [p.termFont, p.termSize, p.termLineHeight, p.termWeight, p.termWeightBold, p.termLetterSpacing, p.termBrightness, p.termContrast, p.termBoldBright, p.cursor, p.cursorBlink, p.scrollback, prefs.resolvedTheme, prefs.terminalDark]
     }, () => {
       const font = termFont()
       document.documentElement.style.setProperty('--mono', monoStack(font))
@@ -101,10 +100,6 @@ export default defineNuxtPlugin({
       Promise.all([`${o.fontWeight} ${o.fontSize}px '${font}'`, `${o.fontWeightBold} ${o.fontSize}px '${font}'`, `${o.fontSize}px '${NERD_SYMBOLS}'`].map(f => document.fonts.load(f)))
         .catch(() => {})
         .then(() => nextTick(() => setTerminalOptions(termOptions())))
-    }, { immediate: true })
-    watch(() => prefs.prefs.opacity ?? 100, (o) => {
-      document.documentElement.style.setProperty('--alpha', `${o}%`)
-      document.documentElement.classList.toggle('translucent', o < 100)
     }, { immediate: true })
     watch(() => prefs.prefs.appFont, (f) => {
       document.documentElement.style.setProperty('--app-font', `'${fontName(f, DEFAULT_PREFS.appFont)}','Outfit',system-ui,sans-serif`)

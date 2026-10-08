@@ -1273,18 +1273,12 @@ export class WorkspaceScene {
 
   // ------------------------------------------------------------ frame
 
-  private quiet = false
   private drawnAt = 0
-
-  /** Something covers the view, such as the session modal: draw a few frames a second instead of every one. */
-  setQuiet(quiet: boolean) {
-    this.quiet = quiet
-  }
 
   private loop = (now = 0) => {
     this.frame = requestAnimationFrame(this.loop)
-    // The browser stops frames for a hidden window. Behind other apps or under a modal, nobody needs 60 a second.
-    const every = this.quiet ? 100 : document.hasFocus() ? 0 : 50
+    // The browser stops frames for a hidden window. Behind other apps, nobody needs 60 a second.
+    const every = document.hasFocus() ? 0 : 50
     if (now - this.drawnAt < every) return
     this.drawnAt = now
     const dt = Math.min(0.12, this.clock.getDelta())

@@ -29,13 +29,17 @@ export const DEFAULT_PREFS: Prefs = {
   skipViewing: true,
   sound: false,
   dnd: false,
-  opacity: 100,
-  blur: 'acrylic',
   termTheme: 'dark',
   shell: 'powershell',
   panelDock: 'bottom',
   panelSize: { bottom: 260, right: 460 },
   summonKey: 'Alt+Space',
+}
+
+/** The session window in the workspace simulation is always a little see-through: 90% at most, 90% unless set. */
+export const SIM_GLASS_MAX = 90
+export function simGlassOf(p: Prefs) {
+  return Math.min(SIM_GLASS_MAX, Math.max(30, p.simGlass ?? SIM_GLASS_MAX))
 }
 
 export const usePrefsStore = defineStore('prefs', () => {

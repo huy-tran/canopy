@@ -54,19 +54,6 @@ function prefs() {
   return store.get('state')?.prefs
 }
 
-let appliedLook = ''
-
-/** Window transparency (Windows 11): a clear background with Acrylic or Mica behind the translucent UI. */
-function applyWindowLook() {
-  if (!win || win.isDestroyed() || process.platform !== 'win32') return
-  const p = prefs()
-  const material = p && (p.opacity ?? 100) < 100 ? (p.blur || 'acrylic') : 'none'
-  if (material === appliedLook) return
-  appliedLook = material
-  win.setBackgroundColor(material === 'none' ? '#0F1012' : '#00000000')
-  win.setBackgroundMaterial(material)
-}
-
 function applyLoginItem() {
   const p = prefs()
   if (!p || !app.isPackaged) return
@@ -147,7 +134,6 @@ function createWindow() {
     },
   })
   if (store.get('maximized')) win.maximize()
-  applyWindowLook()
   win.once('ready-to-show', () => win?.show())
   // The design's type is dense at 100%; render the whole UI a step larger.
   win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(1.1))
@@ -230,7 +216,6 @@ function registerIpc() {
   handle('state:save', (s: Persisted) => {
     store.set('state', s)
     ensureTray()
-    applyWindowLook()
     applyLoginItem()
     applySummonKey(s.prefs?.summonKey ?? '')
   })

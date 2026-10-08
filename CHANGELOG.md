@@ -4,6 +4,9 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The window is always solid: the Window opacity and Background effect settings are gone. Cards over the workspace simulation no longer turn see-through.
+- The session window in the workspace simulation is always a little see-through, 90% by default. Set anywhere from 30% to 90% in Settings > Appearance.
+
 ## [0.13.1] - 2026-10-08
 
 - The terminal in the workspace simulation's session window is see-through too. It stayed black in 0.13.0.

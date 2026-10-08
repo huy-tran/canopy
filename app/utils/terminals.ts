@@ -28,7 +28,6 @@ export interface TermOptions {
   cursor: 'Block' | 'Bar' | 'Underline'
   cursorBlink: boolean
   scrollback: number
-  transparent: boolean
   theme: { background: string; foreground: string; cursor: string; selection: string; ansi?: Record<string, string> }
 }
 
@@ -55,8 +54,7 @@ const CURSOR = { Block: 'block', Bar: 'bar', Underline: 'underline' } as const
 /** Terminals drawn see-through wherever they are shown, such as in the workspace simulation's session window. */
 const seeThrough = new Set<string>()
 
-function xtermOptions(o: TermOptions, clear = false) {
-  const transparent = o.transparent || clear
+function xtermOptions(o: TermOptions, transparent = false) {
   return {
     fontFamily: o.fontFamily,
     fontSize: o.fontSize,
