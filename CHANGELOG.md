@@ -2,6 +2,14 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] - 2026-10-08
+
+- In the workspace simulation, clicking a session in the sidebar flies to its character and follows them around.
+- Right-click a character to talk to them, open their session in the terminals, or close it: they wave goodbye and disappear.
+- A stage in front of the common room has a rock band playing, with stage lights and a dance floor where idle sessions come to rock out.
+- Idle characters no longer stay put: every so often they get up and go do something else.
+- A card shows the local time and the weather outside.
+
 ## [0.9.0] - 2026-10-08
 
 - Ctrl W closes the terminal you are in: the focused session or shell, or the shell in view in the shell panel.
@@ -97,6 +105,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.10.0]: https://github.com/huy-tran/canopy/releases/tag/v0.10.0
 [0.9.0]: https://github.com/huy-tran/canopy/releases/tag/v0.9.0
 [0.8.0]: https://github.com/huy-tran/canopy/releases/tag/v0.8.0
 [0.7.0]: https://github.com/huy-tran/canopy/releases/tag/v0.7.0
