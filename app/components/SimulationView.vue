@@ -418,8 +418,10 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
 .sim-say-doing::before { content: '⚙ '; font-style: normal; }
 .sim-say-doing::after { border-top-color: rgba(20, 18, 28, .85); }
 @keyframes sim-pop { from { transform: scale(.6); opacity: 0; } }
-/* The see-through session window: one tinted, lightly blurred backdrop, with the terminal inside it clear. */
-.sim-glass { --term: transparent; --chrome: transparent; --head: transparent; background: color-mix(in oklch, var(--modal) var(--glass), transparent); backdrop-filter: blur(2px); }
+/* The see-through session window: one tinted, lightly blurred backdrop, with the terminal inside it clear.
+   The terminal pane sets its own colours under .dark, so they are cleared there too. */
+.sim-glass, .sim-glass .dark { --term: transparent; --chrome: transparent; --head: transparent; }
+.sim-glass { background: color-mix(in oklch, var(--modal) var(--glass), transparent); backdrop-filter: blur(2px); }
 .sim-menu-item { display: flex; width: 100%; align-items: center; height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; }
 .sim-menu-item:hover { background: var(--hov); }
 </style>

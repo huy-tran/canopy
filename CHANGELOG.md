@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The terminal in the workspace simulation's session window is see-through too. It stayed black in 0.13.0.
+
 ## [0.13.0] - 2026-10-08
 
 - In the workspace simulation, Ctrl Enter opens the session of the character in view and closes it again. Change it in Settings > Keyboard shortcuts.
