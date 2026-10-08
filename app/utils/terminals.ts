@@ -52,7 +52,11 @@ let noGl = false
 
 const CURSOR = { Block: 'block', Bar: 'bar', Underline: 'underline' } as const
 
-function xtermOptions(o: TermOptions) {
+/** Terminals drawn see-through wherever they are shown, such as in the workspace simulation's session window. */
+const seeThrough = new Set<string>()
+
+function xtermOptions(o: TermOptions, clear = false) {
+  const transparent = o.transparent || clear
   return {
     fontFamily: o.fontFamily,
     fontSize: o.fontSize,
@@ -66,9 +70,9 @@ function xtermOptions(o: TermOptions) {
     cursorBlink: o.cursorBlink,
     scrollback: o.scrollback,
     allowProposedApi: true,
-    allowTransparency: o.transparent,
+    allowTransparency: transparent,
     theme: {
-      background: o.transparent ? 'rgba(0,0,0,0)' : o.theme.background,
+      background: transparent ? 'rgba(0,0,0,0)' : o.theme.background,
       foreground: o.theme.foreground,
       cursor: o.theme.cursor,
       cursorAccent: o.theme.background,
@@ -87,8 +91,8 @@ export function configureTerminals(h: TermHooks) {
 
 export function setTerminalOptions(o: TermOptions) {
   opts = o
-  for (const e of entries.values()) {
-    const x = xtermOptions(o)
+  for (const [sid, e] of entries) {
+    const x = xtermOptions(o, seeThrough.has(sid))
     e.term.options.fontFamily = x.fontFamily
     e.term.options.fontSize = x.fontSize
     e.term.options.lineHeight = x.lineHeight
@@ -104,6 +108,18 @@ export function setTerminalOptions(o: TermOptions) {
     e.term.options.theme = x.theme
     if (e.opened) safeFit(e)
   }
+}
+
+/** Draws a terminal see-through, or back to its usual background. */
+export function setSeeThrough(sid: string, on: boolean) {
+  if (on === seeThrough.has(sid)) return
+  if (on) seeThrough.add(sid)
+  else seeThrough.delete(sid)
+  const e = entries.get(sid)
+  if (!e || !opts) return
+  const x = xtermOptions(opts, on)
+  e.term.options.allowTransparency = x.allowTransparency
+  e.term.options.theme = x.theme
 }
 
 function safeFit(e: Entry) {
@@ -163,7 +179,7 @@ function linkProvider(sid: string, term: Terminal) {
 export function ensureTerminal(sid: string): Entry {
   let e = entries.get(sid)
   if (e) return e
-  const term = new Terminal(xtermOptions(opts!))
+  const term = new Terminal(xtermOptions(opts!, seeThrough.has(sid)))
   const fit = new FitAddon()
   term.loadAddon(fit)
   term.loadAddon(new WebLinksAddon((_ev, url) => hooks?.openUrl(url)))
@@ -232,6 +248,7 @@ export function detachTerminal(sid: string, host: HTMLElement) {
 }
 
 export function disposeTerminal(sid: string) {
+  seeThrough.delete(sid)
   const e = entries.get(sid)
   if (!e) return
   e.ro?.disconnect()

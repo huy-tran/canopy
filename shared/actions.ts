@@ -5,8 +5,8 @@ export interface ActionDef {
   g: string
   label: string
   def: string[]
-  /** 'shell' actions only fire while a shell in the dock panel has focus, and may reuse keys bound elsewhere. */
-  scope?: 'shell'
+  /** 'shell' actions only fire while a shell in the dock panel has focus, 'sim' ones only in the workspace simulation; both may reuse keys bound elsewhere. */
+  scope?: 'shell' | 'sim'
 }
 
 export const ACTIONS: ActionDef[] = [
@@ -38,6 +38,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'shellNewPick', g: 'Shell panel, while it has focus', label: 'New shell, choosing which', def: ['Ctrl+Shift+T'], scope: 'shell' },
   { id: 'shellNext', g: 'Shell panel, while it has focus', label: 'Next shell tab', def: ['Ctrl+Alt+→'], scope: 'shell' },
   { id: 'shellPrev', g: 'Shell panel, while it has focus', label: 'Previous shell tab', def: ['Ctrl+Alt+←'], scope: 'shell' },
+  { id: 'simTalk', g: 'Workspace simulation', label: 'Open or close the session of the character in view', def: ['Ctrl+Enter'], scope: 'sim' },
   { id: 'newProject', g: 'App', label: 'New project', def: ['Ctrl+Shift+N'] },
   { id: 'settings', g: 'App', label: 'Settings', def: ['Ctrl+,'] },
   { id: 'shortcuts', g: 'App', label: 'Keyboard shortcuts', def: ['Ctrl+/'] },

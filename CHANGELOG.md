@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- In the workspace simulation, Ctrl Enter opens the session of the character in view and closes it again. Change it in Settings > Keyboard shortcuts.
+- The session window in the workspace simulation is see-through, so you can watch everyone moving behind the terminal. Set how solid it is in Settings > Appearance; 100% makes it solid again.
+- The sidebar highlights the session of the character in view in the workspace simulation, and the project of the room.
+
 ## [0.12.1] - 2026-10-08
 
 - In the workspace simulation, double-click a session in the sidebar to open it right there, without chasing its character.

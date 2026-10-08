@@ -90,4 +90,14 @@ export function useAppShortcuts() {
     e.stopImmediatePropagation()
     run(id)
   }, { capture: true })
+
+  // Workspace simulation shortcuts, only while it is open; they work from its session window's terminal too.
+  useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+    if (!ui.sim) return
+    const id = matchAction(prefs.keys, comboOf(e), 'sim')
+    if (!id || ui.palette || ui.projectModal || ui.settings || ui.confirm || ui.lightbox) return
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    ui.runAction(id)
+  }, { capture: true })
 }

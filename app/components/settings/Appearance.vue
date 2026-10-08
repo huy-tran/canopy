@@ -23,6 +23,10 @@ const opacity = computed({
   get: () => prefs.prefs.opacity ?? 100,
   set: (v: number) => prefs.set({ opacity: v }),
 })
+const simGlass = computed({
+  get: () => prefs.prefs.simGlass ?? 75,
+  set: (v: number) => prefs.set({ simGlass: v }),
+})
 const blur = computed({
   get: () => prefs.prefs.blur || 'acrylic',
   set: (v: WindowBlur) => prefs.set({ blur: v }),
@@ -52,6 +56,12 @@ const waitStyle = computed({
     </SettingsRow>
     <SettingsRow label="Background effect" sub="Acrylic blurs what is behind the window. Mica tints it with your wallpaper." wrap>
       <Seg v-model="blur" :items="BLURS" size="lg" :class="opacity === 100 ? 'pointer-events-none opacity-50' : ''" />
+    </SettingsRow>
+    <SettingsRow label="Session window in the workspace" sub="Below 100% you can see the characters moving behind a session you open in the workspace simulation." wrap>
+      <div class="flex w-[280px] max-w-full flex-none items-center gap-3">
+        <USlider v-model="simGlass" :min="30" :max="100" :step="5" size="sm" class="flex-1" />
+        <span class="mono w-9 text-right text-[11.5px] text-(--tx2)">{{ simGlass }}%</span>
+      </div>
     </SettingsRow>
     <SettingsRow label="App font" sub="Used for everything except terminals and code." wrap>
       <div class="w-[280px] max-w-full flex-none">

@@ -10,6 +10,7 @@ import { type Pick, type SimHover, type SimPerson, type SimRoom, WorkspaceScene 
 const P = useProjectsStore()
 const S = useSessionsStore()
 const ui = useUiStore()
+const prefs = usePrefsStore()
 
 const el = ref<HTMLElement | null>(null)
 let scene: WorkspaceScene | null = null
@@ -112,8 +113,43 @@ function paintSky() {
 }
 watch([() => Math.floor(ui.now / 60_000), weather], paintSky)
 
-// Draw less while the session modal covers the view.
-watch(() => !!talkTo.value, q => scene?.setQuiet(q))
+// ---------- The session window: see-through, toggled by a shortcut ----------
+
+/** How solid the session window is, in %: below 100 the characters show through it and its terminal. */
+const glass = computed(() => prefs.prefs.simGlass ?? 75)
+
+// Draw less while a solid session window covers the view; a see-through one keeps the scene moving.
+watch([() => !!talkTo.value, glass], ([open, g]) => scene?.setQuiet(open && g >= 100))
+
+watch([() => talkTo.value, glass], ([sid, g], [was]) => {
+  if (was && was !== sid) setSeeThrough(was, false)
+  if (sid) setSeeThrough(sid, g < 100)
+})
+
+/** The shortcut opens the session of the character in view (or the one a subagent works for), or closes the open one. */
+watch(() => ui.simTalk, () => {
+  if (talkTo.value) {
+    talkTo.value = null
+    return
+  }
+  const p = pickedPerson.value
+  if (p) talkTo.value = p.parentId || p.id
+})
+
+// The sidebar shows the session of the character in view, or the room's project, as selected.
+watch(() => picked.value, (pick) => {
+  if (!pick) return
+  if (pick.kind === 'person') {
+    const p = people.value.find(x => x.id === pick.id)
+    const s = p ? S.byId(p.parentId || p.id) : null
+    if (!s) return
+    P.sel = s.pid
+    S.setFocus(s.pid, s.id)
+    P.patch(s.pid, { expanded: true })
+  } else if (P.byId(pick.id)) {
+    P.sel = pick.id
+  }
+})
 
 // ---------- Right-click menu on a person ----------
 
@@ -151,6 +187,7 @@ function menuClose() {
 }
 
 onBeforeUnmount(() => {
+  if (talkTo.value) setSeeThrough(talkTo.value, false)
   scene?.dispose()
   scene = null
 })
@@ -252,7 +289,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
           {{ totals.rooms }} rooms · {{ totals.lit }} lit · {{ totals.sessions }} sessions<template v-if="totals.subagents"> · {{ totals.subagents }} subagents</template>
         </span>
       </div>
-      <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · right-click someone for options · Tab to visit whoever is waiting on you</div>
+      <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · right-click someone for options · Tab to visit whoever is waiting on you · {{ prefs.kl('simTalk') }} to open or close their session</div>
     </div>
 
     <div class="absolute right-3 top-3 flex gap-1.5">
@@ -331,12 +368,17 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       :content="{ onEscapeKeyDown: (e: KeyboardEvent) => e.preventDefault() }"
       :close="false"
       :ui="{
-        overlay: 'bg-black/45',
-        content: 'flex h-[min(78vh,760px)] w-[min(92vw,1100px)] max-w-none flex-col overflow-hidden bg-(--modal) border border-(--bb) rounded-xl shadow-(--shadow) ring-0 divide-y-0',
+        overlay: glass < 100 ? 'bg-black/10' : 'bg-black/45',
+        content: `flex h-[min(78vh,760px)] w-[min(92vw,1100px)] max-w-none flex-col overflow-hidden ${glass < 100 ? 'bg-transparent' : 'bg-(--modal)'} border border-(--bb) rounded-xl shadow-(--shadow) ring-0 divide-y-0`,
       }"
     >
       <template #content>
-        <div v-if="talkSession && talkProject" class="flex min-h-0 flex-1 flex-col">
+        <div
+          v-if="talkSession && talkProject"
+          class="flex min-h-0 flex-1 flex-col"
+          :class="{ 'sim-glass': glass < 100 }"
+          :style="glass < 100 ? { '--glass': glass + '%' } : undefined"
+        >
           <div class="flex h-11 flex-none items-center gap-2.5 border-b border-(--ln) px-3.5">
             <span class="h-2 w-2 flex-none rounded-full" :style="{ background: SC[talkSession.status] }" />
             <span class="flex-none text-[13px] font-semibold text-(--tx)">{{ talkCast?.name }}</span>
@@ -348,7 +390,7 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
             <span v-if="talkHelpers" class="flex-none text-[11px] text-(--fa)">{{ talkHelpers }} subagent{{ talkHelpers === 1 ? '' : 's' }} helping</span>
             <span class="mono flex-none text-[11px] text-(--fa)">{{ usd(S.cost(talkSession)) }}</span>
             <UButton size="xs" color="neutral" variant="subtle" label="Open in terminals" @click="openSession(talkSession.id)" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-cancel-01" title="Close" @click="talkTo = null" />
+            <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-cancel-01" :title="`Close (${prefs.kl('simTalk')})`" @click="talkTo = null" />
           </div>
           <TerminalPane :key="talkSession.id" :session="talkSession" :multi="false" :focused="true" :narrow="false" class="min-h-0 flex-1" />
         </div>
@@ -376,6 +418,8 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
 .sim-say-doing::before { content: '⚙ '; font-style: normal; }
 .sim-say-doing::after { border-top-color: rgba(20, 18, 28, .85); }
 @keyframes sim-pop { from { transform: scale(.6); opacity: 0; } }
+/* The see-through session window: one tinted, lightly blurred backdrop, with the terminal inside it clear. */
+.sim-glass { --term: transparent; --chrome: transparent; --head: transparent; background: color-mix(in oklch, var(--modal) var(--glass), transparent); backdrop-filter: blur(2px); }
 .sim-menu-item { display: flex; width: 100%; align-items: center; height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; }
 .sim-menu-item:hover { background: var(--hov); }
 </style>

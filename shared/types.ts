@@ -147,6 +147,8 @@ export interface Prefs {
   panelSize: { bottom: number; right: number }
   /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
   summonKey: string
+  /** Opacity of the session window in the workspace simulation, 30-100; below 100 the characters show through it. */
+  simGlass?: number
   /** City for the workspace simulation's weather; empty uses the city in the system time zone. */
   weatherCity?: string
   /** File explorer layout, remembered between openings. */

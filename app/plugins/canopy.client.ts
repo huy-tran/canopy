@@ -115,7 +115,7 @@ export default defineNuxtPlugin({
         const cb = comboOf(e)
         if (!cb) return false
         if (/^Alt\+[1-9]$/.test(cb)) return true
-        return !!matchAction(prefs.keys, cb)
+        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim'))
       },
       onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
       onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },

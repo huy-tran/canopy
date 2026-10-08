@@ -34,6 +34,8 @@ export const useUiStore = defineStore('ui', () => {
   const sim = ref(false)
   /** A character or room the simulation flies the camera to; `at` makes a repeat click count. */
   const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number; talk?: boolean } | null>(null)
+  /** Bumped by the shortcut that opens or closes the session window of the character in view. */
+  const simTalk = ref(0)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -682,6 +684,7 @@ export const useUiStore = defineStore('ui', () => {
       paneLeft: () => cycle(-1),
       toggleView,
       simulation: () => { sim.value = !sim.value },
+      simTalk: () => { simTalk.value++ },
       newSession: () => newSession(),
       promptAll: openBc,
       share: shareFocused,
@@ -709,7 +712,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
