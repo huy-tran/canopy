@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-08
+
 - The terminal in the 3D World's session window is see-through again. In 0.14.0 only the frame around it was.
 - The cards over the 3D World (a character's card, the right-click menu and a project's screen card) are see-through and blurred, like the session window.
 - The weather card in the 3D World shows Celsius and km/h.
@@ -151,6 +153,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.15.0]: https://github.com/huy-tran/canopy/releases/tag/v0.15.0
 [0.14.0]: https://github.com/huy-tran/canopy/releases/tag/v0.14.0
 [0.13.1]: https://github.com/huy-tran/canopy/releases/tag/v0.13.1
 [0.13.0]: https://github.com/huy-tran/canopy/releases/tag/v0.13.0
