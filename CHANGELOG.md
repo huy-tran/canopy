@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-08
+
 - In the workspace simulation, Ctrl Enter opens the session of the character in view and closes it again. Change it in Settings > Keyboard shortcuts.
 - The session window in the workspace simulation is see-through, so you can watch everyone moving behind the terminal. Set how solid it is in Settings > Appearance; 100% makes it solid again.
 - The sidebar highlights the session of the character in view in the workspace simulation, and the project of the room.
@@ -135,6 +137,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.13.0]: https://github.com/huy-tran/canopy/releases/tag/v0.13.0
 [0.12.1]: https://github.com/huy-tran/canopy/releases/tag/v0.12.1
 [0.12.0]: https://github.com/huy-tran/canopy/releases/tag/v0.12.0
 [0.11.0]: https://github.com/huy-tran/canopy/releases/tag/v0.11.0
