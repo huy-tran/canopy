@@ -2,6 +2,12 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] - 2026-10-08
+
+- Ctrl W closes the terminal you are in: the focused session or shell, or the shell in view in the shell panel.
+- Ctrl Shift W closes every session and shell in the current project, after asking first.
+- Both shortcuts can be changed in Settings > Keyboard shortcuts.
+
 ## [0.8.0] - 2026-10-08
 
 - A 3D workspace simulation shows all your projects at once. Open it with the Workspace button in the title bar or Ctrl Shift Home.
@@ -91,6 +97,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.9.0]: https://github.com/huy-tran/canopy/releases/tag/v0.9.0
 [0.8.0]: https://github.com/huy-tran/canopy/releases/tag/v0.8.0
 [0.7.0]: https://github.com/huy-tran/canopy/releases/tag/v0.7.0
 [0.6.0]: https://github.com/huy-tran/canopy/releases/tag/v0.6.0
