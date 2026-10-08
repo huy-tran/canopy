@@ -1,7 +1,7 @@
 {
   "name": "canopy",
   "productName": "Canopy",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "private": true,
   "description": "Multi-project Claude Code workspace",
   "author": {

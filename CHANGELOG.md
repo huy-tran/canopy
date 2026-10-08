@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-08
+
 - In the workspace simulation, double-click a session in the sidebar to open it right there, without chasing its character.
 
 - In the workspace simulation, Ctrl Tab and Ctrl Shift Tab fly between everyone's characters, and Alt ] and Alt [ between those in the same room, instead of leaving the view.
@@ -129,6 +131,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.12.1]: https://github.com/huy-tran/canopy/releases/tag/v0.12.1
 [0.12.0]: https://github.com/huy-tran/canopy/releases/tag/v0.12.0
 [0.11.0]: https://github.com/huy-tran/canopy/releases/tag/v0.11.0
 [0.10.0]: https://github.com/huy-tran/canopy/releases/tag/v0.10.0
