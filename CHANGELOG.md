@@ -2,6 +2,13 @@
 
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.11.0] - 2026-10-08
+
+- Click a room in the workspace simulation to add a session to that project without leaving the view. With more than one repo, pick which one.
+- Right-clicking a character now opens its menu. It closed straight away before.
+- Clicking outside a session window in the workspace simulation closes it. Esc still goes to Claude.
+- The room card has the same see-through look as the weather card, with its buttons on one line.
+
 ## [0.10.0] - 2026-10-08
 
 - In the workspace simulation, clicking a session in the sidebar flies to its character and follows them around.
@@ -105,6 +112,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.11.0]: https://github.com/huy-tran/canopy/releases/tag/v0.11.0
 [0.10.0]: https://github.com/huy-tran/canopy/releases/tag/v0.10.0
 [0.9.0]: https://github.com/huy-tran/canopy/releases/tag/v0.9.0
 [0.8.0]: https://github.com/huy-tran/canopy/releases/tag/v0.8.0
