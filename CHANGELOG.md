@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-08
+
 - The terminal in the workspace simulation's session window is see-through too. It stayed black in 0.13.0.
 
 ## [0.13.0] - 2026-10-08
@@ -139,6 +141,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.13.1]: https://github.com/huy-tran/canopy/releases/tag/v0.13.1
 [0.13.0]: https://github.com/huy-tran/canopy/releases/tag/v0.13.0
 [0.12.1]: https://github.com/huy-tran/canopy/releases/tag/v0.12.1
 [0.12.0]: https://github.com/huy-tran/canopy/releases/tag/v0.12.0
