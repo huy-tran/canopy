@@ -1,7 +1,7 @@
 {
   "name": "canopy",
   "productName": "Canopy",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "private": true,
   "description": "Multi-project Claude Code workspace",
   "author": {
@@ -21,7 +21,7 @@
   "scripts": {
     "dev": "concurrently -k -n nuxt,electron -c blue,green \"nuxt dev --port 3456\" \"npm run dev:electron\"",
     "dev:demo": "cross-env CANOPY_DEMO=1 npm run dev",
-    "dev:electron":"node scripts/build-electron.mjs && wait-on -t 120000 http-get://localhost:3456 && cross-env CANOPY_DEV_URL=http://localhost:3456 electron .",
+    "dev:electron": "node scripts/build-electron.mjs && wait-on -t 120000 http-get://localhost:3456 && cross-env CANOPY_DEV_URL=http://localhost:3456 electron .",
     "build": "nuxt generate && node scripts/build-electron.mjs",
     "dist": "npm run build && electron-builder --win",
     "typecheck": "nuxt typecheck && tsc -p tsconfig.electron.json",

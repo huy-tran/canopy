@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-09
+
 - GitHub has its own window, built on the GitHub CLI, so nothing else needs installing. Open or close it with Ctrl Shift G over the terminals or the 3D World, where it is see-through, or close it with a click outside. It replaces the GitHub view that ran gh-tui, along with the "GitHub terminal app" setting.
   - Review requests: the pull requests waiting for your review, longest-waiting first.
   - My pull requests: the ones you opened.
@@ -177,6 +179,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.18.0]: https://github.com/huy-tran/canopy/releases/tag/v0.18.0
 [0.17.0]: https://github.com/huy-tran/canopy/releases/tag/v0.17.0
 [0.16.0]: https://github.com/huy-tran/canopy/releases/tag/v0.16.0
 [0.15.0]: https://github.com/huy-tran/canopy/releases/tag/v0.15.0
