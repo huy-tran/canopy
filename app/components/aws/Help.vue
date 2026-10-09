@@ -48,7 +48,7 @@ useAwsKeys(() => ({ modal: true, keys: { awsBack: { run: () => { A.help = false 
         </div>
         <div class="flex items-baseline gap-3">
           <span class="mono w-[110px] flex-none text-(--tx2)">Esc</span>
-          <span class="text-(--tx3)">Back: clear the filter, then up a level</span>
+          <span class="text-(--tx3)">Back: clear the filter, up a level, then out to the sidebar</span>
         </div>
         <div class="flex items-baseline gap-3">
           <span class="mono w-[110px] flex-none text-(--tx2)">{{ prefs.kl('aws') }}</span>

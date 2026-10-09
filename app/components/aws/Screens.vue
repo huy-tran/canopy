@@ -44,14 +44,15 @@ onBeforeUnmount(() => AW.stop())
 </script>
 
 <template>
-  <div class="relative flex min-h-0 flex-1">
+  <!-- A click in the service gives it the keyboard, as Enter from the sidebar does. -->
+  <div class="relative flex min-h-0 flex-1" @mousedown="($event.target as HTMLElement).closest('nav') || (A.pane = 'main')">
     <nav class="flex w-[196px] flex-none flex-col gap-0.5 overflow-auto border-r border-(--ln) bg-(--chrome) p-2">
       <button
         v-for="t in AWS_TABS"
         :key="t"
         class="flex h-8 flex-none cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-[12.5px] hover:bg-(--hov)"
-        :class="A.tab === t && !A.term ? 'bg-(--hov) font-medium text-(--tx)' : 'text-(--tx2)'"
-        @click="A.go(t)"
+        :class="[A.tab === t && !A.term ? 'bg-(--hov) font-medium text-(--tx)' : 'text-(--tx2)', A.tab === t && !A.term && A.pane === 'nav' && 'ring-1 ring-(--lnk)']"
+        @click="A.go(t); A.pane = 'nav'"
       >
         <UIcon :name="ICON[t]" class="size-4 flex-none" :class="A.tab === t && !A.term ? 'text-(--tx)' : 'text-(--mu)'" />
         <span class="ellipsis flex-1">{{ t }}</span>
@@ -70,7 +71,7 @@ onBeforeUnmount(() => AW.stop())
           class="group flex h-8 flex-none cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-[12px] hover:bg-(--hov)"
           :class="A.term === s.id ? 'bg-(--hov) text-(--tx)' : 'text-(--tx2)'"
           :title="s.cmd"
-          @click="A.term = s.id"
+          @click="A.term = s.id; A.pane = 'main'"
         >
           <UIcon :name="TERM_ICON[s.kind]" class="size-4 flex-none" :class="s.exited ? 'text-(--fa)' : 'text-(--grn)'" />
           <span class="ellipsis flex-1" :class="s.exited && 'text-(--fa)'">{{ s.title }}</span>

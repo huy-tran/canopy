@@ -192,8 +192,6 @@ export function useAwsTable<T>(o: {
       awsFilter: { run: () => { typing.value = true }, hint: 'filter' },
       awsSort: { run: askSort, hint: 'sort' },
       ...(query.value || o.back ? { awsBack: { run: () => (query.value ? (query.value = '') : o.back!()) } } : {}),
-      // A service's main list: ← and → step through the services, as in aws-tui.
-      ...(o.back || o.modal ? {} : { awsRight: { run: () => A.step(1) }, awsLeft: { run: () => A.step(-1) } }),
       ...(o.keys?.(selected.value) || {}),
     },
   }))

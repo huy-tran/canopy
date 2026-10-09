@@ -45,6 +45,8 @@ export const useAwsStore = defineStore('aws', () => {
   const c = (): AwsCtx => ({ profile: profile.value, region: region.value })
 
   const tab = ref<AwsTab>('Beanstalk')
+  /** Where the keyboard is, as in the GitHub window: the sidebar (arrows pick a service) or the service. */
+  const pane = ref<'nav' | 'main'>('nav')
   /** Dialogs over the screens: the profile and region pickers, the finder, bookmarks, related links, help. */
   const picker = ref<'profile' | 'region' | null>(null)
   const finder = ref(false)
@@ -121,9 +123,17 @@ export const useAwsStore = defineStore('aws', () => {
     go(AWS_TABS[(i + d + AWS_TABS.length) % AWS_TABS.length]!)
   }
 
+  /** In the sidebar: the service above or below, shown straight away, stopping at either end. */
+  function stepNav(d: number) {
+    const i = AWS_TABS.indexOf(tab.value)
+    const next = AWS_TABS[Math.min(AWS_TABS.length - 1, Math.max(0, i + d))]
+    if (next && (next !== tab.value || term.value)) go(next)
+  }
+
   /** Shows a service filtered to something: from a bookmark, the finder, a related link or the 3D World. */
   function jumpTo(t: AwsTab, query: string) {
     go(t)
+    pane.value = 'main'
     finder.value = false
     bookmarksOpen.value = false
     links.value = null
@@ -210,6 +220,7 @@ export const useAwsStore = defineStore('aws', () => {
     }
     terms.value = [...terms.value, { id, title, kind, cmd: r.cmd || '', startedAt: Date.now(), exited: false }]
     term.value = id
+    pane.value = 'main'
   }
 
   function onTermExit(id: string, code: number) {
@@ -247,8 +258,8 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    lock, profiles, profile, region, lastRegions, ready, ctx, c, tab, picker, finder, bookmarksOpen, links, help, choice, ask, term, terms, ssoExpired, jump,
-    bookmarks, checkLock, init, useProfile, useRegion, go, step, jumpTo, related, isBookmarked, toggleBookmark, openBookmark, removeBookmark,
+    lock, profiles, profile, region, lastRegions, ready, ctx, c, tab, pane, picker, finder, bookmarksOpen, links, help, choice, ask, term, terms, ssoExpired, jump,
+    bookmarks, checkLock, init, useProfile, useRegion, go, step, stepNav, jumpTo, related, isBookmarked, toggleBookmark, openBookmark, removeBookmark,
     call, done, lockNow, openTerm, onTermExit, closeTerm, signIn, confirm, choose,
   }
 })

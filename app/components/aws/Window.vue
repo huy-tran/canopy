@@ -34,7 +34,10 @@ watch(open, (on) => {
   A.checkLock()
 })
 
-/** Esc and Back: a dialog closes first, then the screen in front goes back a step. */
+/**
+ * Esc and Back: a dialog closes first, then the screen in front goes back a step, and from a
+ * service's main list the keyboard goes out to the sidebar. Only the toggle closes the window.
+ */
 function back() {
   if (A.choice) return (A.choice = null)
   for (const l of awsLayers()) {
@@ -42,6 +45,7 @@ function back() {
     if (k) return k.run()
     if (l.modal) return
   }
+  A.pane = 'nav'
 }
 
 /** Keys that work anywhere in the window unless a dialog has them. */
@@ -108,6 +112,19 @@ function onKey(e: KeyboardEvent) {
   if (!ids.length) return
   if (ids.includes('awsNextTab') || ids.includes('awsPrevTab')) e.preventDefault()
   const layers = awsLayers()
+  // In the sidebar, as in the GitHub window: the arrows pick a service and Enter or → goes into it.
+  // Any other key goes into the service too, so / still filters straight from the sidebar.
+  const inDialog = !!layers[0]?.modal
+  if (A.pane === 'nav' && !inDialog && A.lock?.unlocked && A.ctx) {
+    e.preventDefault()
+    if (ids.includes('awsDown') || ids.includes('awsUp')) return A.stepNav(ids.includes('awsDown') ? 1 : -1)
+    if (ids.includes('awsOpen')) {
+      A.pane = 'main'
+      return
+    }
+    if (ids.includes('awsBack')) return
+    if (!ids.includes('awsRefresh') && !ids.some(id => GLOBAL[id])) A.pane = 'main'
+  }
   for (const l of layers) {
     for (const id of ids) {
       const k = l.keys[id]
@@ -128,8 +145,14 @@ function onKey(e: KeyboardEvent) {
 
 useEventListener(window, 'keydown', onKey)
 
-/** The keys the screen in front answers to, for the footer. */
+/** The keys the screen in front answers to, for the footer; in the sidebar, the ones to move about it. */
 const hints = computed(() => {
+  if (A.pane === 'nav' && !awsLayers()[0]?.modal && A.lock?.unlocked && A.ctx) {
+    return [
+      { keys: '↑ ↓', hint: 'services' },
+      { keys: 'Enter →', hint: 'go in' },
+    ]
+  }
   const seen = new Set<string>()
   const out: { keys: string; hint: string }[] = []
   for (const l of awsLayers()) {
@@ -210,6 +233,7 @@ const until = computed(() => (A.lock?.until ? new Date(A.lock.until).toLocaleTim
         </div>
         <div class="mono flex h-7 flex-none items-center gap-3 overflow-hidden whitespace-nowrap border-t border-(--ln) px-3.5 text-[10.5px] text-(--fa)">
           <span v-for="h in hints" :key="h.hint"><span class="text-(--tx2)">{{ h.keys }}</span> {{ h.hint }}</span>
+          <span v-if="A.pane === 'main'"><span class="text-(--tx2)">Esc</span> {{ A.term ? 'back' : 'back, then sidebar' }}</span>
           <span><span class="text-(--tx2)">{{ prefs.kl('awsHelp') }}</span> all keys</span>
           <div class="flex-1" />
           <span v-if="AW.loading" class="text-(--fa)">reading…</span>
