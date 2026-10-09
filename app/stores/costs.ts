@@ -10,14 +10,12 @@ function todayKey() {
 export const useCostsStore = defineStore('costs', () => {
   const P = useProjectsStore()
   const S = useSessionsStore()
-  const history = ref<Record<string, HistorySession[]>>({})
+  const history = shallowRef<Record<string, HistorySession[]>>({})
 
   async function refresh() {
-    const next: Record<string, HistorySession[]> = {}
-    for (const p of P.projects) {
-      next[p.id] = await api.history(p.repos.map(r => ({ id: r.id, path: r.path }))).catch(() => [])
-    }
-    history.value = next
+    const ps = P.projects
+    const lists = await Promise.all(ps.map(p => api.history(p.repos.map(r => ({ id: r.id, path: r.path }))).catch(() => [] as HistorySession[])))
+    history.value = Object.fromEntries(ps.map((p, i) => [p.id, lists[i]!]))
   }
 
   function today(pid: string): number {
@@ -43,7 +41,8 @@ export const useCostsStore = defineStore('costs', () => {
   function start() {
     if (timer) return
     refresh()
-    timer = setInterval(refresh, 60_000)
+    // Live sessions are counted as they go; the logs only add finished ones, so nothing is lost while hidden.
+    timer = setInterval(() => { if (!document.hidden) refresh() }, 60_000)
   }
 
   return { history, refresh, today, total, start }

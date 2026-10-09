@@ -11,9 +11,24 @@ const waitStyle = computed(() => prefs.prefs.waitStyle || 'both')
 const hl = computed(() => waitStyle.value !== 'badge')
 const pill = computed(() => waitStyle.value !== 'highlight')
 
+/** Open and waiting sessions per project, counted in one pass. */
+const stats = computed(() => {
+  const m: Record<string, { open: number; waiting: number }> = {}
+  for (const s of S.sessions) {
+    if (s.docked) continue
+    const x = (m[s.pid] ||= { open: 0, waiting: 0 })
+    x.open++
+    if (s.status === 'waiting') x.waiting++
+  }
+  return m
+})
+
 function waitingOf(pid: string) {
-  return S.ofProject(pid).filter(s => s.status === 'waiting').length
+  return stats.value[pid]?.waiting || 0
 }
+
+/** The clock in 15s steps: "ago" labels change by the minute, so the list needn't redraw every second. */
+const now = computed(() => Math.floor(ui.now / 15000) * 15000)
 
 /** When a session last did something. */
 function lastAt(s: Session) {
@@ -21,18 +36,18 @@ function lastAt(s: Session) {
 }
 
 function sAgo(s: Session) {
-  return s.status === 'working' ? 'now' : ago(ui.now - lastAt(s))
+  return s.status === 'working' ? 'now' : ago(now.value - lastAt(s))
 }
 
 /** The project's latest activity across its sessions; empty when it has none. */
 function pAgo(p: Project) {
   const ss = S.ofProject(p.id)
   if (!ss.length) return ''
-  return ss.some(s => s.status === 'working') ? 'now' : ago(ui.now - Math.max(...ss.map(lastAt)))
+  return ss.some(s => s.status === 'working') ? 'now' : ago(now.value - Math.max(...ss.map(lastAt)))
 }
 
 function waitAgo(s: Session) {
-  const a = ago(ui.now - (s.waitingSince || ui.now))
+  const a = ago(now.value - (s.waitingSince || now.value))
   return a === 'now' ? '<1m' : a
 }
 
@@ -55,7 +70,7 @@ function sessBg(s: Session, p: Project) {
 
 /** Open sessions in a project. A project without any always shows collapsed. */
 function countOf(pid: string) {
-  return S.ofProject(pid).length
+  return stats.value[pid]?.open || 0
 }
 
 function isOpen(p: Project) {

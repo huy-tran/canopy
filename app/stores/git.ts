@@ -11,6 +11,9 @@ export const useGitStore = defineStore('git', () => {
     const cur = inflight.get(cwd)
     if (cur) return cur
     const p = api.git.status(cwd).then((s) => {
+      // Unchanged status keeps its object, so nothing that reads it re-runs; `at` is when it last changed.
+      const was = byCwd.value[cwd]
+      if (was && was.isRepo === s.isRepo && was.branch === s.branch && JSON.stringify(was.changes) === JSON.stringify(s.changes)) return
       byCwd.value = { ...byCwd.value, [cwd]: { ...s, at: Date.now() } }
     }).finally(() => inflight.delete(cwd))
     inflight.set(cwd, p)

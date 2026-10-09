@@ -6,7 +6,7 @@ import { useEventListener } from '@vueuse/core'
 import { skyOf, useWeather } from '~/composables/useWeather'
 import { simGlassOf } from '~/stores/prefs'
 import { castFor, castOf } from '~/simulation/cast'
-import { type Pick, type SimHover, type SimPerson, type SimRoom, WorkspaceScene } from '~/simulation/scene'
+import { type Pick, type SimHover, type SimMetrics, type SimPerson, type SimRoom, WorkspaceScene } from '~/simulation/scene'
 
 const P = useProjectsStore()
 const S = useSessionsStore()
@@ -68,10 +68,23 @@ watch(hqData, d => scene?.syncGithub(d))
 // The HQ's clock: authors grow impatient while the view stays open.
 watch(() => Math.floor(ui.now / 600_000), () => scene?.syncGithub(hqData.value))
 
+// ---------- The Canopy Core: Canopy's own health, measured while the world is open ----------
+
+const M = useMetricsStore()
+const simMetrics = computed<SimMetrics | null>(() => {
+  const a = M.app
+  if (!a) return null
+  return { memMB: a.memMB, cpu: a.cpu, lagMs: a.lagMs, lagMaxMs: a.lagMaxMs, fps: M.sceneFps, ptys: a.ptys, history: M.history }
+})
+watch(simMetrics, m => scene?.setMetrics(m))
+const memLabel = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${Math.round(mb)} MB`)
+
 onMounted(() => {
+  M.use()
   scene = new WorkspaceScene({
     container: el.value!,
     onHover: (h) => { hover.value = h },
+    onFps: (n) => { M.sceneFps = n },
     onSelect: (p) => {
       picked.value = p
       menu.value = null
@@ -91,6 +104,7 @@ onMounted(() => {
   })
   scene.sync(rooms.value, people.value)
   scene.syncGithub(hqData.value)
+  scene.setMetrics(simMetrics.value)
   GW.start()
   paintSky()
 })
@@ -203,12 +217,15 @@ onBeforeUnmount(() => {
   GW.stop()
   scene?.dispose()
   scene = null
+  M.sceneFps = 0
+  M.release()
 })
 
 // ---------- Hover cards and the picked person or room ----------
 
 const hoverScreen = computed(() => (hover.value?.pick.kind === 'screen' ? hover.value.pick.id : null))
 const hoverGh = computed(() => (hover.value?.pick.kind === 'gh' ? ghInfo(hover.value.pick.id) : null))
+const hoverCore = computed(() => hover.value?.pick.kind === 'core')
 
 // ---------- What things in GitHub HQ are ----------
 
@@ -382,6 +399,10 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
         <span class="text-[11px] text-white/55">
           {{ totals.rooms }} rooms · {{ totals.lit }} lit · {{ totals.sessions }} sessions<template v-if="totals.subagents"> · {{ totals.subagents }} subagents</template>
         </span>
+        <!-- Canopy's own vitals; the Canopy Core by the stage has the rest. -->
+        <span v-if="M.app" class="mono border-l border-white/15 pl-2 text-[10.5px] text-white/45" title="3D World frame rate and Canopy's memory">
+          {{ M.sceneFps }} fps · {{ memLabel(M.app.memMB) }}
+        </span>
       </div>
       <div class="text-[10.5px] text-white/40">Drag to pan · right-drag to turn · scroll to zoom · right-click someone for options · Tab to visit whoever is waiting on you · {{ prefs.kl('simTalk') }} to open or close their session</div>
     </div>
@@ -443,6 +464,21 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       <div class="mt-0.5 text-[11px] text-(--fa)">{{ hoverGh.sub }}</div>
       <div v-for="l in hoverGh.lines" :key="l" class="mt-1 line-clamp-2 text-[11.5px] text-(--tx2)">{{ l }}</div>
       <div class="mt-1.5 text-[10.5px] text-(--fa)">Click to open</div>
+    </div>
+
+    <div v-else-if="hoverCore" class="pointer-events-none absolute z-10 w-[270px] sim-card rounded-lg border border-(--ln) px-3 py-2 text-(--tx) shadow-xl" :style="cardAt(270, 150)">
+      <div class="text-[12.5px] font-semibold">Canopy Core</div>
+      <div class="mt-0.5 text-[11px] text-(--fa)">Canopy's own health, live</div>
+      <template v-if="M.app">
+        <div class="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11.5px]">
+          <span class="text-(--fa)">Memory</span><span class="mono text-(--tx2)">{{ memLabel(M.app.memMB) }}<template v-if="M.heapMB"> · heap {{ Math.round(M.heapMB) }} MB</template></span>
+          <span class="text-(--fa)">CPU</span><span class="mono text-(--tx2)">{{ M.app.cpu.toFixed(1) }}% of the machine · {{ M.app.procs.length }} processes</span>
+          <span class="text-(--fa)">Main lag</span><span class="mono text-(--tx2)">{{ Math.round(M.app.lagMs) }} ms · worst {{ Math.round(M.app.lagMaxMs) }} ms</span>
+          <span class="text-(--fa)">Frames</span><span class="mono text-(--tx2)">{{ M.sceneFps }} fps here · {{ M.fps }} window<template v-if="M.longTasks"> · {{ M.longTasks }} stalls</template></span>
+          <span class="text-(--fa)">Terminals</span><span class="mono text-(--tx2)">{{ M.app.ptys }} · {{ M.app.ptyKBps.toFixed(1) }} KB/s · {{ Math.round(M.app.ipcPerSec) }} msg/s</span>
+        </div>
+      </template>
+      <div v-else class="mt-1 text-[11.5px] text-(--tx2)">Measuring…</div>
     </div>
 
     <div v-if="pickedRoom && !pickedPerson" class="absolute bottom-3 left-3 min-w-[240px] rounded-xl border border-white/10 bg-black/45 px-3.5 py-3 text-white backdrop-blur">

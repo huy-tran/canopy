@@ -3,7 +3,7 @@ import type { HistorySession } from '#shared/types'
 
 export function useOverviewHistory(everyMs = 30_000) {
   const P = useProjectsStore()
-  const history = ref<HistorySession[]>([])
+  const history = shallowRef<HistorySession[]>([])
   const loaded = ref(false)
   let seq = 0, timer: ReturnType<typeof setInterval> | null = null
 
@@ -38,7 +38,7 @@ export function useOverviewHistory(everyMs = 30_000) {
     refresh()
   }, { immediate: true })
 
-  onMounted(() => { timer = setInterval(refresh, everyMs) })
+  onMounted(() => { timer = setInterval(() => { if (!document.hidden) refresh() }, everyMs) })
   onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 
   return { history, loaded, refresh }

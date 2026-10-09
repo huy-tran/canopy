@@ -51,6 +51,7 @@ const browserFallback: CanopyApi = {
   sys: {
     openExternal: async (u) => { window.open(u, '_blank') }, showInFolder: none, openEditor: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     pickFolder: none, fonts: async () => [], shells: async () => [], info: async () => ({ version: '0.0.0', electron: '-', chromium: '-', node: '-', claudeVersion: '-', claudePath: '-', windows: '-' }),
+    metrics: none,
     saveImage: async (_s, n) => n, copyImage: none, saveImageAs: none, notify: none, onNotifyClick: noop, onNotifyAction: noop,
   },
   win: { minimize: none, toggleMaximize: none, close: none, isMaximized: async () => false, onMaximized: noop, summonKey: async () => true },

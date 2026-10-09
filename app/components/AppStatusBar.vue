@@ -51,6 +51,7 @@ const countChips = computed(() => [
         <span v-if="roomy && b.w?.resetsAt">{{ resetText(b.w.resetsAt, b.weekly) }}</span>
       </div>
     </UTooltip>
+    <PerfMeter v-if="prefs.prefs.showMetrics" />
     <div class="flex-1" />
     <div class="flex items-center gap-1.5">
       <UTooltip v-for="c in countChips" :key="c.key" :text="c.title">

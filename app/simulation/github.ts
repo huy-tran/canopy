@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import type { GhPull, GhRepo, GhRun } from '#shared/types'
-import { bigScreen, carpet, disposeTree, doorArch, FONT, floorText, figure, type Figure, geo, hashOf, lightPool, lowWall, mat, mesh, rbox, roundGeo, tag } from './kit'
+import { bigScreen, carpet, disposeTree, doorArch, FONT, floorText, figure, type Figure, freeze, geo, hashOf, lightPool, lowWall, mat, mesh, rbox, roundGeo, tag } from './kit'
 
 /**
  * GitHub HQ: a building of its own beside the office, with two rooms and a staff of octocats.
@@ -68,6 +68,8 @@ const onFloor = (r: GhRun) => r.event !== 'schedule' || live(r) || r.state === '
 /** How many workflows' lamps fit across one machine. */
 const MAX_LAMPS = 5
 const pick = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)]!
+/** Scratch for a cat's step, so walking allocates nothing. */
+const toward = new THREE.Vector3()
 
 /** A colour pushed towards GitHub's dark canvas, for floors and walls. */
 function dark(color: string, amount: number) {
@@ -314,11 +316,15 @@ export class GithubHQ {
   /** Where each factory line stands, for the foremen to walk to. */
   private stations: Line[] = []
   private spots = new Map<string, THREE.Vector3>()
+  /** Where each room's ceiling light hangs, from the group's origin, and the pool of light under it. */
+  readonly glows: { at: THREE.Vector3; pool: THREE.MeshBasicMaterial }[] = []
 
   constructor() {
     // High on the back wall, above the pipes and the back row's signs.
     this.board = bigScreen(6.6, 2.3, 2.6)
     this.buildShell()
+    // The building itself never moves; what is in its rooms and the staff do.
+    for (const o of this.group.children) freeze(o)
     this.group.add(this.dyn, this.staff)
     this.hireStaff()
   }
@@ -419,14 +425,13 @@ export class GithubHQ {
       const arch = doorArch(r.name, r.color)
       arch.position.set(x0, 0, WING_D / 2)
       g.add(arch)
-      // As bright as a room with its lights on: GitHub never sleeps.
-      const light = new THREE.PointLight('#e6edf3', 26, 0, 2)
-      light.position.set(x0, 3.4, 0)
-      g.add(light)
+      // As bright as a room with its lights on: GitHub never sleeps. The scene lends it a real light
+      // when the camera is near; the pool on the floor carries the glow otherwise.
       const pool = lightPool(r.w, WING_D)
       pool.material.opacity = 0.22
       pool.mesh.position.x = x0
       g.add(pool.mesh)
+      this.glows.push({ at: new THREE.Vector3(x0, 3.4, 0), pool: pool.material })
     }
     this.buildFactoryShell()
 
@@ -657,8 +662,7 @@ export class GithubHQ {
     }
     const task = c.task
     const pos = m.group.position
-    const to = task.to.clone().setY(0)
-    const d = to.clone().sub(pos)
+    const d = toward.copy(task.to).setY(0).sub(pos)
     const dist = d.length()
     if (!c.until && dist > 0.05) {
       // Walking: tentacles paddling, a little bob, turned the way it's going.

@@ -188,16 +188,11 @@ const rows = computed<Row[]>(() => {
 const si = computed(() => Math.min(sel.value, Math.max(0, rows.value.length - 1)))
 const cur = computed<Row | null>(() => rows.value[si.value] || null)
 
-const viewRows = computed(() => {
-  const sr = cur.value
+/** What each row shows, apart from the selection: built again only when the rows or changes do, not on every arrow key. */
+const baseRows = computed(() => {
   const openSet = new Set(openDirs.value)
-  const gPre = sr && sr.depth > 0
-    ? (sr.type === 'dir' && openSet.has(sr.path) ? sr.path : sr.path.split('/').slice(0, -1).join('/'))
-    : (sr && sr.type === 'dir' && openSet.has(sr.path) ? sr.path : null)
-  const gK = gPre ? gPre.split('/').length - 1 : -1
   return rows.value.map((row, i) => {
-    const guides = Array.from({ length: row.depth }, (_, k) => ({ left: `${8 + k * 14 + 4}px`, bg: k === gK && row.path.startsWith(gPre + '/') ? 'var(--mu)' : 'var(--ln)' }))
-    const b = { row, i, guides, sel: i === si.value, indent: `${8 + row.depth * 14}px` }
+    const b = { row, i, indent: `${8 + row.depth * 14}px` }
     if (row.type === 'dir') {
       const nch = changes.value.some(c => c.p.startsWith(row.path + '/'))
       return { ...b, chev: openSet.has(row.path) ? 'i-hugeicons-arrow-down-01' : 'i-hugeicons-arrow-right-01', ico: { icon: folderIcon(openSet.has(row.path)), color: 'var(--mu)' }, base: [{ t: row.name!, color: 'var(--tx2)', w: 500 }], dir: [], c: null as Chg | null, stLetter: nch ? '●' : '', stColor: 'var(--amb)', stSize: '8px' }
@@ -218,6 +213,20 @@ const viewRows = computed(() => {
       stSize: '11px',
     }
   })
+})
+
+const viewRows = computed(() => {
+  const sr = cur.value
+  const openSet = new Set(openDirs.value)
+  const gPre = sr && sr.depth > 0
+    ? (sr.type === 'dir' && openSet.has(sr.path) ? sr.path : sr.path.split('/').slice(0, -1).join('/'))
+    : (sr && sr.type === 'dir' && openSet.has(sr.path) ? sr.path : null)
+  const gK = gPre ? gPre.split('/').length - 1 : -1
+  return baseRows.value.map(b => ({
+    ...b,
+    sel: b.i === si.value,
+    guides: Array.from({ length: b.row.depth }, (_, k) => ({ left: `${8 + k * 14 + 4}px`, bg: k === gK && b.row.path.startsWith(gPre + '/') ? 'var(--mu)' : 'var(--ln)' })),
+  }))
 })
 
 const summary = computed(() => {
@@ -297,6 +306,11 @@ function onAutoFocus(e: Event) {
 // ---------- Preview ----------
 
 const preview = shallowRef<Line[]>([])
+/** Lines drawn at first: a long file draws the rest on request, so opening it stays quick. */
+const PREVIEW_STEP = 1500
+const previewMax = ref(PREVIEW_STEP)
+const previewShown = computed(() => (preview.value.length > previewMax.value ? preview.value.slice(0, previewMax.value) : preview.value))
+let shownPath = ''
 let prevToken = 0
 let prevTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -343,6 +357,10 @@ async function loadPreview() {
     lines = [mkHunk(String(e?.message || e))]
   }
   if (token !== prevToken) return
+  if (s.path !== shownPath) {
+    shownPath = s.path
+    previewMax.value = PREVIEW_STEP
+  }
   preview.value = lines
 
   // Highlight each block of code (the file, or each diff hunk) as a unit, then swap the segments in.
@@ -734,10 +752,15 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                 {{ editingBy }}
               </div>
               <div class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 text-[12px] leading-[1.6]">
-                <div v-for="(ln, k) in preview" :key="k" class="flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
+                <div v-for="(ln, k) in previewShown" :key="k" class="flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
                   <span class="w-11 flex-none select-none pr-2.5 text-right text-(--fa)">{{ ln.n }}</span>
                   <span class="w-4 flex-none select-none" :style="{ color: ln.sc }">{{ ln.sign }}</span>
                   <span class="pr-4" :class="lay.wrap && 'min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]'" :style="{ color: ln.tc }"><span v-for="(g, j) in ln.segs" :key="j" :style="{ color: g.color, fontStyle: g.fs }">{{ g.t }}</span></span>
+                </div>
+                <div v-if="preview.length > previewShown.length" class="px-[14px] pt-2">
+                  <UButton color="neutral" variant="outline" size="xs" @mousedown.prevent @click="previewMax += PREVIEW_STEP * 4">
+                    Show {{ Math.min(preview.length - previewShown.length, PREVIEW_STEP * 4) }} more of {{ preview.length - previewShown.length }} lines
+                  </UButton>
                 </div>
               </div>
             </template>

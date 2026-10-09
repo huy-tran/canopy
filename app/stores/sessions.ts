@@ -23,8 +23,12 @@ function describeTool(s: Session, tool: { name: string; input: any } | undefined
   return { what: `Permission: ${tool.name}`, action: tool.name }
 }
 
+/** Prompts kept in memory per session; the saved list keeps fewer. */
+const PROMPTS_KEPT = 50
+
 export const useSessionsStore = defineStore('sessions', () => {
-  const sessions = ref<Session[]>([])
+  // Shallow: sessions are only ever replaced, never changed in place, so deep proxies would be wasted work.
+  const sessions = shallowRef<Session[]>([])
   /** Focused session per project. */
   const focus = ref<Record<string, string | null>>({})
   /** Last tool Claude asked about, per session; explains permission prompts. */
@@ -161,6 +165,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (focus.value[s.pid] === id) setFocus(s.pid, nf ? nf.id : null)
     api.pty.kill(id)
     disposeTerminal(id)
+    s.images.forEach(im => URL.revokeObjectURL(im.src))
     lastTool.delete(id)
     setSubagents(id, [])
     if (activity.value[id]) {
@@ -213,7 +218,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(u.sid)
     if (!s) return
     const title = s.title === 'New session' && u.lastPrompt ? u.lastPrompt.slice(0, 200) : s.title
-    patch(u.sid, { model: u.model ? modelLabel(u.model) : s.model, tokIn: u.tokIn, tokOut: u.tokOut, cacheR: u.cacheR, cacheW: u.cacheW, ctx: u.ctx, claudeId: u.claudeId || s.claudeId, title })
+    const next = { model: u.model ? modelLabel(u.model) : s.model, tokIn: u.tokIn, tokOut: u.tokOut, cacheR: u.cacheR, cacheW: u.cacheW, ctx: u.ctx, claudeId: u.claudeId || s.claudeId, title }
+    // Replacing the session re-runs everything that reads the list, so only when something moved.
+    if ((Object.keys(next) as (keyof typeof next)[]).some(k => next[k] !== s[k])) patch(u.sid, next)
     const text = u.latest === 'said' ? u.said : u.latest === 'doing' ? u.doing : ''
     if (text && u.latest && text !== chatter.value[u.sid]?.text) chatter.value = { ...chatter.value, [u.sid]: { text, kind: u.latest, at: Date.now() } }
     const was = activity.value[u.sid]
@@ -247,7 +254,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         const text = String(p.prompt || '').trim()
         const pc = s.promptCount + 1
         patch(s.id, {
-          status: 'working', title: text.split('\n')[0]!.slice(0, 200) || s.title, prompts: [...s.prompts, { t: text, at: now }],
+          status: 'working', title: text.split('\n')[0]!.slice(0, 200) || s.title, prompts: [...s.prompts, { t: text, at: now }].slice(-PROMPTS_KEPT),
           promptCount: pc, waitingSince: null, waitWhat: '', perm: false, lastAt: now, endedAt: null,
           images: s.images.map(im => (im.pending ? { ...im, pending: false, prompt: pc } : im)),
         })
@@ -342,6 +349,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(sid)
     const im = s?.images.find(x => x.n === n)
     if (!s || !im || !im.pending) return
+    URL.revokeObjectURL(im.src)
     patch(sid, { images: s.images.filter(x => x.n !== n).map(x => (x.n > n ? { ...x, n: x.n - 1 } : x)) })
   }
 

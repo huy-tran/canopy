@@ -7,9 +7,12 @@ const S = useSessionsStore()
 
 const s = computed(() => S.byId(props.sid))
 // Re-read every tick: the prompt is drawn a moment after the session starts waiting.
-const options = computed(() => {
+// Kept when unchanged, so the buttons only redraw when the choices do.
+const options = shallowRef<ReturnType<typeof promptOptions>>([])
+watchEffect(() => {
   void ui.now
-  return s.value?.status === 'waiting' && !s.value.exited ? promptOptions(props.sid) : []
+  const next = s.value?.status === 'waiting' && !s.value.exited ? promptOptions(props.sid) : []
+  if (JSON.stringify(next) !== JSON.stringify(options.value)) options.value = next
 })
 
 const size = computed(() => (props.compact ? 'h-5 px-1.5 text-[10.5px]' : 'h-[22px] px-2 text-[11.5px]'))

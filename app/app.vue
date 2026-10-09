@@ -2,6 +2,14 @@
 const ui = useUiStore()
 
 useAppShortcuts()
+
+// The heaviest windows load their code the first time they open, then stay mounted so they can animate shut.
+const opened = reactive({ gh: false, explorer: false, summary: false })
+watchEffect(() => {
+  if (ui.gh) opened.gh = true
+  if (ui.explorer) opened.explorer = true
+  if (ui.summary) opened.summary = true
+})
 </script>
 
 <template>
@@ -33,12 +41,12 @@ useAppShortcuts()
     <CommandPalette />
     <ProjectModal />
     <SessionDetailsModal />
-    <GitHubWindow />
-    <FileExplorerModal />
+    <LazyGitHubWindow v-if="opened.gh" />
+    <LazyFileExplorerModal v-if="opened.explorer" />
     <SettingsModal />
     <AboutModal />
     <ConfirmModal />
-    <DailySummaryModal />
+    <LazyDailySummaryModal v-if="opened.summary" />
     <UpdateModal />
     <ImageLightbox />
     <ImageHoverPreview />

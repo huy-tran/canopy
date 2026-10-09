@@ -24,10 +24,11 @@ async function load() {
 
 // ---------- Files ----------
 
-const diffs = ref<Map<string, string> | null>(null)
+const diffs = shallowRef<Map<string, string> | null>(null)
 const diffError = ref('')
 const file = ref<string | null>(null)
-const lines = ref<DiffLine[]>([])
+// Shallow: a big diff is thousands of lines, each with highlighted segments.
+const lines = shallowRef<DiffLine[]>([])
 
 async function loadDiff() {
   if (diffs.value) return

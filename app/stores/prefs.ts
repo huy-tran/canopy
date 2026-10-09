@@ -23,7 +23,7 @@ export const DEFAULT_PREFS: Prefs = {
   termBoldBright: true,
   cursorBlink: true,
   cursor: 'Block',
-  scrollback: '5000',
+  scrollback: '3000',
   notifyWaiting: true,
   notifyDone: true,
   skipViewing: true,
@@ -36,6 +36,7 @@ export const DEFAULT_PREFS: Prefs = {
   summonKey: 'Alt+Space',
   reviewNotify: true,
   reviewRemind: 60,
+  showMetrics: true,
 }
 
 /** The session window in the workspace simulation is always a little see-through: 90% at most, 90% unless set. */

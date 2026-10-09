@@ -27,7 +27,7 @@ function focusRoot() {
   nextTick(() => root.value?.focus())
 }
 
-watch(open, (on) => { if (on) setTimeout(focusRoot, 60) })
+watch(open, (on) => { if (on) setTimeout(focusRoot, 60) }, { immediate: true })
 
 /**
  * Esc and Back: a dialog closes first, then a PR, run or repo goes back to its list, then the list

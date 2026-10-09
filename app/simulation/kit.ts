@@ -10,7 +10,8 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 
 const geometries = new Map<string, THREE.BufferGeometry>()
 const materials = new Map<string, THREE.Material>()
-const textures: THREE.Texture[] = []
+/** Rune circles by colour: one canvas each, shared by every summon in that colour. */
+const runes = new Map<string, THREE.CanvasTexture>()
 
 export function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   let g = geometries.get(key)
@@ -46,12 +47,16 @@ export function mat(color: string | number, opts: THREE.MeshStandardMaterialPara
 export function disposeKit() {
   geometries.forEach(g => g.dispose())
   materials.forEach(m => m.dispose())
-  textures.forEach(t => t.dispose())
+  runes.forEach(t => t.dispose())
+  planks?.dispose()
+  sparkTexture?.dispose()
+  pillarTexture?.dispose()
   geometries.clear()
   materials.clear()
-  textures.length = 0
+  runes.clear()
   planks = null
   sparkTexture = null
+  pillarTexture = null
 }
 
 const sharedGeometries = () => new Set(geometries.values())
@@ -62,6 +67,7 @@ export function disposeTree(root: THREE.Object3D) {
   const geos = sharedGeometries(), mats = sharedMaterials()
   root.traverse((o) => {
     const m = o as THREE.Mesh
+    if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose()
     if (m.geometry && !geos.has(m.geometry)) m.geometry.dispose()
     for (const x of ([] as THREE.Material[]).concat(m.material || [])) {
       if (mats.has(x)) continue
@@ -73,9 +79,20 @@ export function disposeTree(root: THREE.Object3D) {
   })
 }
 
-export function mesh(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], shadows = true) {
+const size = new THREE.Vector3()
+
+/** Big enough for its shadow to matter: bodies, furniture and walls, not rods, mugs, balls or curls. */
+function bulky(geometry: THREE.BufferGeometry) {
+  if (!geometry.boundingBox) geometry.computeBoundingBox()
+  geometry.boundingBox!.getSize(size)
+  const [, mid, big] = [size.x, size.y, size.z].sort((a, b) => a - b)
+  return big! >= 0.35 && mid! >= 0.15
+}
+
+/** A mesh that takes shadows; it casts one too if `shadows` says so, or by default if it is bulky. */
+export function mesh(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], shadows?: boolean) {
   const m = new THREE.Mesh(geometry, material)
-  m.castShadow = shadows
+  m.castShadow = shadows ?? bulky(geometry)
   m.receiveShadow = true
   return m
 }
@@ -128,15 +145,29 @@ function canvasTexture(canvas: HTMLCanvasElement, repeat = false) {
   t.colorSpace = THREE.SRGBColorSpace
   t.anisotropy = 4
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping
-  textures.push(t)
   return t
 }
 
 /** Marks an object as something the pointer can hover or click. */
-export type Pick = { kind: 'room' | 'screen'; id: string } | { kind: 'person'; id: string } | { kind: 'gh'; id: string }
+export type Pick = { kind: 'room' | 'screen'; id: string } | { kind: 'person'; id: string } | { kind: 'gh'; id: string } | { kind: 'core'; id: string }
 
 export function tag(object: THREE.Object3D, pick: Pick) {
   object.traverse((o) => { o.userData.pick = pick })
+}
+
+/**
+ * Works out the matrices of something that never moves once, rather than every frame. The `moving`
+ * parts, and everything under them, keep working theirs out.
+ */
+export function freeze(root: THREE.Object3D, moving: THREE.Object3D[] = []) {
+  const keep = new Set(moving)
+  const walk = (o: THREE.Object3D) => {
+    if (keep.has(o)) return
+    o.updateMatrix()
+    o.matrixAutoUpdate = false
+    o.children.forEach(walk)
+  }
+  walk(root)
 }
 
 export const FONT = 'Geist, "Segoe UI", system-ui, sans-serif'
@@ -206,7 +237,6 @@ export function woodFloor(w: number, d: number) {
   const map = planks.clone()
   map.repeat.set(w / 6, d / 6)
   map.needsUpdate = true
-  textures.push(map)
   const floor = mesh(boxGeo(w, 0.1, d), new THREE.MeshStandardMaterial({ map, roughness: 0.85 }), false)
   floor.position.y = -0.05
   return floor
@@ -412,9 +442,10 @@ export function plant(seed: number, size = 1) {
 
 /**
  * The room's big wall screen, facing +z. Its face is a canvas the room paints the project's live
- * numbers on; `material` is the room's own, so the screen goes dark with the lights.
+ * numbers on; `material` is the room's own, so the screen goes dark with the lights. Screens
+ * repainted many times a second use a narrower canvas (`res`), which is cheaper to upload.
  */
-export function bigScreen(w: number, h: number, stand = 0) {
+export function bigScreen(w: number, h: number, stand = 0, res = 1024) {
   const g = new THREE.Group()
   g.add(rbox(w + 0.16, h + 0.16, 0.1, mat('#1c1e25', { roughness: 0.4 }), -0.08, 0.04))
   // Free-standing on two legs, `stand` high, where there is no wall to hang it on.
@@ -429,8 +460,8 @@ export function bigScreen(w: number, h: number, stand = 0) {
     }
   }
   const canvas = document.createElement('canvas')
-  canvas.width = 1024
-  canvas.height = Math.round((1024 * h) / w)
+  canvas.width = res
+  canvas.height = Math.round((res * h) / w)
   const texture = canvasTexture(canvas)
   const material = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ffffff', emissiveMap: texture, emissiveIntensity: 1, roughness: 0.35 })
   const face = mesh(new THREE.PlaneGeometry(w, h), material, false)
@@ -665,8 +696,21 @@ function haircut(style: number, hair: THREE.Material, rand: () => number) {
 
 // ---------------------------------------------------------------- summoning
 
-/** The rune circle drawn under someone being summoned. */
+/** The rune circle drawn under someone being summoned. Its material is the summon's own, to fade; the texture is shared. */
 export function runeCircle(color: string) {
+  let map = runes.get(color)
+  if (!map) {
+    map = canvasTexture(runeCanvas(color))
+    runes.set(color, map)
+  }
+  const material = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+  const m = new THREE.Mesh(geo('rune', () => new THREE.PlaneGeometry(2.2, 2.2)), material)
+  m.rotation.x = -Math.PI / 2
+  m.position.y = 0.08
+  return { mesh: m, material }
+}
+
+function runeCanvas(color: string) {
   const c = document.createElement('canvas')
   c.width = c.height = 512
   const x = c.getContext('2d')!
@@ -704,25 +748,26 @@ export function runeCircle(color: string) {
     x.fillText(glyphs[i % glyphs.length]!, 0, -216)
     x.restore()
   }
-  const material = new THREE.MeshBasicMaterial({ map: canvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
-  const m = new THREE.Mesh(geo('rune', () => new THREE.PlaneGeometry(2.2, 2.2)), material)
-  m.rotation.x = -Math.PI / 2
-  m.position.y = 0.08
-  return { mesh: m, material }
+  return c
 }
 
-/** A column of light rising from the rune circle. */
+let pillarTexture: THREE.CanvasTexture | null = null
+
+/** A column of light rising from the rune circle: a white fade, tinted by its material. */
 export function lightPillar(color: string) {
-  const c = document.createElement('canvas')
-  c.width = 4
-  c.height = 128
-  const x = c.getContext('2d')!
-  const g = x.createLinearGradient(0, 0, 0, 128)
-  g.addColorStop(0, 'rgba(255,255,255,0)')
-  g.addColorStop(1, 'rgba(255,255,255,1)')
-  x.fillStyle = g
-  x.fillRect(0, 0, 4, 128)
-  const material = new THREE.MeshBasicMaterial({ color, map: canvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+  if (!pillarTexture) {
+    const c = document.createElement('canvas')
+    c.width = 4
+    c.height = 128
+    const x = c.getContext('2d')!
+    const g = x.createLinearGradient(0, 0, 0, 128)
+    g.addColorStop(0, 'rgba(255,255,255,0)')
+    g.addColorStop(1, 'rgba(255,255,255,1)')
+    x.fillStyle = g
+    x.fillRect(0, 0, 4, 128)
+    pillarTexture = canvasTexture(c)
+  }
+  const material = new THREE.MeshBasicMaterial({ color, map: pillarTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
   const m = new THREE.Mesh(geo('pillar', () => new THREE.CylinderGeometry(0.75, 0.9, 4, 28, 1, true)), material)
   m.position.y = 2
   return { mesh: m, material }

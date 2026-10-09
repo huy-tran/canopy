@@ -213,7 +213,7 @@ const iconBtn = 'grid size-[22px] flex-none place-items-center rounded p-0 text-
     <!-- column-reverse keeps the view pinned to the newest line unless the user scrolls up -->
     <div v-else class="flex min-h-0 flex-1 flex-col-reverse overflow-auto select-text">
       <div class="mono px-3 pt-1.5 pb-2 text-[11.5px] leading-[1.55]">
-        <div v-for="(ln, i) in lines" :key="i" class="min-h-[1.55em] break-all whitespace-pre-wrap" :style="{ color: LC[ln.c] || 'var(--tx3)' }">{{ ln.t }}</div>
+        <div v-for="ln in lines" :key="ln.n" class="min-h-[1.55em] break-all whitespace-pre-wrap" :style="{ color: LC[ln.c] || 'var(--tx3)' }">{{ ln.t }}</div>
         <div v-if="!lines.length" class="text-(--fa)">Not started yet. Press Start to run it.</div>
       </div>
     </div>

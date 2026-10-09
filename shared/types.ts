@@ -329,6 +329,8 @@ export interface Prefs {
   weatherCity?: string
   /** File explorer layout, remembered between openings. */
   explorer?: ExplorerLayout
+  /** Show Canopy's own memory, CPU and frame rate in the status bar. */
+  showMetrics: boolean
 }
 
 export interface ExplorerLayout {
@@ -553,4 +555,33 @@ export interface GitSync {
   ahead: number
   behind: number
   remote: string
+}
+
+/** One of Canopy's own processes (main, renderer, GPU, utility). */
+export interface ProcMetric {
+  type: string
+  name?: string
+  memMB: number
+  /** Percent of one CPU core. */
+  cpu: number
+}
+
+/** Canopy's own resource use, sampled by the main process. */
+export interface AppMetrics {
+  at: number
+  /** Working set of every Canopy process, in MB. */
+  memMB: number
+  /** CPU of every Canopy process, as a percent of the whole machine. */
+  cpu: number
+  procs: ProcMetric[]
+  /** Share of the time the main process was busy since the last sample, in percent. */
+  busy: number
+  /** How late the main process ran its timers over the last sample, in ms (mean and worst). */
+  lagMs: number
+  lagMaxMs: number
+  /** Live terminals, and the terminal output they produced per second. */
+  ptys: number
+  ptyKBps: number
+  /** Messages the main process sent to the window per second. */
+  ipcPerSec: number
 }

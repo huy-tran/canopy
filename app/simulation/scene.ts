@@ -5,8 +5,8 @@ import type { Act, Status, ToolResult } from '#shared/types'
 import type { Sky } from '~/composables/useWeather'
 import {
   airHockey, arcade, beanBag, bigScreen, blueprintGround, boardGame, book, boxGeo, carpet, coffeeBar, consoleBench, controller, cue, dartboard, deskPod, disposeKit,
-  disposeTree, doorArch, drumKit, drumstick, type Figure, figure, floorLamp, floorText, FONT, foosball, guitar, hashOf, lightPillar, lightPool, lowWall, mat,
-  mesh, micStand, oklch, type Pick, pingPong, plant, poolTable, type Role, seeded, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
+  disposeTree, doorArch, drumKit, drumstick, type Figure, figure, floorLamp, floorText, FONT, foosball, freeze, geo, guitar, hashOf, lightPillar, lightPool, lowWall, mat,
+  mesh, micStand, oklch, type Pick, pingPong, plant, poolTable, rbox, type Role, seeded, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
 } from './kit'
 import { GithubHQ, HQ_PATH_Z, HQ_SIZE, type HqData } from './github'
 
@@ -50,9 +50,25 @@ export interface SimPerson {
 
 export interface SimHover { pick: Pick; x: number; y: number }
 
+/** Canopy's own health, for the Canopy Core in the corner of the stage area. */
+export interface SimMetrics {
+  memMB: number
+  /** Percent of the whole machine. */
+  cpu: number
+  lagMs: number
+  lagMaxMs: number
+  /** Frames the 3D World draws a second. */
+  fps: number
+  ptys: number
+  /** The last two minutes, oldest first. */
+  history: { memMB: number; cpu: number; fps: number; lagMs: number }[]
+}
+
 export interface SceneOptions {
   container: HTMLElement
   onHover: (hover: SimHover | null) => void
+  /** Frames drawn in the last second, about once a second while the view is open. */
+  onFps?: (fps: number) => void
   onSelect: (pick: Pick | null) => void
   /** A right click on someone, at a point in the view. */
   onMenu: (menu: SimHover) => void
@@ -76,8 +92,16 @@ const STAGE_LANE = 7.2
 /** Open ground between the office and GitHub HQ. */
 const HQ_GAP = 7
 const WALK_SPEED = 2.4
-/** Room lights with a real light source; more rooms than this make do with glowing lamps. */
-const MAX_ROOM_LIGHTS = 16
+/**
+ * Real lights lent to the lit rooms nearest the camera; the rest glow with their lamps and the pool
+ * on the floor. A fixed number, so shaders never recompile as rooms come and go.
+ */
+const LIGHT_SLOTS = 3
+/** Frames a second while nothing moves the camera, and for how long after the pointer does. */
+const AMBIENT_FPS = 30
+const BUSY_MS = 1000
+/** How often the sun's shadows are drawn again: people move, the furniture does not. */
+const SHADOW_HZ = 12
 const BACKGROUND = new THREE.Color('#1b1924')
 
 /** The lighting at night, at dusk and dawn, and in the day: the scene blends between them by the hour. */
@@ -90,6 +114,14 @@ const LIGHT = {
 const OVERCAST: Record<Sky, number> = { clear: 1, cloudy: 0.5, fog: 0.55, rain: 0.4, snow: 0.6, storm: 0.25 }
 const STATUS_COLOR: Record<Status, string> = { working: '#5b9cff', waiting: '#f5b544', done: '#4cc38a', idle: '#9aa0ab' }
 const ROLE_LABEL: Record<Role, string> = { developer: 'Dev', designer: 'Design' }
+/** The Canopy Core's rack lights, and the height of the racks' tops, where the smoke comes off. */
+const LED = { off: new THREE.Color('#1a2a22'), ok: new THREE.Color('#4cc38a'), info: new THREE.Color('#8fd6ff'), warn: new THREE.Color('#f5b544'), hot: new THREE.Color('#ff4d4f') }
+const RACK_TOP = 2.2
+
+/** Running hot: the main thread lagging badly, or the CPU flat out. */
+function coreHot(m: SimMetrics | null) {
+  return !!m && (m.lagMs > 30 || m.lagMaxMs > 150 || m.cpu > 85)
+}
 
 type RoomActor = {
   data: SimRoom
@@ -104,7 +136,7 @@ type RoomActor = {
   lit: number
   on: boolean
   switchedAt: number
-  light: THREE.PointLight | null
+  glow: Glow
   lamp: THREE.MeshStandardMaterial
   monitors: THREE.MeshStandardMaterial
   pool: THREE.MeshBasicMaterial
@@ -112,6 +144,22 @@ type RoomActor = {
   screenKey: string
   floor: ReturnType<typeof floorText>
 }
+
+/** Somewhere lit that can borrow one of the real lights: a room with its lights on, or a room in GitHub HQ. */
+type Glow = {
+  at: THREE.Vector3
+  color: string
+  /** The real light's full brightness. */
+  strength: number
+  /** How lit the place is now, 0 to 1. */
+  level: () => number
+  /** How much of a real light it has now, 0 to 1, as one fades in or out. */
+  real: number
+  /** A pool of light on the floor that glows brighter without a real light; rooms see to their own. */
+  pool?: THREE.MeshBasicMaterial
+}
+
+type LightSlot = { light: THREE.PointLight; glow: Glow | null; k: number }
 
 type SpotKind = 'sofa' | 'bean' | 'game' | 'pong' | 'foos' | 'pool' | 'hockey' | 'board' | 'coffee' | 'arcade' | 'darts' | 'chat' | 'crowd'
 
@@ -205,9 +253,29 @@ type PersonActor = {
   react: { ok: boolean; test: boolean; until: number } | null
   reactedAt: number
   phase: number
+  /** What the label shows now, so the DOM is only touched when it changes. */
+  shown: { talk: boolean; bubble: boolean; wait: boolean }
 }
 
-type Telly = { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; next: number }
+/** A screen painted many times a second; `face` is skipped while it is out of view. */
+type Telly = { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; face: THREE.Mesh; next: number }
+
+/** The Canopy Core: server racks, a reactor and a dashboard that show how Canopy itself is doing. */
+type Core = {
+  group: THREE.Group
+  leds: THREE.InstancedMesh
+  ledAt: number
+  heart: THREE.Mesh
+  heartMat: THREE.MeshStandardMaterial
+  rings: THREE.Object3D[]
+  board: ReturnType<typeof bigScreen>
+  boardKey: string
+  boardAt: number
+  /** Smoothed readings, so the reactor eases between samples. */
+  cpu: number
+  mem: number
+  smokeAt: number
+}
 
 type BandPart = 'guitar' | 'bass' | 'drums' | 'vocals'
 
@@ -281,15 +349,37 @@ export class WorkspaceScene {
   private down: { x: number; y: number } | null = null
   /** A camera flight; with `offset` it is to a person, tracking them as they move. */
   private fly: { fromPos: THREE.Vector3; toPos: THREE.Vector3; fromTarget: THREE.Vector3; toTarget: THREE.Vector3; start: number; offset?: THREE.Vector3 } | null = null
+  /** The real lights lent out to the places nearest the camera, and the places that can have one. */
+  private slots: LightSlot[] = []
+  private glows: Glow[] = []
+  private glowAt = 0
+  private core: Core | null = null
+  private metrics: SimMetrics | null = null
+  /** Drawing at all (false under something that hides the view), and at full rate until when. */
+  private active = true
+  private dragging = false
+  private busyUntil = 0
+  private shadowAt = 0
+  private labelsAt = 0
+  private fps = { frames: 0, from: 0 }
+  /** The pointer's latest spot over the view, picked under once on the next frame. */
+  private hoverAt: { x: number; y: number } | null = null
+  private hoverShown: { x: number; y: number } | null = null
+  private readonly frustum = new THREE.Frustum()
+  private readonly viewProj = new THREE.Matrix4()
+  private readonly step = new THREE.Vector3()
+  private fog: THREE.Fog | null = null
 
   constructor(opts: SceneOptions) {
     this.opts = opts
     const { container } = opts
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer.shadowMap.type = THREE.PCFShadowMap
+    // Drawn again a dozen times a second by the loop, not every frame.
+    this.renderer.shadowMap.autoUpdate = false
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -312,6 +402,9 @@ export class WorkspaceScene {
     this.controls.screenSpacePanning = false
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
     this.controls.panSpeed = 1.2
+    // Full frame rate while the camera is being moved, and a moment after while it settles.
+    this.controls.addEventListener('start', this.onControlStart)
+    this.controls.addEventListener('end', this.onControlEnd)
 
     // Early evening: a soft sky and a low warm sun, so the rooms with their lights on stand out.
     this.hemi = new THREE.HemisphereLight('#d6d0ff', '#4b3f38', 0.5)
@@ -324,6 +417,11 @@ export class WorkspaceScene {
     this.scene.add(this.sun, this.sun.target)
     this.scene.add(this.floor)
     this.scene.background = BACKGROUND.clone()
+    for (let i = 0; i < LIGHT_SLOTS; i++) {
+      const light = new THREE.PointLight('#ffd9a0', 0, 0, 2)
+      this.scene.add(light)
+      this.slots.push({ light, glow: null, k: 0 })
+    }
 
     const canvas = this.renderer.domElement
     canvas.addEventListener('pointermove', this.onPointerMove)
@@ -378,6 +476,19 @@ export class WorkspaceScene {
     this.hq?.sync(d)
   }
 
+  /** Canopy's own numbers, for the Canopy Core; null before the first sample. */
+  setMetrics(m: SimMetrics | null) {
+    this.metrics = m
+  }
+
+  /** Stops drawing while something solid covers the view, and starts again after. */
+  setActive(on: boolean) {
+    if (on === this.active) return
+    this.active = on
+    this.drawnAt = 0
+    if (on) this.renderer.shadowMap.needsUpdate = true
+  }
+
   /** Fly back out to see the whole workspace. */
   resetView(animate = true) {
     this.follow = null
@@ -412,6 +523,11 @@ export class WorkspaceScene {
       // The whole building, a wing, or up close to one thing in it.
       const away = pick.id === 'hq' ? new THREE.Vector3(0, 22, 26) : pick.id.startsWith('wing:') ? new THREE.Vector3(0, 11, 12) : new THREE.Vector3(2.5, 4.5, 6)
       this.flyTo(p.clone().add(away), p)
+      return
+    }
+    if (pick.kind === 'core') {
+      const c = this.core?.group.position
+      if (c) this.flyTo(c.clone().add(new THREE.Vector3(1.5, 4.5, 7.5)), c.clone().setY(1.6))
       return
     }
     const room = this.rooms.get(pick.id)
@@ -464,7 +580,16 @@ export class WorkspaceScene {
     const across = d > 0 ? Math.cos(Math.PI * p) : 0.4
     this.sun.position.set(cx + across * s * 0.8, s * (0.3 + 0.7 * up), cz + s * 0.55)
     this.sun.target.position.set(cx, 0, cz)
-    this.scene.fog = this.sky.sky === 'fog' ? new THREE.Fog(bg.clone(), s * 0.5, s * 1.9) : null
+    if (this.sky.sky === 'fog') {
+      this.fog ??= new THREE.Fog(bg.clone())
+      this.fog.color.copy(bg)
+      this.fog.near = s * 0.5
+      this.fog.far = s * 1.9
+      this.scene.fog = this.fog
+    } else {
+      this.scene.fog = null
+    }
+    this.renderer.shadowMap.needsUpdate = true
   }
 
   /** Rain as falling streaks, snow as drifting flakes, over the whole floor. */
@@ -574,9 +699,14 @@ export class WorkspaceScene {
       ;(p.points.material as THREE.Material).dispose()
     }
     this.clearBuilt()
+    this.controls.removeEventListener('start', this.onControlStart)
+    this.controls.removeEventListener('end', this.onControlEnd)
     this.controls.dispose()
     this.renderer.dispose()
+    // Hands the GL context back now, rather than whenever the canvas is collected.
+    this.renderer.forceContextLoss()
     disposeKit()
+    this.opts.onFps?.(0)
     canvas.remove()
     this.labels.domElement.remove()
   }
@@ -600,6 +730,13 @@ export class WorkspaceScene {
     this.pong = null
     this.hockey = null
     this.band = null
+    this.core = null
+    this.glows = []
+    for (const s of this.slots) {
+      s.glow = null
+      s.k = 0
+      s.light.intensity = 0
+    }
   }
 
   private add(o: THREE.Object3D) {
@@ -637,14 +774,15 @@ export class WorkspaceScene {
 
     const ground = this.add(blueprintGround(Math.max(this.world.w, this.world.d) * 3))
     ground.position.set(this.world.cx, ground.position.y, this.world.cz)
-    this.add(woodFloor(this.bounds.w, this.bounds.d)).position.z = this.bounds.cz
+    const wood = this.add(woodFloor(this.bounds.w, this.bounds.d))
+    wood.position.z = this.bounds.cz
 
     rows.forEach((row, ri) => {
       let x = -rowWidth(row) / 2
       for (const r of row) {
         const w = widthOf(r.id)
         const center = v3(x + w / 2, -ri * (ROOM_D + HALL) - ROOM_D / 2)
-        const room = this.buildRoom(r, center, w, perSide(r.id), ri, this.rooms.size < MAX_ROOM_LIGHTS)
+        const room = this.buildRoom(r, center, w, perSide(r.id), ri)
         const prev = previous.get(r.id)
         if (prev) {
           room.lit = prev.lit
@@ -656,16 +794,19 @@ export class WorkspaceScene {
     })
     this.buildCommon(commonW)
     this.buildStage()
+    this.buildCore(commonW)
 
     const hq = new GithubHQ()
     hq.group.position.set(hqX, 0, hqZ)
     this.add(hq.group)
     hq.sync(this.hqData)
     this.hq = hq
+    for (const g of hq.glows) this.glows.push({ at: hq.group.position.clone().add(g.at), color: '#e6edf3', strength: 26, level: () => 1, real: 0, pool: g.pool })
     // A path across to it from the office floor, onto its plaza.
     const pathLen = HQ_GAP + 0.4
     const path = this.add(mesh(boxGeo(pathLen, 0.06, 2.6), mat('#3a3f4b', { roughness: 0.95 }), false))
     path.position.set(this.bounds.w / 2 + pathLen / 2 - 0.2, -0.02, hqZ + HQ_PATH_Z)
+    for (const o of [ground, wood, path]) freeze(o)
 
     for (const p of out) {
       p.spot = null
@@ -681,9 +822,12 @@ export class WorkspaceScene {
     cam.near = 1
     cam.far = s * 3
     cam.updateProjectionMatrix()
+    // No compileAsync to warm the shaders: it polls on a timer and throws there when GitHub HQ swaps
+    // out materials in the meantime. A fixed light count already keeps them from recompiling.
+    this.renderer.shadowMap.needsUpdate = true
   }
 
-  private buildRoom(data: SimRoom, center: THREE.Vector3, w: number, perSide: number, row: number, withLight: boolean): RoomActor {
+  private buildRoom(data: SimRoom, center: THREE.Vector3, w: number, perSide: number, row: number): RoomActor {
     const g = new THREE.Group()
     g.position.copy(center)
     const color = '#' + oklch(0.72, 0.12, data.hue).getHexString()
@@ -732,24 +876,22 @@ export class WorkspaceScene {
     bag.position.set(w / 2 - 0.8, 0, -d / 2 + 1.9)
     g.add(bag)
 
-    let light: THREE.PointLight | null = null
-    if (withLight) {
-      light = new THREE.PointLight('#ffd9a0', 0, 0, 2)
-      light.position.set(0, 3.6, POD_Z)
-      g.add(light)
-    }
-
     // The project's name on the hall floor in front of the door.
     const floor = floorText(w - 1, 1.5, 'center')
     floor.plane.position.set(center.x, 0.03, center.z + d / 2 + 1.6)
     this.add(floor.plane)
 
     this.add(g)
+    freeze(g)
+    freeze(floor.plane)
     const seats = seatOrder(pod.seats).map(s => ({ x: center.x + s.x, z: center.z + POD_Z + s.z, face: s.face }))
-    return {
+    const room: RoomActor = {
       data, center, width: w, row, podHalf: pod.width / 2, seats, color, ink: '#' + oklch(0.45, 0.13, data.hue).getHexString(),
-      lit: 0, on: false, switchedAt: -10, light, lamp, monitors, pool: pool.material, screen, screenKey: '', floor,
+      lit: 0, on: false, switchedAt: -10, glow: null!, lamp, monitors, pool: pool.material, screen, screenKey: '', floor,
     }
+    room.glow = { at: center.clone().add(new THREE.Vector3(0, 3.6, POD_Z)), color: '#ffd9a0', strength: 28, level: () => room.lit, real: 0 }
+    this.glows.push(room.glow)
+    return room
   }
 
   /**
@@ -775,10 +917,10 @@ export class WorkspaceScene {
 
     // Football: the TV faces +x, the sofas and bean bags face it.
     at(carpet(7, 6, '#7fb37a'), x0 + 3.6, zc)
-    const tv = bigScreen(3.6, 2, 0.9)
+    const tv = bigScreen(3.6, 2, 0.9, 512)
     tv.group.position.y = 0.9
     at(tv.group, x0 + 0.7, zc, Math.PI / 2)
-    this.football = { canvas: tv.canvas, texture: tv.texture, next: 0, goals: [0, 0], goalUntil: 0, nextGoal: 20 }
+    this.football = { canvas: tv.canvas, texture: tv.texture, face: tv.face, next: 0, goals: [0, 0], goalUntil: 0, nextGoal: 20 }
     for (const dz of [-1.15, 1.15]) {
       at(sofa(dz < 0 ? '#e0739a' : '#5a6bd6'), x0 + 3.6, zc + dz, -Math.PI / 2)
       for (const s of [-0.45, 0.45]) spot('sofa', x0 + 3.5, zc + dz + s, -Math.PI / 2, x0 + 2.4, 0.08, 'football')
@@ -831,10 +973,10 @@ export class WorkspaceScene {
 
     // The games corner: the TV faces -x over the console, three bean bags face it.
     at(carpet(6, 6, '#8c7ad6'), x1 - 3, zc)
-    const play = bigScreen(3.2, 1.8, 0.9)
+    const play = bigScreen(3.2, 1.8, 0.9, 512)
     play.group.position.y = 0.9
     at(play.group, x1 - 0.5, zc, -Math.PI / 2)
-    this.game = { canvas: play.canvas, texture: play.texture, next: 0 }
+    this.game = { canvas: play.canvas, texture: play.texture, face: play.face, next: 0 }
     at(consoleBench(), x1 - 1.3, zc, -Math.PI / 2)
     ;[-1.3, 0, 1.3].forEach((dz, i) => {
       at(beanBag(['#4cc38a', '#e85f5c', '#5b9cff'][i]!), x1 - 3.9, zc + dz)
@@ -864,9 +1006,10 @@ export class WorkspaceScene {
 
     for (const [x, z] of [[x0 + 0.8, HALL + 0.8], [x1 - 0.8, HALL + 0.8], [-8, zf], [8, zf]] as const) at(plant(Math.round(x * 7), 1.2), x, z)
     g.add(stringLights([new THREE.Vector2(x0 + 0.3, HALL + 0.3), new THREE.Vector2(x1 - 0.3, HALL + 0.3), new THREE.Vector2(x1 - 0.3, HALL + COMMON_D - 0.3), new THREE.Vector2(x0 + 0.3, HALL + COMMON_D - 0.3)]))
-    for (const x of [x0 + 4, 0, x1 - 4]) {
-      const l = new THREE.PointLight('#ffd6a8', 22, 0, 2)
-      l.position.set(x, 4.2, zc)
+    // Two lights between the string lights, a little brighter than the three it used to take.
+    for (const x of [-width * 0.22, width * 0.22]) {
+      const l = new THREE.PointLight('#ffd6a8', 30, 0, 2)
+      l.position.set(x, 4.4, zc)
       g.add(l)
     }
 
@@ -876,6 +1019,8 @@ export class WorkspaceScene {
     this.sign = sign
     this.spots = spots
     this.add(g)
+    // Only the ping pong ball and the air hockey puck and mallets move.
+    freeze(g, [this.pong?.ball, this.hockey?.puck, ...this.hockey?.mallets ?? []].filter(o => !!o) as THREE.Object3D[])
   }
 
   /**
@@ -896,7 +1041,7 @@ export class WorkspaceScene {
 
     const kit = drumKit()
     on(kit.group, 0, -0.7)
-    const wall = bigScreen(6, 2.1, 1.2)
+    const wall = bigScreen(6, 2.1, 1.2, 512)
     on(wall.group, 0, -1.75, STAGE_H + 1.2)
     for (const x of [-1, 1]) {
       on(speaker(0.9, 0.8, 1), x * 3.7, -1.2)
@@ -927,7 +1072,7 @@ export class WorkspaceScene {
     this.add(st.group)
 
     // The dance floor: a grid of tiles that light up to the beat.
-    const df = bigScreen(10, 3.6)
+    const df = bigScreen(10, 3.6, 0, 512)
     df.group.children[0]!.visible = false
     df.face.rotation.x = -Math.PI / 2
     df.face.position.set(0, 0.03, 0)
@@ -944,8 +1089,150 @@ export class WorkspaceScene {
 
     this.band = {
       members, beams: st.beams, cans: st.cans, strip: st.strip, cymbals: [kit.hat, kit.crash], light,
-      wall: { canvas: wall.canvas, texture: wall.texture, next: 0 },
-      floor: { canvas: df.canvas, texture: df.texture, next: -2 },
+      wall: { canvas: wall.canvas, texture: wall.texture, face: wall.face, next: 0 },
+      floor: { canvas: df.canvas, texture: df.texture, face: df.face, next: -2 },
+    }
+    // The band, the lighting cans and the cymbals move; the rest of the stage does not.
+    freeze(st.group, [...members.map(m => m.fig.group), ...st.cans, kit.hat, kit.crash])
+    freeze(df.group)
+  }
+
+  /**
+   * The Canopy Core, in the front corner by the stage: two server racks whose lights blink faster
+   * the harder Canopy works its CPU, a reactor whose heart swells with the memory it holds, and a
+   * dashboard over them with the last two minutes of memory, CPU, frame rate and main-thread lag.
+   * When the main thread lags it runs hot: the heart flashes red and the racks smoke.
+   */
+  private buildCore(commonW: number) {
+    const g = new THREE.Group()
+    // Between the floor's edge and the lane past the stage, turned a little towards the dance floor.
+    g.position.set(-commonW / 2 + 4.4, 0, HALL + COMMON_D + 4)
+    g.rotation.y = 0.3
+
+    const pad = rbox(5, 0.06, 3.2, mat('#24212d', { roughness: 0.9 }), 0, 0.03)
+    pad.castShadow = false
+    g.add(pad)
+
+    // Two racks of servers, a grid of status lights down each front: one instanced mesh for them all.
+    const RACK = 2.1, COLS = 3, ROWS = 11
+    const shell = mat('#1d1b24', { roughness: 0.5, metalness: 0.3 })
+    const blade = mat('#2c2a36', { roughness: 0.6, metalness: 0.2 })
+    const ledMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })
+    const leds = new THREE.InstancedMesh(boxGeo(0.1, 0.05, 0.02), ledMat, 2 * COLS * ROWS)
+    const m = new THREE.Matrix4()
+    let n = 0
+    for (const side of [-1, 1]) {
+      const x = side * 1.6
+      const rack = rbox(0.9, RACK, 0.8, shell, 0.06, 0.05)
+      rack.position.x = x
+      g.add(rack)
+      for (let r = 0; r < ROWS; r++) {
+        const y = 0.3 + r * 0.17
+        const b = mesh(boxGeo(0.78, 0.13, 0.02), blade, false)
+        b.position.set(x, y, 0.41)
+        g.add(b)
+        for (let c = 0; c < COLS; c++) {
+          m.makeTranslation(x + 0.12 + c * 0.12, y, 0.425)
+          leds.setMatrixAt(n++, m)
+        }
+      }
+    }
+    for (let i = 0; i < n; i++) leds.setColorAt(i, LED.ok)
+    leds.computeBoundingSphere()
+    g.add(leds)
+
+    // The reactor between them: a plinth, a glass tube with the glowing heart inside, rings round it.
+    const metal = mat('#3a3d48', { roughness: 0.35, metalness: 0.6 })
+    const plinth = mesh(geo('core-plinth', () => new THREE.CylinderGeometry(0.62, 0.7, 0.35, 24)), metal)
+    plinth.position.y = 0.2
+    g.add(plinth)
+    const cap = mesh(geo('core-cap', () => new THREE.CylinderGeometry(0.5, 0.62, 0.22, 24)), metal)
+    cap.position.y = 2.05
+    g.add(cap)
+    const glass = mesh(geo('core-glass', () => new THREE.CylinderGeometry(0.5, 0.5, 1.7, 24, 1, true)),
+      mat('#bfe6ff', { transparent: true, opacity: 0.16, roughness: 0.1, depthWrite: false }), false)
+    glass.position.y = 1.2
+    g.add(glass)
+    // Not tone mapped, so it stays a saturated green, amber or red rather than washing out to white.
+    const heartMat = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#4cc38a', emissiveIntensity: 1.2, toneMapped: false })
+    const heart = mesh(geo('core-heart', () => new THREE.IcosahedronGeometry(0.5, 2)), heartMat, false)
+    heart.position.y = 1.2
+    g.add(heart)
+    const ringMat = mat('#8fd6ff', { emissive: '#8fd6ff', emissiveIntensity: 1.4 })
+    const rings = [0, 1].map((i) => {
+      const ring = mesh(geo('core-ring', () => new THREE.TorusGeometry(0.62, 0.03, 8, 40)), ringMat, false)
+      ring.position.y = 1.2
+      ring.rotation.x = Math.PI / 2 + (i ? 0.5 : -0.5)
+      g.add(ring)
+      return ring
+    })
+
+    // The dashboard on two legs behind it all, above the racks.
+    const board = bigScreen(3.6, 1.8, 2.3, 512)
+    board.group.position.set(0, 2.3, -0.75)
+    g.add(board.group)
+
+    const sign = floorText(4.6, 0.7, 'center')
+    sign.draw([{ text: 'CANOPY CORE', size: 0.42, color: 'rgba(143, 214, 255, .7)', weight: 800 }])
+    sign.plane.position.set(0, 0.07, 1.25)
+    g.add(sign.plane)
+
+    tag(g, { kind: 'core', id: 'core' })
+    this.add(g)
+    freeze(g, [heart, ...rings])
+    this.core = { group: g, leds, ledAt: 0, heart, heartMat, rings, board, boardKey: '', boardAt: 0, cpu: 0, mem: 0, smokeAt: 0 }
+  }
+
+  /** Runs the Canopy Core off the latest numbers. */
+  private stepCore(t: number, dt: number) {
+    const c = this.core
+    if (!c) return
+    const m = this.metrics
+    const cpu = m?.cpu ?? 0, mem = m?.memMB ?? 0
+    c.cpu += (cpu - c.cpu) * Math.min(1, dt * 2)
+    c.mem += (mem - c.mem) * Math.min(1, dt * 2)
+    const hot = coreHot(m)
+    // CPU is a share of the whole machine: a third of it is a lot for an app.
+    const busy = clamp01(c.cpu / 35)
+
+    // The heart: bigger with more memory (full at 4 GB), beating, green to amber with CPU, red and flashing when hot.
+    const size = 0.45 + 0.4 * clamp01(c.mem / 4096)
+    c.heart.scale.setScalar(size * (1 + Math.sin(t * (3 + busy * 9)) * 0.05))
+    c.heart.rotation.y += dt * (0.3 + busy * 2)
+    if (hot) c.heartMat.emissive.set(Math.sin(t * 14) > 0 ? '#ff4d4f' : '#ff9f43')
+    else c.heartMat.emissive.setHSL(0.38 - 0.27 * busy, 0.75, 0.55)
+    c.heartMat.emissiveIntensity = hot ? 1.1 : 0.8 + busy * 0.3
+    c.rings.forEach((r, i) => { r.rotation.z += dt * (0.4 + busy * 6) * (i ? -1 : 1) })
+
+    // The racks' lights, a dozen times a second: each blinks at its own pace, quicker with more CPU.
+    if (t >= c.ledAt && this.inView(c.leds)) {
+      c.ledAt = t + 1 / 12
+      const rate = 0.6 + busy * 14
+      for (let i = 0; i < c.leds.count; i++) {
+        const k = Math.floor(t * rate * (0.6 + (i % 7) * 0.1) + i)
+        const h = (Math.imul(i + 1, 73856093) ^ Math.imul(k, 19349663)) >>> 0
+        const p = (h >>> 8) % 100
+        c.leds.setColorAt(i, p < 30 ? LED.off : hot && p > 80 ? LED.hot : p > 93 ? LED.warn : i % 11 === 0 ? LED.info : LED.ok)
+      }
+      c.leds.instanceColor!.needsUpdate = true
+    }
+
+    // Smoke off the racks while it runs hot.
+    if (hot && t >= c.smokeAt) {
+      c.smokeAt = t + 0.7
+      const at = new THREE.Vector3((Math.random() < 0.5 ? -1 : 1) * 1.6, RACK_TOP, 0)
+      this.smoke(c.group.localToWorld(at))
+    }
+
+    // The dashboard, at most once a second and only when the numbers change.
+    if (t >= c.boardAt && m) {
+      const key = JSON.stringify([Math.round(m.memMB), Math.round(m.cpu * 10), m.fps, Math.round(m.lagMs), Math.round(m.lagMaxMs), m.history.length, m.history.at(-1)?.memMB])
+      if (key !== c.boardKey) {
+        c.boardAt = t + 1
+        c.boardKey = key
+        drawCore(c.board.canvas, m, hot)
+        c.board.texture.needsUpdate = true
+      }
     }
   }
 
@@ -1108,6 +1395,7 @@ export class WorkspaceScene {
       summon: born > 0 ? this.summonFx(desk.pos, color, 46) : null,
       pos: desk.pos.clone(), face: desk.face, desk, mode: 'desk', dest: 'desk', path: [], trail: [], spot: null,
       calmSince: born, restless: 0, leaving: null, gone: false, stride: 0, pad: null, cue: null, book: null, react: null, reactedAt: p.result?.at || 0, phase: (hashOf(p.id) % 1000) / 160,
+      shown: { talk: false, bubble: true, wait: false },
     }
     if (actor.summon) this.say(actor, '✨', 2.5)
     this.people.set(p.id, actor)
@@ -1164,8 +1452,12 @@ export class WorkspaceScene {
 
   /** A little cloud of smoke rising off someone's head. */
   private puff(a: PersonActor) {
+    this.smoke(a.pos.clone().setY(a.data.parentId ? 1.6 : 2))
+  }
+
+  /** A little cloud of smoke rising from a point. */
+  private smoke(at: THREE.Vector3) {
     const n = 18
-    const at = a.pos.clone().setY(a.data.parentId ? 1.6 : 2)
     const positions = new Float32Array(n * 3)
     const vel: THREE.Vector3[] = []
     for (let i = 0; i < n; i++) {
@@ -1180,7 +1472,8 @@ export class WorkspaceScene {
   }
 
   private stepPuffs(t: number, dt: number) {
-    this.puffs = this.puffs.filter((p) => {
+    for (let k = this.puffs.length - 1; k >= 0; k--) {
+      const p = this.puffs[k]!
       const age = (t - p.born) / 2.2
       const pos = p.points.geometry.getAttribute('position') as THREE.BufferAttribute
       p.vel.forEach((v, i) => pos.setXYZ(i, pos.getX(i) + v.x * dt, pos.getY(i) + v.y * dt, pos.getZ(i) + v.z * dt))
@@ -1188,12 +1481,12 @@ export class WorkspaceScene {
       const m = p.points.material as THREE.PointsMaterial
       m.opacity = 0.85 * (1 - age)
       m.size = 0.55 + age * 0.6
-      if (age < 1) return true
+      if (age < 1) continue
       this.scene.remove(p.points)
       p.points.geometry.dispose()
       m.dispose()
-      return false
-    })
+      this.puffs.splice(k, 1)
+    }
   }
 
   /** A short speech bubble over someone's head. */
@@ -1322,7 +1615,7 @@ export class WorkspaceScene {
     let left = WALK_SPEED * dt
     while (left > 0 && a.path.length) {
       const next = a.path[0]!
-      const to = next.clone().sub(a.pos)
+      const to = this.step.copy(next).sub(a.pos)
       const d = to.length()
       if (d > 0.001) a.face = Math.atan2(to.x, to.z)
       if (d <= left) {
@@ -1365,6 +1658,7 @@ export class WorkspaceScene {
 
   private clearSummon(s: Summon) {
     this.scene.remove(s.rune.mesh, s.pillar.mesh, s.points)
+    // Their textures are the kit's, shared by every summon in the colour.
     s.rune.material.dispose()
     s.pillar.material.dispose()
     s.points.geometry.dispose()
@@ -1394,24 +1688,105 @@ export class WorkspaceScene {
 
   private loop = (now = 0) => {
     this.frame = requestAnimationFrame(this.loop)
-    // The browser stops frames for a hidden window. Behind other apps, nobody needs 60 a second.
-    const every = document.hasFocus() ? 0 : 50
+    if (!this.active) return
+    // The browser stops frames for a hidden window. Behind other apps, nobody needs 60 a second,
+    // nor while the camera is still: full rate only while it moves, or the pointer has just moved.
+    const busy = this.dragging || !!this.fly || !!this.follow || now < this.busyUntil
+    const every = !document.hasFocus() ? 50 : busy ? 0 : 1000 / AMBIENT_FPS - 2
     if (now - this.drawnAt < every) return
     this.drawnAt = now
     const dt = Math.min(0.12, this.clock.getDelta())
     const t = this.clock.elapsedTime
+    this.updateFrustum()
     this.stepRooms(t, dt)
+    this.stepLights(t, dt)
     this.stepCommon(t)
     this.stepBand(t)
     this.stepPeople(t, dt)
+    this.stepCore(t, dt)
     this.hq?.step(t, dt)
     this.stepPuffs(t, dt)
     this.stepWeather(t, dt)
     this.stepFly(t)
     this.stepFollow()
     this.controls.update()
+    this.stepHover()
+    if (t - this.shadowAt >= 1 / SHADOW_HZ) {
+      this.shadowAt = t
+      this.renderer.shadowMap.needsUpdate = true
+    }
     this.renderer.render(this.scene, this.camera)
-    this.labels.render(this.scene, this.camera)
+    // Name tags at half rate while the camera is still: people walk slowly enough for it.
+    if (busy || now - this.labelsAt > 2 * (1000 / AMBIENT_FPS) - 4) {
+      this.labelsAt = now
+      this.labels.render(this.scene, this.camera)
+    }
+    this.countFrame(now)
+  }
+
+  /** Frames drawn in the last second, for the frame rate readout. */
+  private countFrame(now: number) {
+    const f = this.fps
+    f.frames++
+    if (!f.from) f.from = now
+    if (now - f.from < 1000) return
+    this.opts.onFps?.(Math.round((f.frames * 1000) / (now - f.from)))
+    f.frames = 0
+    f.from = now
+  }
+
+  private updateFrustum() {
+    this.camera.updateMatrixWorld()
+    this.viewProj.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse)
+    this.frustum.setFromProjectionMatrix(this.viewProj)
+  }
+
+  /** Whether a screen is on camera, worth painting. */
+  private inView(o: THREE.Mesh) {
+    return this.frustum.intersectsObject(o)
+  }
+
+  /**
+   * Lends the real lights to the lit places nearest the camera's target, a few times a second;
+   * each fades out of where it was before fading in where it is wanted.
+   */
+  private stepLights(t: number, dt: number) {
+    if (t >= this.glowAt) {
+      this.glowAt = t + 0.3
+      const target = this.controls.target
+      const wanted = this.glows.filter(g => g.level() > 0.02).sort((a, b) => a.at.distanceToSquared(target) - b.at.distanceToSquared(target)).slice(0, LIGHT_SLOTS)
+      for (const s of this.slots) if (s.glow && !wanted.includes(s.glow)) s.glow.real = -1
+      for (const g of wanted) {
+        const held = this.slots.find(s => s.glow === g)
+        if (held) {
+          g.real = held.k
+          continue
+        }
+        const free = this.slots.find(s => !s.glow)
+        if (!free) break
+        free.glow = g
+        free.k = 0
+        free.light.position.copy(g.at)
+        free.light.color.set(g.color)
+      }
+    }
+    for (const s of this.slots) {
+      const g = s.glow
+      if (!g) continue
+      // Marked as no longer wanted: fade out, then free the light.
+      const leaving = g.real < 0
+      s.k = leaving ? s.k - dt * 3 : Math.min(1, s.k + dt * 3)
+      if (s.k <= 0) {
+        g.real = 0
+        s.glow = null
+        s.k = 0
+        s.light.intensity = 0
+        continue
+      }
+      if (!leaving) g.real = s.k
+      s.light.intensity = s.k * g.level() * g.strength
+    }
+    for (const g of this.glows) if (g.pool) g.pool.opacity = 0.22 + 0.12 * (1 - Math.max(0, g.real))
   }
 
   private stepRooms(t: number, dt: number) {
@@ -1425,10 +1800,10 @@ export class WorkspaceScene {
         r.lit = Math.max(0, r.lit - dt * 2.2)
       }
       const l = r.lit
-      if (r.light) r.light.intensity = l * 28
       r.lamp.emissiveIntensity = l * 1.8
       r.monitors.emissiveIntensity = 0.05 + l * 0.85
-      r.pool.opacity = 0.35 * l
+      // Without a real light of its own, the pool on the floor does more of the work.
+      r.pool.opacity = 0.35 * l * (1 + 0.6 * (1 - Math.max(0, r.glow.real)))
       r.screen.material.emissiveIntensity = 0.1 + l * 0.9
     }
   }
@@ -1454,14 +1829,18 @@ export class WorkspaceScene {
         f.goalUntil = t + 3
         f.nextGoal = t + 22 + Math.random() * 25
       }
-      drawFootball(f.canvas, t, f.goals, t < f.goalUntil)
-      f.texture.needsUpdate = true
+      if (this.inView(f.face)) {
+        drawFootball(f.canvas, t, f.goals, t < f.goalUntil)
+        f.texture.needsUpdate = true
+      }
     }
     const g = this.game
     if (g && t >= g.next) {
       g.next = t + 1 / 15
-      drawRacing(g.canvas, t)
-      g.texture.needsUpdate = true
+      if (this.inView(g.face)) {
+        drawRacing(g.canvas, t)
+        g.texture.needsUpdate = true
+      }
     }
     const p = this.pong
     if (p) {
@@ -1489,7 +1868,8 @@ export class WorkspaceScene {
   }
 
   private stepPeople(t: number, dt: number) {
-    for (const a of [...this.people.values()]) {
+    // Removing the one being visited is safe while walking a Map.
+    for (const a of this.people.values()) {
       const { fig } = a
       if (a.leaving !== null) {
         // Saying goodbye: turned to the camera, then the session closes and they vanish.
@@ -1550,12 +1930,24 @@ export class WorkspaceScene {
       fig.group.position.y = lift
 
       this.pose(a, t)
+      // The label's DOM is only touched when what it shows changes.
+      const shown = a.shown
       const talking = t < a.speechUntil && a.mode === 'desk' && a.data.status === 'working' && a.dying === null
-      a.speech.style.display = talking ? '' : 'none'
+      if (talking !== shown.talk) {
+        shown.talk = talking
+        a.speech.style.display = talking ? '' : 'none'
+      }
       const waiting = a.data.status === 'waiting' && t >= a.bubbleUntil && a.leaving === null
-      a.bubble.style.display = t < a.bubbleUntil || waiting ? '' : 'none'
-      if (waiting) a.bubble.textContent = '!'
-      a.bubble.classList.toggle('sim-bubble-wait', waiting)
+      const bubble = t < a.bubbleUntil || waiting
+      if (bubble !== shown.bubble) {
+        shown.bubble = bubble
+        a.bubble.style.display = bubble ? '' : 'none'
+      }
+      if (waiting !== shown.wait) {
+        shown.wait = waiting
+        if (waiting) a.bubble.textContent = '!'
+        a.bubble.classList.toggle('sim-bubble-wait', waiting)
+      }
     }
   }
 
@@ -1975,14 +2367,14 @@ export class WorkspaceScene {
     }
 
     const w = b.wall
-    if (t >= w.next) {
+    if (t >= w.next && this.inView(w.face)) {
       w.next = t + 1 / 15
       drawLedWall(w.canvas, t, playing, at, song, pulse)
       w.texture.needsUpdate = true
     }
     const f = b.floor
     const tick = playing ? Math.floor(beat) : -1
-    if (tick !== f.next) {
+    if (tick !== f.next && this.inView(f.face)) {
       f.next = tick
       drawDanceFloor(f.canvas, tick, hue)
       f.texture.needsUpdate = true
@@ -2021,7 +2413,7 @@ export class WorkspaceScene {
       this.follow = null
       return
     }
-    const delta = who.pos.clone().sub(f.last)
+    const delta = this.step.copy(who.pos).sub(f.last)
     if (delta.lengthSq() < 1e-8) return
     this.camera.position.add(delta)
     this.controls.target.add(delta)
@@ -2039,11 +2431,12 @@ export class WorkspaceScene {
 
   // ------------------------------------------------------------ pointer
 
-  private pickAt(e: PointerEvent): Pick | null {
+  private pickAt(e: { clientX: number; clientY: number }): Pick | null {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
     this.raycaster.setFromCamera(this.pointer, this.camera)
-    const targets = [this.floor, ...[...this.people.values()].map(p => p.fig.group)]
+    const targets: THREE.Object3D[] = [this.floor]
+    for (const p of this.people.values()) targets.push(p.fig.group)
     for (const hit of this.raycaster.intersectObjects(targets, true)) {
       const pick = hit.object.userData.pick as Pick | undefined
       if (pick) return pick
@@ -2051,27 +2444,52 @@ export class WorkspaceScene {
     return null
   }
 
-  private onPointerMove = (e: PointerEvent) => {
-    if (e.buttons) return
-    const pick = this.pickAt(e)
-    const rect = this.renderer.domElement.getBoundingClientRect()
+  /** What is under the pointer, once a frame however often it moves; the card only hears of a new thing or a real move. */
+  private stepHover() {
+    const at = this.hoverAt
+    if (!at) return
+    this.hoverAt = null
+    const pick = this.pickAt({ clientX: at.x, clientY: at.y })
     this.renderer.domElement.style.cursor = pick ? 'pointer' : ''
     if (!pick) {
       if (this.hovered) this.opts.onHover(null)
       this.hovered = null
+      this.hoverShown = null
       return
     }
+    const same = this.hovered && this.hovered.kind === pick.kind && this.hovered.id === pick.id
+    const last = this.hoverShown
+    if (same && last && Math.hypot(at.x - last.x, at.y - last.y) < 6) return
     this.hovered = pick
-    this.opts.onHover({ pick, x: e.clientX - rect.left, y: e.clientY - rect.top })
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    this.hoverShown = { x: at.x, y: at.y }
+    this.opts.onHover({ pick, x: at.x - rect.left, y: at.y - rect.top })
+  }
+
+  private onControlStart = () => {
+    this.dragging = true
+  }
+
+  private onControlEnd = () => {
+    this.dragging = false
+    this.busyUntil = performance.now() + BUSY_MS
+  }
+
+  private onPointerMove = (e: PointerEvent) => {
+    this.busyUntil = performance.now() + BUSY_MS
+    if (e.buttons) return
+    this.hoverAt = { x: e.clientX, y: e.clientY }
   }
 
   private onPointerDown = (e: PointerEvent) => {
     this.down = { x: e.clientX, y: e.clientY }
     this.fly = null
+    this.hoverAt = null
     // Panning away lets them go; turning round them with the right button keeps up with them.
     if (e.button !== 2) this.follow = null
     if (this.hovered) this.opts.onHover(null)
     this.hovered = null
+    this.hoverShown = null
   }
 
   private onPointerUp = (e: PointerEvent) => {
@@ -2092,17 +2510,92 @@ export class WorkspaceScene {
 
   private onPointerLeave = () => {
     this.renderer.domElement.style.cursor = ''
+    this.hoverAt = null
     if (this.hovered) this.opts.onHover(null)
     this.hovered = null
+    this.hoverShown = null
   }
 }
 
 // ---------------------------------------------------------------- the TVs
 
+/** A screen's canvas drawn as if 1024 wide, whatever its real width, so the TVs can be painted smaller. */
+function paint(c: HTMLCanvasElement) {
+  const x = c.getContext('2d')!
+  const k = c.width / 1024
+  x.setTransform(k, 0, 0, k, 0, 0)
+  return { x, W: 1024, H: c.height / k }
+}
+
+/** The Canopy Core's dashboard: four tiles of memory, CPU, frame rate and lag, each a number over a sparkline of the last two minutes. */
+function drawCore(c: HTMLCanvasElement, m: SimMetrics, hot: boolean) {
+  const { x, W, H } = paint(c)
+  x.fillStyle = '#0f1118'
+  x.fillRect(0, 0, W, H)
+  x.textBaseline = 'middle'
+  x.textAlign = 'left'
+  x.fillStyle = '#ffffff'
+  x.font = `800 40px ${FONT}`
+  x.fillText('CANOPY CORE', 32, 42)
+  const state = hot ? 'OVERHEATING' : m.cpu > 40 ? 'BUSY' : 'NOMINAL'
+  const sc = hot ? '#ff4d4f' : m.cpu > 40 ? '#f5b544' : '#4cc38a'
+  x.font = `700 26px ${FONT}`
+  const sw = x.measureText(state).width + 44
+  x.fillStyle = sc
+  x.beginPath()
+  x.roundRect(W - 32 - sw, 22, sw, 40, 20)
+  x.fill()
+  x.fillStyle = '#0f1118'
+  x.fillText(state, W - 32 - sw + 22, 43)
+
+  const mem = m.memMB >= 1024 ? `${(m.memMB / 1024).toFixed(2)} GB` : `${Math.round(m.memMB)} MB`
+  const tiles: [string, string, string, number[], number][] = [
+    ['MEMORY', mem, '#8fd6ff', m.history.map(h => h.memMB), 0],
+    ['CPU', `${m.cpu.toFixed(1)}%`, '#4cc38a', m.history.map(h => h.cpu), 10],
+    ['3D WORLD', `${m.fps} fps`, '#b48cff', m.history.map(h => h.fps), 60],
+    ['MAIN LAG', `${Math.round(m.lagMs)} ms`, hot ? '#ff4d4f' : '#f5b544', m.history.map(h => h.lagMs), 20],
+  ]
+  const tw = (W - 64 - 24) / 2, th = (H - 96 - 16 - 24) / 2
+  tiles.forEach(([label, value, color, series, floor], i) => {
+    const tx = 32 + (i % 2) * (tw + 24), ty = 88 + Math.floor(i / 2) * (th + 16)
+    x.fillStyle = 'rgba(255,255,255,.05)'
+    x.beginPath()
+    x.roundRect(tx, ty, tw, th, 16)
+    x.fill()
+    x.fillStyle = 'rgba(255,255,255,.55)'
+    x.font = `600 22px ${FONT}`
+    x.fillText(label, tx + 22, ty + 28)
+    x.fillStyle = color
+    x.font = `800 52px ${FONT}`
+    x.fillText(value, tx + 22, ty + 78, tw * 0.45)
+    // The sparkline on the right of the tile, scaled to its own peak (or a floor, so calm stays flat).
+    const n = series.length
+    if (n < 2) return
+    const max = Math.max(floor, ...series) || 1
+    const lx = tx + tw * 0.48, lw = tw * 0.48 - 18, ly = ty + 20, lh = th - 40
+    x.beginPath()
+    series.forEach((v, k) => {
+      const px = lx + (k / (n - 1)) * lw, py = ly + lh - (Math.max(0, v) / max) * lh
+      if (k) x.lineTo(px, py)
+      else x.moveTo(px, py)
+    })
+    x.strokeStyle = color
+    x.lineWidth = 4
+    x.lineJoin = 'round'
+    x.stroke()
+    x.lineTo(lx + lw, ly + lh)
+    x.lineTo(lx, ly + lh)
+    x.closePath()
+    x.globalAlpha = 0.15
+    x.fillStyle = color
+    x.fill()
+    x.globalAlpha = 1
+  })
+}
+
 /** A football match from above: two teams chasing the ball, the score and the clock, and GOAL! now and then. */
 function drawFootball(c: HTMLCanvasElement, t: number, goals: [number, number], goal: boolean) {
-  const x = c.getContext('2d')!
-  const W = c.width, H = c.height
+  const { x, W, H } = paint(c)
   for (let i = 0; i < 10; i++) {
     x.fillStyle = i % 2 ? '#3f9b55' : '#46a85d'
     x.fillRect((i * W) / 10, 0, W / 10 + 1, H)
@@ -2166,8 +2659,8 @@ function drawFootball(c: HTMLCanvasElement, t: number, goals: [number, number], 
 
 /** A neon racing game: a sunset, a grid road rushing past and two karts weaving. */
 function drawRacing(c: HTMLCanvasElement, t: number) {
-  const x = c.getContext('2d')!
-  const W = c.width, H = c.height, horizon = H * 0.45
+  const { x, W, H } = paint(c)
+  const horizon = H * 0.45
   const sky = x.createLinearGradient(0, 0, 0, horizon)
   sky.addColorStop(0, '#1a0b3a')
   sky.addColorStop(1, '#ff4fa3')
@@ -2221,8 +2714,7 @@ const SONGS = ['Merge Conflict', 'Stack Overflow', 'Null Pointer Blues', 'Hotfix
 
 /** The LED wall behind the band: their name over a pulsing equaliser while they play, thanks between songs. */
 function drawLedWall(c: HTMLCanvasElement, t: number, playing: boolean, at: number, song: number, pulse: number) {
-  const x = c.getContext('2d')!
-  const W = c.width, H = c.height
+  const { x, W, H } = paint(c)
   x.fillStyle = '#0b0912'
   x.fillRect(0, 0, W, H)
   const hue = (t * 22) % 360
@@ -2263,8 +2755,7 @@ function drawLedWall(c: HTMLCanvasElement, t: number, playing: boolean, at: numb
 
 /** The dance floor's tiles: a new pattern of lit squares on every beat, dark between songs. */
 function drawDanceFloor(c: HTMLCanvasElement, tick: number, hue: number) {
-  const x = c.getContext('2d')!
-  const W = c.width, H = c.height
+  const { x, W, H } = paint(c)
   const cols = 10, rows = 4
   const tw = W / cols, th = H / rows
   x.fillStyle = '#100d18'

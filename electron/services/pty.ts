@@ -13,11 +13,24 @@ export interface SpawnOpts {
 
 interface Term {
   p: pty.IPty
-  /** Output produced before the renderer attached, replayed on request. */
-  buf: string[]
+  /** Recent output, replayed when the renderer attaches. */
+  buf: string
+  /** Output not yet sent to the renderer. */
+  pending: string
+  flushT?: ReturnType<typeof setTimeout>
 }
 
 const terms = new Map<string, Term>()
+
+/** Characters of recent output kept per terminal for replay (about 2 MB). */
+const REPLAY_MAX = 1_000_000
+/** ConPTY emits many small chunks; send them on together, at most this often. */
+const FLUSH_MS = 8
+const FLUSH_NOW = 64 * 1024
+
+export function liveCount() {
+  return terms.size
+}
 
 /** The app's environment minus Claude Code's own session variables, so each terminal starts a fresh top-level session. */
 export function cleanEnv(): Record<string, string> {
@@ -58,14 +71,26 @@ export function spawnSession(o: SpawnOpts, onData: (id: string, d: string) => vo
 
 /** Registers a pty under an id, keeping recent output for replay and streaming it on. */
 function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
-  const t: Term = { p, buf: [] }
+  const t: Term = { p, buf: '', pending: '' }
   terms.set(id, t)
-  p.onData((d) => {
-    t.buf.push(d)
-    if (t.buf.length > 4000) t.buf.splice(0, t.buf.length - 4000)
+  const flush = () => {
+    clearTimeout(t.flushT)
+    t.flushT = undefined
+    if (!t.pending) return
+    const d = t.pending
+    t.pending = ''
     onData(id, d)
+  }
+  p.onData((d) => {
+    t.buf += d
+    // Trimmed in big steps so the copy is rare, and at a line break so no escape sequence is cut in half.
+    if (t.buf.length > REPLAY_MAX * 1.5) t.buf = t.buf.slice(t.buf.indexOf('\n', t.buf.length - REPLAY_MAX) + 1)
+    t.pending += d
+    if (t.pending.length >= FLUSH_NOW) flush()
+    else if (!t.flushT) t.flushT = setTimeout(flush, FLUSH_MS)
   })
   p.onExit(({ exitCode }) => {
+    flush()
     if (terms.get(id) === t) terms.delete(id)
     onExit(id, exitCode)
   })
@@ -113,6 +138,7 @@ export function killSession(id: string) {
   const t = terms.get(id)
   if (!t) return
   terms.delete(id)
+  clearTimeout(t.flushT)
   try {
     t.p.kill()
   } catch {
@@ -126,5 +152,5 @@ export function killAllSessions() {
 }
 
 export function bufferOf(id: string): string {
-  return terms.get(id)?.buf.join('') ?? ''
+  return terms.get(id)?.buf ?? ''
 }

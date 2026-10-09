@@ -1,5 +1,5 @@
 // The API the preload script exposes as window.canopy.
-import type { AppInfo, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind } from './types'
+import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind } from './types'
 
 type Off = () => void
 
@@ -93,6 +93,8 @@ export interface CanopyApi {
     fonts(): Promise<{ name: string; nerd: boolean; mono: boolean }[]>
     shells(): Promise<ShellInfo[]>
     info(): Promise<AppInfo>
+    /** Canopy's own memory, CPU, main-thread lag and terminal traffic since the last call. */
+    metrics(): Promise<AppMetrics | null>
     saveImage(sid: string, name: string, bytes: Uint8Array): Promise<string>
     copyImage(file: string): Promise<void>
     saveImageAs(file: string): Promise<string | null>

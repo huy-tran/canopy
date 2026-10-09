@@ -2,7 +2,11 @@ import { defineStore } from 'pinia'
 import type { Project, Repo, Service } from '#shared/types'
 
 export type SvcStatus = 'starting' | 'running' | 'stopped'
-export interface LogLine { t: string; c: string }
+/** A log line; `n` is a running id, so the list redraws only the lines that came or went. */
+export interface LogLine { t: string; c: string; n: number }
+
+let lineN = 0
+const ln = (t: string, c: string): LogLine => ({ t, c, n: ++lineN })
 
 const MAX_LINES = 1000
 
@@ -23,7 +27,11 @@ function tint(t: string): string {
 }
 
 export const useServicesStore = defineStore('services', () => {
-  const runtime = ref<Record<string, { status: SvcStatus; log: LogLine[]; partial: string }>>({})
+  // Shallow: entries are only ever replaced, and logs hold up to a thousand lines each.
+  const runtime = shallowRef<Record<string, { status: SvcStatus; log: LogLine[]; partial: string }>>({})
+  /** Output received but not yet added, per service: chatty servers send many small chunks. A timer, not a frame, so it still drains while the window is hidden. */
+  const pending = new Map<string, string>()
+  let flushT: ReturnType<typeof setTimeout> | undefined
 
   function rt(id: string) {
     return runtime.value[id] || { status: 'stopped' as SvcStatus, log: [], partial: '' }
@@ -34,23 +42,39 @@ export const useServicesStore = defineStore('services', () => {
   }
 
   function push(id: string, lines: LogLine[]) {
+    flush()
     const r = rt(id)
     runtime.value = { ...runtime.value, [id]: { ...r, log: [...r.log, ...lines].slice(-MAX_LINES) } }
   }
 
   function onData(id: string, d: string) {
-    const r = rt(id)
-    // ConPTY sometimes positions the cursor instead of writing a newline; treat that as a line break.
-    const text = (r.partial + d.replace(CURSOR_MOVE, '\n').replace(ANSI, '')).replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n')
-    const parts = text.split('\n')
-    const partial = parts.pop() || ''
-    const lines = parts.map(t => t.replace(/^.*\r(?=.)/, '').replace(/\r/g, '')).map(t => ({ t, c: tint(t) }))
-    runtime.value = { ...runtime.value, [id]: { ...r, partial, log: [...r.log, ...lines].slice(-MAX_LINES) } }
+    pending.set(id, (pending.get(id) || '') + d)
+    flushT ??= setTimeout(flush, 16)
+  }
+
+  function flush() {
+    clearTimeout(flushT)
+    flushT = undefined
+    if (!pending.size) return
+    const next = { ...runtime.value }
+    for (const [id, d] of pending) {
+      const r = next[id] || rt(id)
+      // ConPTY sometimes positions the cursor instead of writing a newline; treat that as a line break.
+      const text = (r.partial + d.replace(CURSOR_MOVE, '\n').replace(ANSI, '')).replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n')
+      const parts = text.split('\n')
+      const partial = parts.pop() || ''
+      const lines = parts.map(t => t.replace(/^.*\r(?=.)/, '').replace(/\r/g, '')).map(t => ln(t, tint(t)))
+      next[id] = { ...r, partial, log: lines.length ? [...r.log, ...lines].slice(-MAX_LINES) : r.log }
+    }
+    pending.clear()
+    runtime.value = next
   }
 
   function onStatus(id: string, s: SvcStatus, code?: number) {
+    // Output that came before the status goes first.
+    flush()
     const r = rt(id)
-    const extra: LogLine[] = s === 'stopped' ? [...(r.partial ? [{ t: r.partial, c: tint(r.partial) }] : []), { t: code != null && code !== 0 && code !== 1 ? `Exited with code ${code}.` : 'Stopped.', c: 'fa' }] : []
+    const extra: LogLine[] = s === 'stopped' ? [...(r.partial ? [ln(r.partial, tint(r.partial))] : []), ln(code != null && code !== 0 && code !== 1 ? `Exited with code ${code}.` : 'Stopped.', 'fa')] : []
     runtime.value = { ...runtime.value, [id]: { status: s, partial: s === 'stopped' ? '' : r.partial, log: [...r.log, ...extra].slice(-MAX_LINES) } }
   }
 
@@ -62,14 +86,14 @@ export const useServicesStore = defineStore('services', () => {
   function start(v: Service, r: Repo) {
     const st = status(v.id)
     if (st === 'running' || st === 'starting') return
-    push(v.id, [{ t: '> ' + v.cmd, c: 'fa' }])
-    runtime.value[v.id]!.status = 'starting'
+    push(v.id, [ln('> ' + v.cmd, 'fa')])
+    runtime.value = { ...runtime.value, [v.id]: { ...rt(v.id), status: 'starting' } }
     api.svc.start({ id: v.id, cwd: r.path, cmd: v.cmd, port: v.port })
   }
 
   function stop(id: string) {
     if (status(id) === 'stopped') return
-    push(id, [{ t: '^C', c: 'fa' }])
+    push(id, [ln('^C', 'fa')])
     return api.svc.stop(id)
   }
 
@@ -79,12 +103,14 @@ export const useServicesStore = defineStore('services', () => {
   }
 
   function clear(id: string) {
+    pending.delete(id)
     const r = rt(id)
     runtime.value = { ...runtime.value, [id]: { ...r, log: [], partial: '' } }
   }
 
   function forget(id: string) {
     stop(id)
+    pending.delete(id)
     const next = { ...runtime.value }
     delete next[id]
     runtime.value = next

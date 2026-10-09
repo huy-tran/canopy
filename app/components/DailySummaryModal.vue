@@ -46,7 +46,7 @@ async function load() {
   }
 }
 
-watch([open, offset], ([o]) => { if (o) load() })
+watch([open, offset], ([o]) => { if (o) load() }, { immediate: true })
 watch(() => ui.summary?.pid, () => { offset.value = 0 })
 
 const repos = computed(() => (project.value?.repos || []).map(r => ({

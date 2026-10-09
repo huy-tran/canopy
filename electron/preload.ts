@@ -74,6 +74,7 @@ const api: CanopyApi = {
     fonts: inv('sys:fonts') as any,
     shells: inv('sys:shells') as any,
     info: inv('sys:info') as any,
+    metrics: inv('sys:metrics') as any,
     saveImage: inv('sys:saveImage') as any,
     copyImage: inv('sys:copyImage') as any,
     saveImageAs: inv('sys:saveImageAs') as any,

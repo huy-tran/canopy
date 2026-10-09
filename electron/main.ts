@@ -15,6 +15,7 @@ import {
 import * as git from './services/git'
 import { startService, stopAllServices, stopService } from './services/devservers'
 import { planUsage } from './services/usage'
+import { countIpc, countPty, sampleMetrics } from './services/metrics'
 import { appInfo, clearImages, copyImage, listFonts, listShells, openInEditor, saveImage, showInFolder } from './services/system'
 
 const { autoUpdater } = electronUpdater
@@ -42,7 +43,9 @@ if (!app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', () => showWindow())
 
 function send(channel: string, ...args: unknown[]) {
-  if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
+  if (!win || win.isDestroyed()) return
+  countIpc()
+  win.webContents.send(channel, ...args)
 }
 
 function showWindow() {
@@ -62,10 +65,13 @@ function prefs() {
   return store.get('state')?.prefs
 }
 
+let loginItem: boolean | undefined
+
 function applyLoginItem() {
   const p = prefs()
-  if (!p || !app.isPackaged) return
-  app.setLoginItemSettings({ openAtLogin: !!p.launchLogin })
+  if (!p || !app.isPackaged || loginItem === !!p.launchLogin) return
+  loginItem = !!p.launchLogin
+  app.setLoginItemSettings({ openAtLogin: loginItem })
 }
 
 function ensureTray() {
@@ -145,11 +151,19 @@ function createWindow() {
   win.once('ready-to-show', () => win?.show())
   // The design's type is dense at 100%; render the whole UI a step larger.
   win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(1.1))
-  const saveBounds = () => {
+  // Dragging fires many events a second, and each store write is a synchronous file write.
+  let boundsT: ReturnType<typeof setTimeout> | undefined
+  const writeBounds = () => {
+    clearTimeout(boundsT)
     if (!win || win.isDestroyed()) return
     store.set('maximized', win.isMaximized())
     if (!win.isMaximized() && !win.isMinimized()) store.set('bounds', win.getBounds())
   }
+  const saveBounds = () => {
+    clearTimeout(boundsT)
+    boundsT = setTimeout(writeBounds, 500)
+  }
+  win.on('close', writeBounds)
   win.on('resize', saveBounds)
   win.on('move', saveBounds)
   win.on('maximize', () => send('win:maximized', true))
@@ -170,11 +184,16 @@ function createWindow() {
 
 // ---------- Hooks: session status from Claude Code ----------
 
+/** Hook events go out in the order they came, even when one waits on reading the transcript. */
+let hookQueue = Promise.resolve()
+
 function onHook(sid: string, event: string, payload: Record<string, any>) {
   const ev: HookEvent = { sid, event, payload }
   if (payload.transcript_path) watchTranscript(sid, String(payload.session_id || ''), String(payload.transcript_path), u => send('session:usage', u))
-  if (event === 'Stop') ev.lastText = lastAssistantText(sid)
-  send('session:hook', ev)
+  hookQueue = hookQueue.then(async () => {
+    if (event === 'Stop') ev.lastText = await lastAssistantText(sid)
+    send('session:hook', ev)
+  }).catch(() => undefined)
 }
 
 // ---------- Updates ----------
@@ -219,6 +238,14 @@ function handle(channel: string, fn: (...args: any[]) => any) {
   ipcMain.handle(channel, (_e, ...args) => fn(...args))
 }
 
+function ptyData(id: string, d: string) {
+  countPty(d.length)
+  send('pty:data', id, d)
+}
+
+/** The GitHub HQ data last written to the cache, to skip rewriting it unchanged. */
+let ghCacheKey = ''
+
 function registerIpc() {
   handle('state:load', () => store.get('state') ?? null)
   handle('state:save', (s: Persisted) => {
@@ -228,7 +255,7 @@ function registerIpc() {
     applySummonKey(s.prefs?.summonKey ?? '')
   })
 
-  handle('pty:spawn', o => spawnSession(o, (id, d) => send('pty:data', id, d), (id, code) => {
+  handle('pty:spawn', o => spawnSession(o, ptyData, (id, code) => {
     unwatchTranscript(id)
     send('pty:exit', id, code)
   }))
@@ -237,7 +264,7 @@ function registerIpc() {
   handle('pty:shell', async (o: { id: string; cwd: string; kind: string; cols: number; rows: number }) => {
     const shells = await listShells()
     const shell = shells.find(s => s.kind === o.kind) || shells[0]!
-    return spawnShell({ ...o, shell }, (id, d) => send('pty:data', id, d), (id, code) => send('pty:exit', id, code))
+    return spawnShell({ ...o, shell }, ptyData, (id, code) => send('pty:exit', id, code))
   })
   handle('pty:kill', (id: string) => {
     unwatchTranscript(id)
@@ -289,14 +316,21 @@ function registerIpc() {
   handle('summary:activity', async (repos: { id: string; path: string }[], since: number, until: number) => {
     const commits = (await Promise.all(repos.filter(r => r.path).map(async r => (await git.commitsBetween(r.path, since, until)).map(c => ({ ...c, repoId: r.id })))))
       .flat().sort((a, b) => a.at - b.at)
-    return { sessions: dayActivity(repos, since, until), commits }
+    return { sessions: await dayActivity(repos, since, until), commits }
   })
   handle('claude:run', (prompt: string) => runClaude(prompt))
   handle('usage', () => planUsage())
   handle('gh:reviews', () => reviewRequests())
   handle('gh:world', async (folders: string[], hidden: string[]) => {
     const w = await githubWorld(folders, hidden || [])
-    if (!w.error) ghCache.set('world', w)
+    if (!w.error) {
+      // Only the data counts as a change, not the time it was read.
+      const key = JSON.stringify({ ...w, at: 0 })
+      if (key !== ghCacheKey) {
+        ghCacheKey = key
+        setImmediate(() => ghCache.set('world', w))
+      }
+    }
     return w
   })
   handle('gh:cachedWorld', () => ghCache.get('world') ?? null)
@@ -327,6 +361,7 @@ function registerIpc() {
   handle('sys:fonts', () => listFonts())
   handle('sys:shells', () => listShells())
   handle('sys:info', () => appInfo())
+  handle('sys:metrics', () => sampleMetrics())
   handle('sys:saveImage', (sid: string, name: string, bytes: Uint8Array) => saveImage(sid, name, bytes))
   handle('sys:copyImage', (file: string) => copyImage(file))
   handle('sys:saveImageAs', async (file: string) => {

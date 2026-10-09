@@ -39,6 +39,8 @@ interface Entry {
   ro: ResizeObserver | null
   /** The GPU renderer, held only while the terminal is in a pane. */
   gl: WebglAddon | null
+  /** A fit waiting for the next frame. */
+  fitRaf: number
 }
 
 const entries = new Map<string, Entry>()
@@ -87,25 +89,26 @@ export function configureTerminals(h: TermHooks) {
   api.pty.onData((id, d) => entries.get(id)?.term.write(d))
 }
 
+/** Options that change the cell size, so the terminal needs fitting again. */
+const METRIC_KEYS = ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'fontWeight', 'fontWeightBold'] as const
+const PLAIN_KEYS = [...METRIC_KEYS, 'minimumContrastRatio', 'drawBoldTextInBrightColors', 'cursorStyle', 'cursorBlink', 'scrollback', 'allowTransparency'] as const
+
+/** Applies only the options that changed: setting any (above all the theme) makes xterm redraw, and with WebGL rebuild its glyphs. */
+function applyOptions(e: Entry, x: ReturnType<typeof xtermOptions>) {
+  const cur = e.term.options as Record<string, unknown>
+  let refit = false
+  for (const k of PLAIN_KEYS) {
+    if (cur[k] === x[k]) continue
+    cur[k] = x[k]
+    if ((METRIC_KEYS as readonly string[]).includes(k)) refit = true
+  }
+  if (JSON.stringify(e.term.options.theme) !== JSON.stringify(x.theme)) e.term.options.theme = x.theme
+  if (refit && e.opened) queueFit(e)
+}
+
 export function setTerminalOptions(o: TermOptions) {
   opts = o
-  for (const [sid, e] of entries) {
-    const x = xtermOptions(o, seeThrough.has(sid))
-    e.term.options.fontFamily = x.fontFamily
-    e.term.options.fontSize = x.fontSize
-    e.term.options.lineHeight = x.lineHeight
-    e.term.options.fontWeight = x.fontWeight
-    e.term.options.fontWeightBold = x.fontWeightBold
-    e.term.options.letterSpacing = x.letterSpacing
-    e.term.options.minimumContrastRatio = x.minimumContrastRatio
-    e.term.options.drawBoldTextInBrightColors = x.drawBoldTextInBrightColors
-    e.term.options.cursorStyle = x.cursorStyle
-    e.term.options.cursorBlink = x.cursorBlink
-    e.term.options.scrollback = x.scrollback
-    e.term.options.allowTransparency = x.allowTransparency
-    e.term.options.theme = x.theme
-    if (e.opened) safeFit(e)
-  }
+  for (const [sid, e] of entries) applyOptions(e, xtermOptions(o, seeThrough.has(sid)))
 }
 
 /** Draws a terminal see-through, or back to its usual background. */
@@ -115,9 +118,7 @@ export function setSeeThrough(sid: string, on: boolean) {
   else seeThrough.delete(sid)
   const e = entries.get(sid)
   if (!e || !opts) return
-  const x = xtermOptions(opts, on)
-  e.term.options.allowTransparency = x.allowTransparency
-  e.term.options.theme = x.theme
+  applyOptions(e, xtermOptions(opts, on))
 }
 
 function safeFit(e: Entry) {
@@ -129,8 +130,32 @@ function safeFit(e: Entry) {
   }
 }
 
-/** Draws with WebGL while in a pane. Hidden terminals let go of their context, since Chromium caps them per page. */
+/** Fits on the next frame, once however many size changes came before it. */
+function queueFit(e: Entry) {
+  if (e.fitRaf) return
+  e.fitRaf = requestAnimationFrame(() => {
+    e.fitRaf = 0
+    safeFit(e)
+  })
+}
+
+/**
+ * Terminals that just left their pane but keep their WebGL context, oldest first, so switching back
+ * doesn't rebuild it. Kept few: Chromium caps contexts per page, and visible panes and the 3D World need theirs.
+ */
+const warm: Entry[] = []
+const WARM_MAX = 4
+
+function keepWarm(e: Entry) {
+  if (!e.gl) return
+  warm.push(e)
+  while (warm.length > WARM_MAX) disableGl(warm[0]!)
+}
+
+/** Draws with WebGL while in a pane. Hidden terminals let go of their context after a while (see `warm`). */
 function enableGl(e: Entry) {
+  const i = warm.indexOf(e)
+  if (i >= 0) warm.splice(i, 1)
   if (e.gl || noGl) return
   try {
     const gl = new WebglAddon()
@@ -143,6 +168,8 @@ function enableGl(e: Entry) {
 }
 
 function disableGl(e: Entry) {
+  const i = warm.indexOf(e)
+  if (i >= 0) warm.splice(i, 1)
   e.gl?.dispose()
   e.gl = null
 }
@@ -185,7 +212,12 @@ export function ensureTerminal(sid: string): Entry {
   const el = document.createElement('div')
   el.style.cssText = 'width:100%;height:100%;'
   term.onData(d => api.pty.write(sid, d))
-  term.onResize(({ cols, rows }) => api.pty.resize(sid, cols, rows))
+  // Claude redraws its whole screen on every resize, so dragging a pane edge only tells it the size it settles on.
+  let resizeT: ReturnType<typeof setTimeout> | undefined
+  term.onResize(({ cols, rows }) => {
+    clearTimeout(resizeT)
+    resizeT = setTimeout(() => api.pty.resize(sid, cols, rows), 120)
+  })
   term.attachCustomKeyEventHandler((ev) => {
     if (ev.type !== 'keydown') return true
     if (hooks?.isAppKey(ev)) return false
@@ -198,7 +230,7 @@ export function ensureTerminal(sid: string): Entry {
     }
     return true
   })
-  e = { term, fit, el, opened: false, ro: null, gl: null }
+  e = { term, fit, el, opened: false, ro: null, gl: null, fitRaf: 0 }
   entries.set(sid, e)
   return e
 }
@@ -229,9 +261,9 @@ export function attachTerminal(sid: string, host: HTMLElement) {
   }
   enableGl(e)
   e.ro?.disconnect()
-  e.ro = new ResizeObserver(() => safeFit(e))
+  e.ro = new ResizeObserver(() => queueFit(e))
   e.ro.observe(host)
-  requestAnimationFrame(() => safeFit(e))
+  queueFit(e)
 }
 
 export function detachTerminal(sid: string, host: HTMLElement) {
@@ -240,7 +272,7 @@ export function detachTerminal(sid: string, host: HTMLElement) {
   if (e.el.parentElement === host) {
     e.ro?.disconnect()
     e.ro = null
-    disableGl(e)
+    keepWarm(e)
     host.removeChild(e.el)
   }
 }
@@ -250,6 +282,7 @@ export function disposeTerminal(sid: string) {
   const e = entries.get(sid)
   if (!e) return
   e.ro?.disconnect()
+  cancelAnimationFrame(e.fitRaf)
   disableGl(e)
   e.term.dispose()
   e.el.remove()

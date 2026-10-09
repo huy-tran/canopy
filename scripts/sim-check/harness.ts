@@ -55,6 +55,17 @@ scene.syncGithub({
 
 scene.setSky({ hour: Number(q.get('hour') ?? 14), sunrise: 6, sunset: 18, sky: q.get('sky') || null })
 
+// Canopy's own numbers for the Canopy Core: two minutes of a calm app, or one whose main thread is lagging.
+const hot = view === 'metrics-hot'
+const history = Array.from({ length: 60 }, (_, i) => ({
+  memMB: 1180 + i * 4 + Math.sin(i * 0.7) * 30,
+  cpu: 6 + Math.abs(Math.sin(i * 0.4)) * (hot ? 40 : 8),
+  fps: i % 17 === 5 ? 22 : 30,
+  lagMs: hot && i > 45 ? 40 + (i % 5) * 12 : 2 + (i % 9 === 0 ? 9 : 1),
+}))
+const last = history.at(-1)!
+scene.setMetrics({ ...last, lagMaxMs: hot ? 260 : 14, ptys: 6, history })
+
 // Run the clock fast so people settle into their spots and the band gets going.
 const fast = Number(q.get('fast') || 0)
 if (fast) {
@@ -90,6 +101,10 @@ setTimeout(() => {
   }
   else if (view === 'desks') at([bravo.x + 4, 6, bravo.z + 8], [bravo.x, 0.6, bravo.z])
   else if (view === 'react') at([bravo.x + 2, 4, bravo.z + 5], [bravo.x, 0.8, bravo.z])
+  else if (view.startsWith('metrics')) {
+    const c = scene.core.group.position as THREE.Vector3
+    at([c.x + 3.5, 4.2, c.z + 7.5], [c.x, 1.6, c.z])
+  }
   else if (view.startsWith('hq')) {
     // The whole building, or one room from just outside its door.
     const hq = scene.hq.group.position as THREE.Vector3
@@ -99,3 +114,16 @@ setTimeout(() => {
   }
   ;(window as any).simErrors = errors
 }, 400)
+
+// What a frame costs, for sim-check.mjs to print: the last frame's draw calls and triangles, and the shader programs and lights.
+setTimeout(() => {
+  const r = scene.renderer as THREE.WebGLRenderer
+  // three.js leaves the shadow pass out of its counts: the meshes casting a shadow stand in for its draw calls.
+  let lights = 0, casters = 0
+  scene.scene.traverseVisible((o: THREE.Object3D) => {
+    if ((o as THREE.PointLight).isPointLight) lights++
+    if ((o as THREE.Mesh).isMesh && o.castShadow) casters++
+  })
+  r.render(scene.scene, scene.camera)
+  console.log('sim-info ' + JSON.stringify({ calls: r.info.render.calls, triangles: r.info.render.triangles, casters, programs: r.info.programs?.length, pointLights: lights }))
+}, 3000)

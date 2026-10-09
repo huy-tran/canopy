@@ -29,6 +29,9 @@ const VIEWS = [
   { name: 'hq', q: 'view=hq&hour=15&fast=4' },
   { name: 'hq-pulls', q: 'view=hq-pulls&hour=15&fast=4' },
   { name: 'hq-runs', q: 'view=hq-runs&hour=15&fast=4' },
+  // The Canopy Core by the stage: calm, then running hot with the main thread lagging.
+  { name: 'metrics', q: 'view=metrics&hour=15&fast=4' },
+  { name: 'metrics-hot', q: 'view=metrics-hot&hour=21&fast=4' },
 ]
 
 const browser = process.env.CHROME || [
@@ -63,11 +66,14 @@ for (const v of VIEWS.filter(v => !only || v.name.includes(only))) {
     `--user-data-dir=${path.join(out, 'profile')}`, `--screenshot=${file}`, `${pathToFileURL(path.join(out, 'index.html'))}?${v.q}`,
   ], { encoding: 'utf8', timeout: 120_000 })
   const errors = (r.stderr || '').split('\n').filter(l => /Uncaught|CONSOLE.*error/i.test(l))
+  // The harness logs what its frame cost: draw calls, triangles, shader programs and lights.
+  const info = /sim-info (\{.*?\})/.exec(r.stderr || '')?.[1]
+  const cost = info ? Object.entries(JSON.parse(info)).map(([k, n]) => `${k} ${n}`).join(', ') : ''
   if (errors.length || !fs.existsSync(file)) {
     failed = true
     console.error(`✗ ${v.name}\n  ${errors.join('\n  ') || 'no screenshot'}`)
   } else {
-    console.log(`✓ ${v.name}  ${path.relative(root, file)}`)
+    console.log(`✓ ${v.name}  ${path.relative(root, file)}${cost ? `  (${cost})` : ''}`)
   }
 }
 process.exit(failed ? 1 : 0)

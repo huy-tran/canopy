@@ -1,6 +1,7 @@
 // Git and repo inspection for the explorer, pane chips, worktrees and the project form.
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { GitChange, GitStatus, RepoInfo } from '../../shared/types'
 
@@ -71,17 +72,41 @@ function parseNumstat(out: string): Map<string, { a: number; d: number }> {
   return m
 }
 
+/** Untracked files bigger than this aren't read to count their lines. */
+const COUNT_MAX = 512 * 1024
+/** Nor more than this many of them. */
+const COUNT_FILES = 200
+
+async function lineCount(file: string): Promise<number> {
+  try {
+    if ((await fsp.stat(file)).size > COUNT_MAX) return 0
+    const txt = await fsp.readFile(file, 'utf8')
+    return txt ? txt.split('\n').length - (txt.endsWith('\n') ? 1 : 0) : 0
+  } catch {
+    return 0
+  }
+}
+
+/** "## main...origin/main [ahead 1]" -> "main"; detached is "HEAD", as rev-parse says. */
+function branchOf(header: string) {
+  const h = header.replace(/^## /, '')
+  if (h.startsWith('HEAD (no branch)')) return 'HEAD'
+  return h.replace(/^No commits yet on /, '').replace(/^Initial commit on /, '').split('...')[0]!.split(' ')[0]!
+}
+
 export async function status(cwd: string): Promise<GitStatus> {
   try {
-    const [branchOut, porcelain, unstaged, staged] = await Promise.all([
-      git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']),
-      git(cwd, ['status', '--porcelain=v1', '-uall']),
-      git(cwd, ['diff', '--numstat']),
-      git(cwd, ['diff', '--cached', '--numstat']),
+    // Two git runs: status with the branch header, and staged plus unstaged line counts against HEAD.
+    const [porcelain, numstat] = await Promise.all([
+      git(cwd, ['status', '--porcelain=v1', '-b', '-uall']),
+      git(cwd, ['diff', 'HEAD', '--numstat']).catch(() => git(cwd, ['diff', '--cached', '--numstat']).catch(() => '')),
     ])
-    const us = parseNumstat(unstaged), ss = parseNumstat(staged)
+    const ns = parseNumstat(numstat)
     const changes: GitChange[] = []
-    for (const line of porcelain.split('\n')) {
+    const lines = porcelain.split('\n')
+    const branch = lines[0]?.startsWith('## ') ? branchOf(lines.shift()!) : ''
+    const counts: Promise<void>[] = []
+    for (const line of lines) {
       if (line.length < 4) continue
       const x = line[0]!, y = line[1]!
       let p = line.slice(3)
@@ -89,19 +114,13 @@ export async function status(cwd: string): Promise<GitStatus> {
       p = p.replace(/^"|"$/g, '')
       const untracked = x === '?'
       const st: GitChange['st'] = untracked || x === 'A' ? 'A' : x === 'D' || y === 'D' ? 'D' : 'M'
-      let a = (us.get(p)?.a || 0) + (ss.get(p)?.a || 0)
-      const d = (us.get(p)?.d || 0) + (ss.get(p)?.d || 0)
-      if (untracked) {
-        try {
-          const txt = fs.readFileSync(path.join(cwd, p), 'utf8')
-          a = txt ? txt.split('\n').length - (txt.endsWith('\n') ? 1 : 0) : 0
-        } catch {
-          a = 0
-        }
-      }
-      changes.push({ p, st, a, d, staged: x !== ' ' && x !== '?' && y === ' ' })
+      const c: GitChange = { p, st, a: ns.get(p)?.a || 0, d: ns.get(p)?.d || 0, staged: x !== ' ' && x !== '?' && y === ' ' }
+      changes.push(c)
+      // Untracked files have no diff; their lines are counted from the file.
+      if (untracked && counts.length < COUNT_FILES) counts.push(lineCount(path.join(cwd, p)).then((n) => { c.a = n }))
     }
-    return { isRepo: true, branch: branchOut.trim(), changes }
+    await Promise.all(counts)
+    return { isRepo: true, branch, changes }
   } catch {
     return { isRepo: false, branch: '', changes: [] }
   }

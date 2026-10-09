@@ -54,11 +54,20 @@ export default defineNuxtPlugin({
       sessions: reopened ? S.saved : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
       recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels,
     }))
-    watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, JSON.stringify(S.saved), S.focus, ui.recaps, ui.recapHours, ui.panels], () => {
+    /** When the first unsaved change came; saves wait for a quiet moment, but never longer than SAVE_MAX after it. */
+    let dirtySince = 0
+    const SAVE_MAX = 2000
+    // One string of everything saved: the watcher fires only when it really changes, not on every session update.
+    watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.recaps, ui.recapHours, ui.panels]), () => {
       if (demo) return
+      const now = Date.now()
+      dirtySince ||= now
       clearTimeout(saveT)
-      saveT = setTimeout(() => api.state.save(snapshot()), 300)
-    }, { deep: true })
+      saveT = setTimeout(() => {
+        dirtySince = 0
+        api.state.save(snapshot())
+      }, Math.max(0, Math.min(300, dirtySince + SAVE_MAX - now)))
+    })
 
     // ---------- Terminals ----------
     // Terminal colours come from a probe scoped to the terminal's own theme (panes can stay dark in light mode).
@@ -87,14 +96,15 @@ export default defineNuxtPlugin({
         drawBoldTextInBrightColors: p.termBoldBright ?? true,
         cursor: p.cursor,
         cursorBlink: p.cursorBlink ?? true,
-        scrollback: Math.max(100, parseInt(p.scrollback, 10) || 5000),
+        scrollback: Math.max(100, parseInt(p.scrollback, 10) || 3000),
         theme: { background: css('--term'), foreground: fg, cursor: fg, selection: prefs.terminalDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)', ansi: prefs.terminalDark ? undefined : LIGHT_ANSI },
       }
     }
     setTerminalOptions(termOptions())
     watch(() => {
       const p = prefs.prefs
-      return [p.termFont, p.termSize, p.termLineHeight, p.termWeight, p.termWeightBold, p.termLetterSpacing, p.termBrightness, p.termContrast, p.termBoldBright, p.cursor, p.cursorBlink, p.scrollback, prefs.resolvedTheme, prefs.terminalDark]
+      // A string, so unrelated prefs changes (such as dragging the dock panel's edge) don't restyle every terminal.
+      return [p.termFont, p.termSize, p.termLineHeight, p.termWeight, p.termWeightBold, p.termLetterSpacing, p.termBrightness, p.termContrast, p.termBoldBright, p.cursor, p.cursorBlink, p.scrollback, prefs.resolvedTheme, prefs.terminalDark].join('|')
     }, () => {
       const font = termFont()
       document.documentElement.style.setProperty('--mono', monoStack(font))
@@ -164,14 +174,16 @@ export default defineNuxtPlugin({
     watch(() => ui.gh, (on) => { if (!on) setTimeout(R.poll, 2000) })
 
     // ---------- Git status for the selected project's sessions and repos ----------
+    // Not while the window is hidden or minimised: nobody sees it, and each poll starts git processes.
     const pollGit = () => {
       const p = P.current
-      if (!p) return
+      if (!p || document.hidden) return
       const cwds = new Set<string>([...p.repos.map(r => r.path), ...S.ofProject(p.id).map(s => s.cwd)])
       cwds.forEach(c => G.refresh(c))
     }
     setInterval(pollGit, 5000)
     watch(() => P.sel, pollGit, { immediate: true })
+    document.addEventListener('visibilitychange', pollGit)
 
     if (demo) {
       // Fake sessions only: nothing to resume, and nothing that starts Claude.

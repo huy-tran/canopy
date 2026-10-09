@@ -32,7 +32,7 @@ export const useGhWorldStore = defineStore('ghworld', () => {
   const isHidden = (repo: string) => hidden.value.has(repo.toLowerCase())
 
   /** The last read as it came, and as shown: without the hidden repos, so hiding one takes effect at once. */
-  const raw = ref<GhWorld | null>(null)
+  const raw = shallowRef<GhWorld | null>(null)
   const world = computed<GhWorld | null>(() => {
     const w = raw.value
     if (!w || !hidden.value.size) return w
