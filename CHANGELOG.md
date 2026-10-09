@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-09
+
 - Subagents show up in the 3D World again. Claude Code now runs them in the background by default, and Canopy took each one as finished as soon as it started, so they vanished at once. They now stand behind their session's chair, with a name and a Subagent tag, until they finish.
 
 ## [0.19.0] - 2026-10-09
@@ -185,6 +187,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.19.1]: https://github.com/huy-tran/canopy/releases/tag/v0.19.1
 [0.19.0]: https://github.com/huy-tran/canopy/releases/tag/v0.19.0
 [0.18.0]: https://github.com/huy-tran/canopy/releases/tag/v0.18.0
 [0.17.0]: https://github.com/huy-tran/canopy/releases/tag/v0.17.0
