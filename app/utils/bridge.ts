@@ -1,4 +1,5 @@
-import type { CanopyApi } from '#shared/bridge'
+import { AWS_CALLS, type AwsApi, type CanopyApi } from '#shared/bridge'
+import type { AwsCtx } from '#shared/aws'
 
 const noop = () => () => {}
 const none = async () => null as any
@@ -48,6 +49,17 @@ const browserFallback: CanopyApi = {
     branches: async () => [],
     runWorkflow: async () => ({ ok: false, error: 'Needs the desktop app.' }),
   },
+  aws: {
+    ...Object.fromEntries(AWS_CALLS.map(c => [c, async () => ({ ok: false, error: 'Needs the desktop app.', problem: 'other' })])),
+    lockState: async () => ({ unlocked: false, enrolled: false, until: 0, dryRun: false, dryRunFrom: null }),
+    profiles: async () => [],
+    state: async () => ({ lastProfile: '', lastRegions: {}, bookmarks: {} }),
+    cachedWorld: none,
+    world: async (ctx: AwsCtx) => ({ profile: ctx.profile, region: ctx.region, instances: [], envs: [], at: Date.now(), error: 'Needs the desktop app.', problem: 'other' }),
+    search: async () => ({ items: [], failed: [] }),
+    s3PickUpload: async () => [],
+    onTail: noop,
+  } as unknown as AwsApi,
   sys: {
     openExternal: async (u) => { window.open(u, '_blank') }, showInFolder: none, openEditor: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     pickFolder: none, fonts: async () => [], shells: async () => [], info: async () => ({ version: '0.0.0', electron: '-', chromium: '-', node: '-', claudeVersion: '-', claudePath: '-', windows: '-' }),

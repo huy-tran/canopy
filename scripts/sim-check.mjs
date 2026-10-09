@@ -32,6 +32,10 @@ const VIEWS = [
   // The Canopy Core by the stage: calm, then running hot with the main thread lagging.
   { name: 'metrics', q: 'view=metrics&hour=15&fast=4' },
   { name: 'metrics-hot', q: 'view=metrics-hot&hour=21&fast=4' },
+  // The AWS data centre on the other side: the whole building, then each room up close.
+  { name: 'dc', q: 'view=dc&hour=15&fast=4' },
+  { name: 'dc-racks', q: 'view=dc-racks&hour=15&fast=4' },
+  { name: 'dc-envs', q: 'view=dc-envs&hour=15&fast=4' },
 ]
 
 const browser = process.env.CHROME || [

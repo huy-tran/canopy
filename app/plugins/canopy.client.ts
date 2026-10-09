@@ -123,7 +123,8 @@ export default defineNuxtPlugin({
         const cb = comboOf(e)
         if (!cb) return false
         if (/^Alt\+[1-9]$/.test(cb)) return true
-        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim'))
+        // In an AWS terminal, the key that leaves it running stays with the window.
+        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim')) || (ui.aws && matchAction(prefs.keys, cb, 'aws') === 'awsDetach')
       },
       onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
       onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },
@@ -138,7 +139,7 @@ export default defineNuxtPlugin({
     // ---------- Main process events ----------
     api.session.onHook(e => S.onHook(e))
     api.session.onUsage(u => S.onUsage(u))
-    api.pty.onExit((id, code) => S.onExit(id, code))
+    api.pty.onExit((id, code) => (id.startsWith('aws-') ? useAwsStore().onTermExit(id, code) : S.onExit(id, code)))
     api.svc.onData((id, d) => V.onData(id, d))
     api.svc.onStatus((id, s, code) => V.onStatus(id, s, code))
     api.sys.onNotifyClick((sid) => {

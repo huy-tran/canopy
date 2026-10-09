@@ -1,5 +1,95 @@
 // The API the preload script exposes as window.canopy.
 import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind } from './types'
+import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
+
+/** The AWS calls, one IPC channel each (`aws:<name>`); main and preload are both built from this list. */
+export const AWS_CALLS = [
+  'lockState', 'unlock', 'lock', 'enrolStart', 'enrolFinish', 'profiles', 'state', 'remember', 'saveBookmarks', 'forget',
+  'regions', 'world', 'cachedWorld', 'search', 'term',
+  'ec2Instances', 'ec2Console', 'ec2Power',
+  'ebEnvs', 'ebEvents', 'ebVersions', 'ebDeploy',
+  'rdsInstances',
+  'ecResources', 'ecUpdates', 'ecServiceUpdate', 'ecApply',
+  'logGroups', 'logStreams', 'logEvents', 'logSearch', 'tailStart', 'tailStop',
+  'cfDistributions', 'cfInvalidations', 'cfInvalidate',
+  's3Buckets', 's3List', 's3Download', 's3Delete', 's3PickUpload', 's3Existing', 's3Upload',
+  'params', 'paramValue', 'paramHistory', 'paramPut',
+  'shInsights', 'shInsightResults', 'shFindings',
+  'cdApps', 'cdGroups', 'cdDeployments',
+] as const
+
+/** The AWS window's calls, made with the AWS SDK in the main process. Reads take `force` to skip the cache. */
+export interface AwsApi {
+  /** Whether AWS is unlocked, enrolled, and only dry-running its changes. */
+  lockState(): Promise<AwsLockState>
+  /** Unlocks with a TOTP or backup code; `waitMs` after a wrong one. */
+  unlock(code: string): Promise<{ ok: boolean; error?: string; waitMs?: number }>
+  lock(): Promise<void>
+  enrolStart(): Promise<AwsEnrolment>
+  /** Confirms a new TOTP secret with its first code; returns ten one-time backup codes. */
+  enrolFinish(code: string): Promise<{ ok: boolean; error?: string; codes?: string[] }>
+  profiles(): Promise<AwsProfile[]>
+  /** The last profile and regions and the bookmarks, shared with aws-tui. */
+  state(): Promise<AwsState>
+  remember(profile: string, region: string): Promise<void>
+  saveBookmarks(profile: string, list: AwsBookmark[]): Promise<void>
+  /** Forgets a profile's credentials, after an SSO sign-in. */
+  forget(profile: string): Promise<void>
+  regions(ctx: AwsCtx): Promise<AwsResult<AwsRegionStatus[]>>
+  /** EC2 instances and Beanstalk environments, for the window and the 3D World's data centre. */
+  world(ctx: AwsCtx, force: boolean): Promise<AwsWorld>
+  cachedWorld(): Promise<AwsWorld | null>
+  search(ctx: AwsCtx): Promise<{ items: AwsSearchItem[]; failed: string[] }>
+  /** Starts an AWS CLI session in a terminal: an SSM shell, a port forward, a log tail or an SSO sign-in. */
+  term(ctx: AwsCtx, id: string, o: { kind: AwsTerm['kind']; instance?: string; remotePort?: number; localPort?: number; host?: string; group?: string }, cols: number, rows: number): Promise<{ ok: boolean; cmd?: string; error?: string }>
+  ec2Instances(ctx: AwsCtx, force: boolean): Promise<AwsResult<Ec2Instance[]>>
+  ec2Console(ctx: AwsCtx, id: string, latest: boolean): Promise<AwsResult<string>>
+  ec2Power(ctx: AwsCtx, id: string, what: 'stop' | 'start' | 'reboot', name: string, stateBefore: string): Promise<AwsDone>
+  ebEnvs(ctx: AwsCtx, force: boolean): Promise<AwsResult<EbEnv[]>>
+  ebEvents(ctx: AwsCtx, env: string): Promise<AwsResult<EbEvent[]>>
+  ebVersions(ctx: AwsCtx, app: string, force: boolean): Promise<AwsResult<EbVersion[]>>
+  ebDeploy(ctx: AwsCtx, env: string, version: string): Promise<AwsDone>
+  rdsInstances(ctx: AwsCtx, force: boolean): Promise<AwsResult<RdsInstance[]>>
+  ecResources(ctx: AwsCtx, force: boolean): Promise<AwsResult<EcResource[]>>
+  ecUpdates(ctx: AwsCtx, force: boolean): Promise<AwsResult<EcUpdateAction[]>>
+  ecServiceUpdate(ctx: AwsCtx, name: string, force: boolean): Promise<AwsResult<EcServiceUpdate | null>>
+  ecApply(ctx: AwsCtx, update: string, resource: string, kind: EcUpdateAction['resourceKind'], severity: string): Promise<AwsDone>
+  logGroups(ctx: AwsCtx, token: string | null, force: boolean): Promise<AwsResult<{ groups: LogGroup[]; next: string | null }>>
+  logStreams(ctx: AwsCtx, group: string, force: boolean): Promise<AwsResult<LogStream[]>>
+  logEvents(ctx: AwsCtx, group: string, stream: string): Promise<AwsResult<LogEvent[]>>
+  logSearch(ctx: AwsCtx, group: string, pattern: string, start: number, end: number): Promise<AwsResult<{ events: LogEvent[]; more: boolean }>>
+  /** Follows a log group live; events arrive through onTail. */
+  tailStart(ctx: AwsCtx, id: string, groupArn: string): Promise<void>
+  tailStop(id: string): Promise<void>
+  onTail(fn: (m: LogTailMsg) => void): () => void
+  cfDistributions(ctx: AwsCtx, force: boolean): Promise<AwsResult<CfDistribution[]>>
+  cfInvalidations(ctx: AwsCtx, dist: string, force: boolean): Promise<AwsResult<CfInvalidation[]>>
+  cfInvalidate(ctx: AwsCtx, dist: string, paths: string[]): Promise<AwsDone>
+  s3Buckets(ctx: AwsCtx, force: boolean): Promise<AwsResult<S3Bucket[]>>
+  s3List(ctx: AwsCtx, bucket: string, region: string, prefix: string, force: boolean): Promise<AwsResult<{ entries: S3Entry[]; truncated: boolean }>>
+  /** Asks where to save, then downloads; null data when the user cancelled. */
+  s3Download(ctx: AwsCtx, bucket: string, region: string, key: string): Promise<AwsResult<string | null>>
+  s3Delete(ctx: AwsCtx, bucket: string, region: string, keys: string[]): Promise<AwsDone>
+  /** Asks for files to upload. */
+  s3PickUpload(): Promise<{ path: string; size: number }[]>
+  s3Existing(ctx: AwsCtx, bucket: string, region: string, keys: string[]): Promise<AwsResult<string[]>>
+  s3Upload(ctx: AwsCtx, bucket: string, region: string, file: string, key: string): Promise<AwsDone>
+  params(ctx: AwsCtx, force: boolean): Promise<AwsResult<SsmParam[]>>
+  paramValue(ctx: AwsCtx, meta: SsmParam, version?: number): Promise<AwsResult<SsmParamValue>>
+  paramHistory(ctx: AwsCtx, name: string): Promise<AwsResult<SsmParamVersion[]>>
+  paramPut(ctx: AwsCtx, o: { name: string; value: string; type: string; overwrite: boolean; description?: string; keyId?: string }): Promise<AwsDone>
+  shInsights(ctx: AwsCtx, force: boolean): Promise<AwsResult<ShInsight[]>>
+  shInsightResults(ctx: AwsCtx, arn: string): Promise<AwsResult<ShInsightResult[]>>
+  shFindings(ctx: AwsCtx, q: ShFindingsQuery): Promise<AwsResult<{ findings: ShFinding[]; capped: boolean }>>
+  cdApps(ctx: AwsCtx, force: boolean): Promise<AwsResult<CdApp[]>>
+  cdGroups(ctx: AwsCtx, app: string, force: boolean): Promise<AwsResult<CdGroup[]>>
+  cdDeployments(ctx: AwsCtx, app: string, group: string, force: boolean): Promise<AwsResult<CdDeployment[]>>
+}
+
+// Every listed call is in the interface, and every method but onTail is listed.
+type _Calls = (typeof AWS_CALLS)[number]
+const _check: Record<Exclude<keyof AwsApi, 'onTail'>, true> = Object.fromEntries(AWS_CALLS.map(c => [c, true])) as Record<_Calls, true>
+void _check
 
 type Off = () => void
 
@@ -85,6 +175,7 @@ export interface CanopyApi {
     branches(repo: string): Promise<string[]>
     runWorkflow(repo: string, id: number, ref: string, inputs: Record<string, string>): Promise<GhDone>
   }
+  aws: AwsApi
   sys: {
     openExternal(url: string): Promise<void>
     showInFolder(path: string): Promise<void>

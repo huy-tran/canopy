@@ -9,6 +9,7 @@ import {
   mesh, micStand, oklch, type Pick, pingPong, plant, poolTable, rbox, type Role, seeded, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
 } from './kit'
 import { GithubHQ, HQ_PATH_Z, HQ_SIZE, type HqData } from './github'
+import { AwsDataCentre, DC_PATH_Z, DC_SIZE, type DcData } from './aws'
 
 /**
  * The Canopy workspace as an open-plan office. Each project is a room behind low walls in its
@@ -89,7 +90,7 @@ const SONG = 34
 const ENCORE = 7
 /** The x of the two clear lanes through the common room and past either side of the stage. */
 const STAGE_LANE = 7.2
-/** Open ground between the office and GitHub HQ. */
+/** Open ground between the office and GitHub HQ, and the AWS data centre on the other side. */
 const HQ_GAP = 7
 const WALK_SPEED = 2.4
 /**
@@ -325,10 +326,12 @@ export class WorkspaceScene {
   private sign: ReturnType<typeof floorText> | null = null
   private signKey = ''
   private bounds = { w: 20, d: 20, cz: 0 }
-  /** The office and GitHub HQ beside it, for the camera, the sun and the weather. */
+  /** The office with GitHub HQ and the AWS data centre either side, for the camera, the sun and the weather. */
   private world = { cx: 0, w: 20, d: 20, cz: 0 }
   private hq: GithubHQ | null = null
   private hqData: HqData = { repos: [], pulls: [], runs: [], loading: true }
+  private dc: AwsDataCentre | null = null
+  private dcData: DcData = { profile: '', region: '', instances: [], envs: [], loading: true }
   /** x of the side aisles that lead from the back rows down to the common room. */
   private aisleX = 10
   private spots: Spot[] = []
@@ -489,10 +492,16 @@ export class WorkspaceScene {
     if (on) this.renderer.shadowMap.needsUpdate = true
   }
 
+  /** The EC2 instances and Beanstalk environments the AWS data centre shows. */
+  syncAws(d: DcData) {
+    this.dcData = d
+    this.dc?.sync(d)
+  }
+
   /** Fly back out to see the whole workspace. */
   resetView(animate = true) {
     this.follow = null
-    // Wide enough for the office and GitHub HQ side by side, in a narrower view too.
+    // Wide enough for the office and the buildings either side, in a narrower view too.
     const size = Math.max(this.world.w * Math.max(1, 1.55 / Math.max(0.5, this.camera.aspect)), this.world.d)
     // A little towards the common room, which is where most of the fun is.
     const target = v3(this.world.cx, this.bounds.cz + 1)
@@ -528,6 +537,13 @@ export class WorkspaceScene {
     if (pick.kind === 'core') {
       const c = this.core?.group.position
       if (c) this.flyTo(c.clone().add(new THREE.Vector3(1.5, 4.5, 7.5)), c.clone().setY(1.6))
+      return
+    }
+    if (pick.kind === 'aws') {
+      const p = this.dc?.where(pick.id)
+      if (!p) return
+      const away = pick.id === 'dc' ? new THREE.Vector3(0, 22, 26) : pick.id.startsWith('wing:') ? new THREE.Vector3(0, 11, 12) : new THREE.Vector3(2.5, 4.5, 6)
+      this.flyTo(p.clone().add(away), p)
       return
     }
     const room = this.rooms.get(pick.id)
@@ -716,6 +732,8 @@ export class WorkspaceScene {
   private clearBuilt() {
     this.hq?.dispose()
     this.hq = null
+    this.dc?.dispose()
+    this.dc = null
     for (const o of this.built) {
       this.floor.remove(o)
       disposeTree(o)
@@ -764,12 +782,15 @@ export class WorkspaceScene {
     const front = HALL + COMMON_D + STAGE_D + 1
     this.bounds = { w: Math.max(maxW, commonW) + 8, d: front - back + 2, cz: (front + back) / 2 }
 
-    // GitHub HQ stands on its own ground to the right of the office, level with the common room.
+    // GitHub HQ stands on its own ground to the right of the office, level with the common room,
+    // and the AWS data centre likewise to the left.
     const hqX = this.bounds.w / 2 + HQ_GAP + HQ_SIZE.w / 2
     const hqZ = HALL + COMMON_D / 2 - HQ_SIZE.cz
-    const left = -this.bounds.w / 2, right = hqX + HQ_SIZE.w / 2
-    const near = Math.min(this.bounds.cz - this.bounds.d / 2, hqZ + HQ_SIZE.cz - HQ_SIZE.d / 2)
-    const far = Math.max(this.bounds.cz + this.bounds.d / 2, hqZ + HQ_SIZE.cz + HQ_SIZE.d / 2)
+    const dcX = -this.bounds.w / 2 - HQ_GAP - DC_SIZE.w / 2
+    const dcZ = HALL + COMMON_D / 2 - DC_SIZE.cz
+    const left = dcX - DC_SIZE.w / 2, right = hqX + HQ_SIZE.w / 2
+    const near = Math.min(this.bounds.cz - this.bounds.d / 2, hqZ + HQ_SIZE.cz - HQ_SIZE.d / 2, dcZ + DC_SIZE.cz - DC_SIZE.d / 2)
+    const far = Math.max(this.bounds.cz + this.bounds.d / 2, hqZ + HQ_SIZE.cz + HQ_SIZE.d / 2, dcZ + DC_SIZE.cz + DC_SIZE.d / 2)
     this.world = { cx: (left + right) / 2, w: right - left, d: far - near, cz: (near + far) / 2 }
 
     const ground = this.add(blueprintGround(Math.max(this.world.w, this.world.d) * 3))
@@ -807,6 +828,14 @@ export class WorkspaceScene {
     const path = this.add(mesh(boxGeo(pathLen, 0.06, 2.6), mat('#3a3f4b', { roughness: 0.95 }), false))
     path.position.set(this.bounds.w / 2 + pathLen / 2 - 0.2, -0.02, hqZ + HQ_PATH_Z)
     for (const o of [ground, wood, path]) freeze(o)
+
+    const dc = new AwsDataCentre()
+    dc.group.position.set(dcX, 0, dcZ)
+    this.add(dc.group)
+    dc.sync(this.dcData)
+    this.dc = dc
+    const dcPath = this.add(mesh(boxGeo(pathLen, 0.06, 2.6), mat('#3a3f4b', { roughness: 0.95 }), false))
+    dcPath.position.set(-this.bounds.w / 2 - pathLen / 2 + 0.2, -0.02, dcZ + DC_PATH_Z)
 
     for (const p of out) {
       p.spot = null
@@ -1705,6 +1734,7 @@ export class WorkspaceScene {
     this.stepPeople(t, dt)
     this.stepCore(t, dt)
     this.hq?.step(t, dt)
+    this.dc?.step(t, dt)
     this.stepPuffs(t, dt)
     this.stepWeather(t, dt)
     this.stepFly(t)

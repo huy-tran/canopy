@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import type { DockPanelState, Layout, PlanUsage, RecapHours, Session, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
-export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'notifications' | 'keys'
+export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'notifications' | 'aws' | 'keys'
 
 export const useUiStore = defineStore('ui', () => {
   const P = useProjectsStore()
@@ -38,6 +38,8 @@ export const useUiStore = defineStore('ui', () => {
   const simTalk = ref(0)
   /** The GitHub window is open, over the terminals or the 3D World. */
   const gh = ref(false)
+  /** The AWS window is open, likewise. */
+  const aws = ref(false)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -82,8 +84,8 @@ export const useUiStore = defineStore('ui', () => {
 
   function focusLater() {
     setTimeout(() => {
-      // The GitHub window takes the keyboard itself while it is open.
-      if (gh.value) return
+      // The GitHub and AWS windows take the keyboard themselves while open.
+      if (gh.value || aws.value) return
       const id = fid.value
       if (id && !palette.value && !projectModal.value && !settings.value && !explorer.value) focusTerminal(id)
     }, 30)
@@ -100,6 +102,7 @@ export const useUiStore = defineStore('ui', () => {
     P.sel = pid
     sim.value = false
     gh.value = false
+    aws.value = false
     inbox.value = null
     bc.value = null
     closeTransient()
@@ -115,6 +118,7 @@ export const useUiStore = defineStore('ui', () => {
     P.sel = s.pid
     sim.value = false
     gh.value = false
+    aws.value = false
     palette.value = null
     newMenu.value = false
     if (inbox.value && inbox.value.sid !== sid) inbox.value = null
@@ -334,6 +338,16 @@ export const useUiStore = defineStore('ui', () => {
 
   function openGithub() {
     gh.value = true
+    aws.value = false
+    palette.value = null
+    focusLater()
+  }
+
+  // ---------- AWS window ----------
+
+  function openAws() {
+    aws.value = true
+    gh.value = false
     palette.value = null
     focusLater()
   }
@@ -347,6 +361,7 @@ export const useUiStore = defineStore('ui', () => {
     P.sel = s.pid
     sim.value = false
     gh.value = false
+    aws.value = false
     palette.value = null
     bc.value = null
     newMenu.value = false
@@ -701,6 +716,12 @@ export const useUiStore = defineStore('ui', () => {
       simulation: () => { sim.value = !sim.value },
       github: () => {
         gh.value = !gh.value
+        if (gh.value) aws.value = false
+        focusLater()
+      },
+      aws: () => {
+        aws.value = !aws.value
+        if (aws.value) gh.value = false
         focusLater()
       },
       simTalk: () => { simTalk.value++ },
@@ -731,13 +752,13 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
-    openGithub,
+    openGithub, openAws,
   }
 })

@@ -12,6 +12,14 @@ onMounted(async () => {
 })
 
 const R = useReviewsStore()
+const AW = useAwsStore()
+/** AWS CLI sessions still going (port forwards, shells, tails), counted on the AWS button. */
+const liveTerms = computed(() => AW.terms.filter(t => !t.exited).length)
+const awsTitle = computed(() => {
+  const base = `AWS (${prefs.kl('aws')})`
+  if (AW.ssoExpired) return `${base}: the SSO sign-in for ${AW.ssoExpired} has run out`
+  return liveTerms.value ? `${base}: ${liveTerms.value} session${liveTerms.value > 1 ? 's' : ''} running` : base
+})
 const ghTitle = computed(() => {
   const n = R.prs.length
   const waiting = R.problem === 'missing'
@@ -132,6 +140,17 @@ const items = computed<DropdownMenuItem[][]>(() => [
       <UIcon name="i-hugeicons-github" class="size-3.5" />GitHub
       <span v-if="R.problem" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
       <span v-else-if="R.prs.length" class="mono rounded-lg bg-(--ambf) px-1.5 text-[10.5px] font-bold text-[#131417]">{{ R.prs.length }}</span>
+    </div>
+
+    <div
+      :title="awsTitle"
+      class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
+      :class="ui.aws ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
+      @click.stop="ui.runAction('aws')"
+    >
+      <UIcon name="i-hugeicons-cloud-server" class="size-3.5" />AWS
+      <span v-if="AW.ssoExpired" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
+      <span v-else-if="liveTerms" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveTerms }}</span>
     </div>
 
     <div

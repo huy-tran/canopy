@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CanopyApi } from '../shared/bridge'
+import { AWS_CALLS, type AwsApi, type CanopyApi } from '../shared/bridge'
 
 const inv = (ch: string) => (...a: unknown[]) => ipcRenderer.invoke(ch, ...a)
 
@@ -66,6 +66,7 @@ const api: CanopyApi = {
     branches: inv('gh:branches') as any,
     runWorkflow: inv('gh:runWorkflow') as any,
   },
+  aws: { ...Object.fromEntries(AWS_CALLS.map(c => [c, inv(`aws:${c}`)])), onTail: on('aws:tail') } as unknown as AwsApi,
   sys: {
     openExternal: inv('sys:openExternal') as any,
     showInFolder: inv('sys:showInFolder') as any,

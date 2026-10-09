@@ -79,6 +79,21 @@ const simMetrics = computed<SimMetrics | null>(() => {
 watch(simMetrics, m => scene?.setMetrics(m))
 const memLabel = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${Math.round(mb)} MB`)
 
+// ---------- The AWS data centre ----------
+
+const A = useAwsStore()
+const AWW = useAwsWorldStore()
+const dcData = computed(() => ({
+  profile: A.profile,
+  region: A.region,
+  instances: AWW.world?.instances || [],
+  envs: AWW.world?.envs || [],
+  loading: !AWW.world,
+  error: AWW.world?.error,
+  locked: !!A.lock && !A.lock.unlocked,
+}))
+watch(dcData, d => scene?.syncAws(d))
+
 onMounted(() => {
   M.use()
   scene = new WorkspaceScene({
@@ -90,6 +105,8 @@ onMounted(() => {
       menu.value = null
       // Anything in GitHub HQ opens the GitHub window on it.
       if (p?.kind === 'gh') openFromHq(p.id)
+      // And anything in the data centre the AWS window.
+      if (p?.kind === 'aws') openFromDc(p.id)
       // A person opens their session, or a subagent the session that started it, in a modal.
       if (p?.kind === 'person') {
         const who = people.value.find(x => x.id === p.id)
@@ -105,7 +122,9 @@ onMounted(() => {
   scene.sync(rooms.value, people.value)
   scene.syncGithub(hqData.value)
   scene.setMetrics(simMetrics.value)
+  scene.syncAws(dcData.value)
   GW.start()
+  AWW.start()
   paintSky()
 })
 
@@ -123,7 +142,7 @@ watch(() => ui.simTarget, (t) => {
 
 /** Tab and Shift Tab fly between the sessions waiting on you, while nothing else has the keyboard. */
 useEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || ui.gh || menu.value) return
+  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || ui.gh || ui.aws || menu.value) return
   const t = e.target as HTMLElement | null
   if (t?.closest('input, textarea, [contenteditable], .xterm, [role="dialog"]')) return
   e.preventDefault()
@@ -215,6 +234,7 @@ function menuClose() {
 onBeforeUnmount(() => {
   if (talkTo.value) setSeeThrough(talkTo.value, false)
   GW.stop()
+  AWW.stop()
   scene?.dispose()
   scene = null
   M.sceneFps = 0
@@ -224,8 +244,12 @@ onBeforeUnmount(() => {
 // ---------- Hover cards and the picked person or room ----------
 
 const hoverScreen = computed(() => (hover.value?.pick.kind === 'screen' ? hover.value.pick.id : null))
-const hoverGh = computed(() => (hover.value?.pick.kind === 'gh' ? ghInfo(hover.value.pick.id) : null))
 const hoverCore = computed(() => hover.value?.pick.kind === 'core')
+/** The card for something in GitHub HQ or the AWS data centre. */
+const hoverBuilding = computed(() => {
+  const p = hover.value?.pick
+  return p?.kind === 'gh' ? ghInfo(p.id) : p?.kind === 'aws' ? awsInfo(p.id) : null
+})
 
 // ---------- What things in GitHub HQ are ----------
 
@@ -300,6 +324,41 @@ function openFromHq(id: string) {
   } else G.go(id === 'wing:runs' ? 'runs' : id === 'wing:repos' ? 'repos' : 'reviews')
   ui.openGithub()
 }
+// ---------- What things in the AWS data centre are; a click opens the AWS window on them ----------
+
+/** The card for something in the data centre, from its pick id. */
+function awsInfo(id: string): GhInfo | null {
+  const w = AWW.world
+  if (id === 'dc') {
+    const running = (w?.instances || []).filter(i => i.state === 'running').length
+    return {
+      title: 'AWS Data Centre', sub: A.profile ? `${A.profile} · ${A.region}` : 'Pick a profile in the AWS window',
+      lines: A.lock && !A.lock.unlocked ? ['Locked: enter your TOTP code in the AWS window'] : w?.error ? [`Can't read AWS: ${w.error}`] : [`${plural(running, 'instance')} running · ${plural(w?.envs.length || 0, 'environment')}`],
+    }
+  }
+  if (id === 'wing:racks') return { title: 'Server hall', sub: 'A rack per EC2 instance', lines: ['Blinking green: running · pulsing amber: starting or stopping · dark: stopped', 'Sam the technician says how things are'] }
+  if (id === 'wing:envs') return { title: 'Beanstalk', sub: 'A tower per environment, its beacon its health', lines: ['A beam of light while a deploy is going', 'The board lists each environment and its version'] }
+  if (id.startsWith('ec2:')) {
+    const i = w?.instances.find(x => x.id === id.slice(4))
+    if (!i) return null
+    return { title: i.name || i.id, sub: `${i.id} · ${i.type}`, lines: [`${i.state}${i.privIp ? ` · ${i.privIp}` : ''}`, i.launchedAt ? `launched ${ago(Date.now() - i.launchedAt)} ago` : ''].filter(Boolean), dot: ec2StateColor(i.state) }
+  }
+  if (id.startsWith('eb:')) {
+    const e = w?.envs.find(x => x.env === id.slice(3))
+    if (!e) return null
+    return { title: e.env, sub: e.app, lines: [`${e.health || 'Grey'} · ${e.status}`, `version ${e.version}`], dot: ebHealthColor(e.health) }
+  }
+  return null
+}
+
+function openFromDc(id: string) {
+  if (id.startsWith('ec2:')) A.jumpTo('EC2', id.slice(4))
+  else if (id.startsWith('eb:')) A.jumpTo('Beanstalk', id.slice(3))
+  else if (id === 'wing:racks') A.go('EC2')
+  else if (id === 'wing:envs') A.go('Beanstalk')
+  ui.openAws()
+}
+
 const hoverPerson = computed(() => (hover.value?.pick.kind === 'person' ? people.value.find(p => p.id === hover.value!.pick.id) || null : null))
 
 /** Keeps a card beside the pointer and inside the view. */
@@ -456,13 +515,13 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       </div>
     </div>
 
-    <div v-else-if="hoverGh" class="pointer-events-none absolute z-10 w-[280px] sim-card rounded-lg border border-(--ln) px-3 py-2 text-(--tx) shadow-xl" :style="cardAt(280, 120)">
+    <div v-else-if="hoverBuilding" class="pointer-events-none absolute z-10 w-[280px] sim-card rounded-lg border border-(--ln) px-3 py-2 text-(--tx) shadow-xl" :style="cardAt(280, 120)">
       <div class="flex items-center gap-1.5 text-[12.5px] font-semibold">
-        <span v-if="hoverGh.dot" class="h-2 w-2 flex-none rounded-full" :style="{ background: hoverGh.dot }" />
-        <span class="ellipsis">{{ hoverGh.title }}</span>
+        <span v-if="hoverBuilding.dot" class="h-2 w-2 flex-none rounded-full" :style="{ background: hoverBuilding.dot }" />
+        <span class="ellipsis">{{ hoverBuilding.title }}</span>
       </div>
-      <div class="mt-0.5 text-[11px] text-(--fa)">{{ hoverGh.sub }}</div>
-      <div v-for="l in hoverGh.lines" :key="l" class="mt-1 line-clamp-2 text-[11.5px] text-(--tx2)">{{ l }}</div>
+      <div class="mt-0.5 text-[11px] text-(--fa)">{{ hoverBuilding.sub }}</div>
+      <div v-for="l in hoverBuilding.lines" :key="l" class="mt-1 line-clamp-2 text-[11.5px] text-(--tx2)">{{ l }}</div>
       <div class="mt-1.5 text-[10.5px] text-(--fa)">Click to open</div>
     </div>
 

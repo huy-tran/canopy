@@ -23,6 +23,7 @@ const TABS: [SettingsTab, string][] = [
   ['appearance', 'Appearance'],
   ['terminal', 'Terminal'],
   ['notifications', 'Notifications'],
+  ['aws', 'AWS'],
   ['keys', 'Keyboard shortcuts'],
 ]
 
@@ -73,6 +74,7 @@ const nav = computed<NavigationMenuItem[]>(() => TABS.map(([id, label]) => ({
           <SettingsAppearance v-else-if="tab === 'appearance'" />
           <SettingsTerminal v-else-if="tab === 'terminal'" />
           <SettingsNotifications v-else-if="tab === 'notifications'" />
+          <SettingsAws v-else-if="tab === 'aws'" />
           <SettingsKeys v-else />
         </div>
       </div>

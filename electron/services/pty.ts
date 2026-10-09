@@ -1,5 +1,6 @@
 // Claude Code terminals and plain shells. One node-pty per session, streamed to the renderer.
 import * as pty from 'node-pty'
+import os from 'node:os'
 import type { ShellInfo, ShellKind } from '../../shared/types'
 import { writeSessionSettings, removeSessionSettings } from './hooks'
 
@@ -95,6 +96,20 @@ function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void,
     onExit(id, exitCode)
   })
   return { pid: p.pid }
+}
+
+/** A one-off command line in a pty, such as an AWS CLI session; its window closes with it. */
+export function spawnCommand(o: { id: string; cmd: string; cols: number; rows: number }, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
+  killSession(o.id)
+  const p = pty.spawn(process.env.ComSpec || 'cmd.exe', `/d /s /c "${o.cmd}"`, {
+    name: 'xterm-256color',
+    cols: Math.max(20, o.cols || 120),
+    rows: Math.max(5, o.rows || 30),
+    cwd: os.homedir(),
+    env: { ...cleanEnv(), COLORTERM: 'truecolor' },
+    useConpty: true,
+  })
+  return track(o.id, p, onData, onExit)
 }
 
 /** Arguments for an interactive shell that starts in the spawn folder. */

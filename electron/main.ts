@@ -5,13 +5,16 @@ import { pathToFileURL } from 'node:url'
 import Store from 'electron-store'
 import electronUpdater from 'electron-updater'
 import type { GhWorld, HookEvent, Persisted, UpdateState } from '../shared/types'
+import type { AwsCtx, AwsWorld } from '../shared/aws'
+import { AWS_CALLS, type AwsApi } from '../shared/bridge'
 import { clearSessionSettings, startHookServer, stopHookServer } from './services/hooks'
-import { bufferOf, killAllSessions, killSession, resizeSession, spawnSession, spawnShell, writeSession } from './services/pty'
+import { bufferOf, killAllSessions, killSession, resizeSession, spawnCommand, spawnSession, spawnShell, writeSession } from './services/pty'
 import { dayActivity, lastAssistantText, projectHistory, unwatchTranscript, watchTranscript } from './services/transcript'
 import { runClaude } from './services/claude'
 import {
   allRepos, branches, cancelRun, dispatchables, rateLimit, runWorkflow, githubWorld, mergePull, pullDetail, pullDiff, rerunRun, reviewPull, reviewRequests, runDetail, runLog, searchPulls, securityAlerts, workflowRuns,
 } from './services/github'
+import * as aws from './services/aws'
 import * as git from './services/git'
 import { startService, stopAllServices, stopService } from './services/devservers'
 import { planUsage } from './services/usage'
@@ -29,6 +32,8 @@ else if (DEMO) app.setPath('userData', path.join(app.getPath('appData'), 'canopy
 const store = new Store<{ state?: Persisted; bounds?: Electron.Rectangle; maximized?: boolean }>({ name: 'canopy' })
 /** GitHub HQ's last good read, so the 3D World and the GitHub window fill in at once on the next launch. */
 const ghCache = new Store<{ world?: GhWorld }>({ name: 'github-cache' })
+/** The data centre's last good read, likewise for the 3D World and the AWS window. */
+const awsCache = new Store<{ world?: AwsWorld }>({ name: 'aws-cache' })
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -246,6 +251,92 @@ function ptyData(id: string, d: string) {
 /** The GitHub HQ data last written to the cache, to skip rewriting it unchanged. */
 let ghCacheKey = ''
 
+// ---------- AWS ----------
+
+aws.configureAws(() => {
+  const p = prefs()
+  return { totp: p?.awsTotp !== false, ttlHours: p?.awsUnlockHours || 4, dryRun: !!p?.awsDryRun }
+})
+
+/** One `aws:<name>` channel per call in AWS_CALLS. */
+function registerAws() {
+  const calls: { [K in (typeof AWS_CALLS)[number]]: (...a: any[]) => ReturnType<AwsApi[K]> | Awaited<ReturnType<AwsApi[K]>> } = {
+    lockState: () => aws.lockState(),
+    unlock: (code: string) => aws.unlock(code, aws.settings().ttlHours),
+    lock: () => aws.lock(),
+    enrolStart: () => aws.enrolStart(),
+    enrolFinish: (code: string) => aws.enrolFinish(code, aws.settings().ttlHours),
+    profiles: () => aws.listProfiles(),
+    state: () => aws.loadState(),
+    remember: (profile: string, region: string) => aws.rememberProfile(profile, region),
+    saveBookmarks: (profile, list) => aws.saveBookmarks(profile, list),
+    forget: (profile: string) => aws.forgetProfile(profile),
+    regions: (ctx: AwsCtx) => aws.regions(ctx),
+    world: async (ctx: AwsCtx, force: boolean) => {
+      const w = await aws.world(ctx, force)
+      if (!w.error) awsCache.set('world', w)
+      return w
+    },
+    cachedWorld: () => awsCache.get('world') ?? null,
+    search: (ctx: AwsCtx) => aws.search(ctx),
+    term: (ctx: AwsCtx, id: string, o: any, cols: number, rows: number) => {
+      if (!aws.gateOpen()) return { ok: false, error: 'AWS is locked.' }
+      const c = aws.cliCommand(ctx, o)
+      if ('error' in c) return { ok: false, error: c.error }
+      spawnCommand({ id, cmd: c.cmd, cols, rows }, ptyData, (i, code) => send('pty:exit', i, code))
+      return { ok: true, cmd: c.cmd }
+    },
+    ec2Instances: (ctx, force) => aws.ec2Instances(ctx, force),
+    ec2Console: (ctx, id, latest) => aws.ec2Console(ctx, id, latest),
+    ec2Power: (ctx, id, what, name, before) => aws.ec2Power(ctx, id, what, name, before),
+    ebEnvs: (ctx, force) => aws.ebEnvs(ctx, force),
+    ebEvents: (ctx, env) => aws.ebEvents(ctx, env),
+    ebVersions: (ctx, app, force) => aws.ebVersions(ctx, app, force),
+    ebDeploy: (ctx, env, version) => aws.ebDeploy(ctx, env, version),
+    rdsInstances: (ctx, force) => aws.rdsInstances(ctx, force),
+    ecResources: (ctx, force) => aws.ecResources(ctx, force),
+    ecUpdates: (ctx, force) => aws.ecUpdates(ctx, force),
+    ecServiceUpdate: (ctx, name, force) => aws.ecServiceUpdate(ctx, name, force),
+    ecApply: (ctx, update, resource, kind, severity) => aws.ecApply(ctx, update, resource, kind, severity),
+    logGroups: (ctx, token, force) => aws.logGroups(ctx, token, force),
+    logStreams: (ctx, group, force) => aws.logStreams(ctx, group, force),
+    logEvents: (ctx, group, stream) => aws.logEvents(ctx, group, stream),
+    logSearch: (ctx, group, pattern, start, end) => aws.logSearch(ctx, group, pattern, start, end),
+    tailStart: (ctx, id, arn) => aws.tailStart(ctx, id, arn, m => send('aws:tail', m)),
+    tailStop: (id: string) => aws.tailStop(id),
+    cfDistributions: (ctx, force) => aws.cfDistributions(ctx, force),
+    cfInvalidations: (ctx, dist, force) => aws.cfInvalidations(ctx, dist, force),
+    cfInvalidate: (ctx, dist, paths) => aws.cfInvalidate(ctx, dist, paths),
+    s3Buckets: (ctx, force) => aws.s3Buckets(ctx, force),
+    s3List: (ctx, bucket, region, prefix, force) => aws.s3List(ctx, bucket, region, prefix, force),
+    s3Download: async (ctx: AwsCtx, bucket: string, region: string, key: string) => {
+      const r = await dialog.showSaveDialog(win!, { defaultPath: path.join(app.getPath('downloads'), path.basename(key)) })
+      if (r.canceled || !r.filePath) return { ok: true as const, data: null }
+      return aws.s3Download(ctx, bucket, region, key, r.filePath)
+    },
+    s3Delete: (ctx, bucket, region, keys) => aws.s3Delete(ctx, bucket, region, keys),
+    s3PickUpload: async () => {
+      const r = await dialog.showOpenDialog(win!, { properties: ['openFile', 'multiSelections'] })
+      if (r.canceled) return []
+      const sizes = aws.fileSizes(r.filePaths)
+      return r.filePaths.map((p, i) => ({ path: p, size: sizes[i] || 0 }))
+    },
+    s3Existing: (ctx, bucket, region, keys) => aws.s3Existing(ctx, bucket, region, keys),
+    s3Upload: (ctx, bucket, region, file, key) => aws.s3Upload(ctx, bucket, region, file, key),
+    params: (ctx, force) => aws.params(ctx, force),
+    paramValue: (ctx, meta, version) => aws.paramValue(ctx, meta, version),
+    paramHistory: (ctx, name) => aws.paramHistory(ctx, name),
+    paramPut: (ctx, o) => aws.paramPut(ctx, o),
+    shInsights: (ctx, force) => aws.shInsights(ctx, force),
+    shInsightResults: (ctx, arn) => aws.shInsightResults(ctx, arn),
+    shFindings: (ctx, q) => aws.shFindings(ctx, q),
+    cdApps: (ctx, force) => aws.cdApps(ctx, force),
+    cdGroups: (ctx, appName, force) => aws.cdGroups(ctx, appName, force),
+    cdDeployments: (ctx, appName, group, force) => aws.cdDeployments(ctx, appName, group, force),
+  }
+  for (const name of AWS_CALLS) handle(`aws:${name}`, calls[name])
+}
+
 function registerIpc() {
   handle('state:load', () => store.get('state') ?? null)
   handle('state:save', (s: Persisted) => {
@@ -351,7 +442,17 @@ function registerIpc() {
   handle('gh:branches', (repo: string) => branches(repo))
   handle('gh:runWorkflow', (repo: string, id: number, ref: string, inputs: Record<string, string>) => runWorkflow(repo, id, ref, inputs))
 
-  handle('sys:openExternal', (url: string) => shell.openExternal(url))
+  registerAws()
+
+  // Web links only: a link from outside (an AWS finding's remediation, say) never reaches another protocol handler.
+  handle('sys:openExternal', (url: string) => {
+    try {
+      const u = new URL(url)
+      if (u.protocol === 'https:' || u.protocol === 'http:') return shell.openExternal(u.href)
+    } catch {
+      // Not a URL.
+    }
+  })
   handle('sys:showInFolder', (p: string) => showInFolder(p))
   handle('sys:openEditor', (editor: string, folder: string, file?: string) => openInEditor(editor, folder, file))
   handle('sys:pickFolder', async () => {
@@ -436,6 +537,7 @@ app.on('before-quit', () => {
   quitting = true
   globalShortcut.unregisterAll()
   killAllSessions()
+  aws.stopAllTails()
   stopAllServices()
   stopHookServer()
   clearImages()

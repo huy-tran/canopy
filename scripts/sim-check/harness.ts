@@ -3,6 +3,7 @@
 import * as THREE from 'three'
 import { WorkspaceScene } from '../../app/simulation/scene'
 import { HQ_WINGS } from '../../app/simulation/github'
+import { DC_WINGS } from '../../app/simulation/aws'
 
 const q = new URLSearchParams(location.search)
 const view = q.get('view') || 'all'
@@ -51,6 +52,24 @@ scene.syncGithub({
     })),
     { id: 99, url: '', repo: repoNames[0]!, workflow: 'Nightly sweep', title: 't', branch: 'main', event: 'schedule', state: 'success' as const, startedAt: now },
   ],
+})
+
+// The AWS data centre: instances in every state, and environments in every health with one deploying.
+const states = ['running', 'running', 'running', 'pending', 'running', 'stopped', 'running', 'stopping', 'running', 'stopped', 'running', 'running', 'running', 'running']
+scene.syncAws({
+  profile: 'acme-prod',
+  region: 'ap-southeast-2',
+  instances: states.map((state, i) => ({
+    id: `i-0${(i + 10).toString(16)}a1b2c3d4e5f`, name: ['web', 'worker', 'api', 'bastion', 'cron', 'legacy', 'search'][i % 7] + '-' + (i + 1), state, type: ['t3.medium', 'm5.large', 't3.small'][i % 3],
+    privIp: `10.0.1.${i + 10}`, pubIp: '', pubDns: '', vpc: 'vpc-1', subnet: 'subnet-1', az: 'ap-southeast-2a', platform: 'linux', ami: 'ami-1', iamRole: '', launchedAt: now - i * H, securityGroups: [], tags: [],
+  })),
+  envs: [
+    { env: 'web-prod', health: 'Green', status: 'Ready' },
+    { env: 'api-prod', health: 'Green', status: 'Updating' },
+    { env: 'worker-prod', health: 'Yellow', status: 'Ready' },
+    { env: 'web-staging', health: 'Red', status: 'Ready' },
+    { env: 'api-staging', health: 'Grey', status: 'Ready' },
+  ].map((e, i) => ({ ...e, app: e.env.split('-')[0]!, id: 'e-' + i, cname: '', version: `v1.${i}.${i * 3}`, platform: '', tier: 'WebServer', updatedAt: now })),
 })
 
 scene.setSky({ hour: Number(q.get('hour') ?? 14), sunrise: 6, sunset: 18, sky: q.get('sky') || null })
@@ -111,6 +130,13 @@ setTimeout(() => {
     const dx = { 'hq-pulls': HQ_WINGS.pulls, 'hq-runs': HQ_WINGS.runs }[view] ?? null
     if (dx === null) at([hq.x, 24, hq.z + 30], [hq.x, 0, hq.z + 1])
     else at([hq.x + dx, 9, hq.z + 12], [hq.x + dx, 0.5, hq.z - 0.5])
+  }
+  else if (view.startsWith('dc')) {
+    // The data centre, or one room from just outside its door.
+    const dc = scene.dc.group.position as THREE.Vector3
+    const dx = { 'dc-racks': DC_WINGS.racks, 'dc-envs': DC_WINGS.envs }[view] ?? null
+    if (dx === null) at([dc.x, 24, dc.z + 30], [dc.x, 0, dc.z + 1])
+    else at([dc.x + dx, 9, dc.z + 12], [dc.x + dx, 0.5, dc.z - 0.5])
   }
   ;(window as any).simErrors = errors
 }, 400)

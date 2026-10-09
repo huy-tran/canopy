@@ -9,6 +9,7 @@ A Windows desktop workspace for running many Claude Code sessions across many cl
 - Pinia stores, persisted with `electron-store`
 - xterm.js in the renderer, node-pty in the main process
 - Shiki for diff and file highlighting
+- The AWS SDK v3 in the main process for the AWS window
 
 ## Requirements
 
@@ -16,6 +17,7 @@ A Windows desktop workspace for running many Claude Code sessions across many cl
 - Claude Code (`claude`) and `git` on your PATH
 - `curl.exe` (ships with Windows 10+), used by the session hooks
 - Optional: a Nerd Font such as JetBrainsMono Nerd Font for Claude's status line icons
+- Optional: profiles in `~/.aws` for the AWS window, and the AWS CLI with the Session Manager plugin for its SSM shells and port forwards
 
 ## Commands
 

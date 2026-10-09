@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ACTIONS, RESERVED, comboOf, type ActionDef } from '#shared/actions'
+import { ACTIONS, RESERVED, clashes, comboOf, type ActionDef } from '#shared/actions'
 import { DEFAULT_PREFS } from '~/stores/prefs'
 
 type Msg =
@@ -79,14 +79,15 @@ function recordKey(combo: string) {
   if (r.id === SUMMON) return recordSummon(combo)
   if (combo === summonKey.value) { msg.value = { kind: 'err', id: r.id, t: nice + ' shows and hides Canopy from anywhere.' }; return }
   // Shell panel keys never reach Claude, so Claude's own keys are free there.
-  const scope = ACTIONS.find(a => a.id === r.id)?.scope
+  const def = ACTIONS.find(a => a.id === r.id)
+  const scope = def?.scope
   if (RESERVED[combo] && !scope) { msg.value = { kind: 'err', id: r.id, t: RESERVED[combo] + ' Pick another shortcut.' }; return }
   const last = combo.split('+').pop() || ''
-  // The GitHub window has no terminal to type into: single keys work there, as in gh-tui.
-  if (scope !== 'github' && !/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: r.id, t: 'Add Ctrl or Alt to ' + nice + ' so typing still reaches the terminal.' }; return }
+  // The GitHub and AWS windows have no terminal to type into: single keys work there, as in gh-tui and aws-tui.
+  if (scope !== 'github' && scope !== 'aws' && !/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: r.id, t: 'Add Ctrl or Alt to ' + nice + ' so typing still reaches the terminal.' }; return }
   if (/^Alt\+[1-9]$/.test(combo)) { msg.value = { kind: 'err', id: r.id, t: 'Alt 1-9 already switches projects.' }; return }
   // A shell panel key may match an app-wide one: inside the panel the panel's wins.
-  const other = ACTIONS.find(a => a.id !== r.id && a.scope === scope && prefs.keysFor(a.id).includes(combo))
+  const other = ACTIONS.find(a => a.id !== r.id && !!def && clashes(a, def) && prefs.keysFor(a.id).includes(combo))
   if (other) {
     rec.value = null
     msg.value = { kind: 'conflict', id: r.id, idx: r.idx, combo, other: other.id, t: nice + ' is already used by "' + other.label + '".' }

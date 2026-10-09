@@ -26,6 +26,8 @@ export function useAppShortcuts() {
     if (ui.projectModal || ui.settings || ui.about || ui.updOpen || ui.summary || ui.confirm) return false
     // The GitHub window has its own keys; only its toggle and quitting get past it.
     if (ui.gh) return id === 'github' || id === 'quit'
+    // Likewise the AWS window.
+    if (ui.aws) return id === 'aws' || id === 'quit'
     if (ui.explorer) return id === 'files'
     if (ui.palette) return id === 'jump' || id === 'commands'
     return true
@@ -63,7 +65,7 @@ export function useAppShortcuts() {
       c[`alt_${i}`] = {
         usingInput: true,
         handler: () => {
-          if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox || ui.confirm || ui.gh) return
+          if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox || ui.confirm || ui.gh || ui.aws) return
           const p = P.ordered[i - 1]
           if (p) ui.selectProject(p.id)
         },
@@ -95,7 +97,7 @@ export function useAppShortcuts() {
 
   // Workspace simulation shortcuts, only while it is open; they work from its session window's terminal too.
   useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-    if (!ui.sim || ui.gh) return
+    if (!ui.sim || ui.gh || ui.aws) return
     const id = matchAction(prefs.keys, comboOf(e), 'sim')
     if (!id || ui.palette || ui.projectModal || ui.settings || ui.confirm || ui.lightbox) return
     e.preventDefault()

@@ -37,6 +37,9 @@ export const DEFAULT_PREFS: Prefs = {
   reviewNotify: true,
   reviewRemind: 60,
   showMetrics: true,
+  awsTotp: true,
+  awsUnlockHours: 4,
+  awsDryRun: false,
 }
 
 /** The session window in the workspace simulation is always a little see-through: 90% at most, 90% unless set. */

@@ -149,7 +149,7 @@ function canvasTexture(canvas: HTMLCanvasElement, repeat = false) {
 }
 
 /** Marks an object as something the pointer can hover or click. */
-export type Pick = { kind: 'room' | 'screen'; id: string } | { kind: 'person'; id: string } | { kind: 'gh'; id: string } | { kind: 'core'; id: string }
+export type Pick = { kind: 'room' | 'screen'; id: string } | { kind: 'person'; id: string } | { kind: 'gh'; id: string } | { kind: 'core'; id: string } | { kind: 'aws'; id: string }
 
 export function tag(object: THREE.Object3D, pick: Pick) {
   object.traverse((o) => { o.userData.pick = pick })

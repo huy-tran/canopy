@@ -4,6 +4,23 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- AWS has its own window, aws-tui inside Canopy. Open or close it with Ctrl Shift A or the AWS button in the title bar, over the terminals or the 3D World, where it is see-through. It reads your profiles from ~/.aws, as the AWS CLI and aws-tui do, and covers all ten of aws-tui's services:
+  - Beanstalk: environments with their health and version, an environment's details and events, and deploying a version to it.
+  - EC2: instances (running ones unless you pick another state), their details and console output, a shell on one through SSM, port forwarding, and stopping, starting or rebooting one.
+  - RDS: databases and their details, and a port forward through a bastion: copy the command, or start it in Canopy.
+  - ElastiCache: caches with their pending service updates, flagged by how close their apply-by date is, and applying an update.
+  - Logs: log groups, a stream's latest thousand events with find and JSON pretty-printing, a search over the last hour, day or week, and live tail, in the window or with aws logs tail in a terminal.
+  - CloudFront: distributions, their invalidations (followed while one is in progress), and creating one.
+  - S3: buckets, browsing them folder by folder, downloading, uploading (asking before overwriting) and deleting files.
+  - Parameter Store: parameters, a value (secure ones masked until revealed, and masked again after 30 seconds), its history, editing it and making new ones.
+  - SecurityHub: insights, their results and the findings behind them, filtered by severity.
+  - CodeDeploy: applications, deployment groups and deployments.
+- The AWS window works from the keyboard with aws-tui's keys. J and K move, / filters, S sorts, Enter opens and Esc goes back. Tab moves between services, Ctrl K finds anything across them, Ctrl P and Ctrl G switch profile and region, B bookmarks a row and Shift B lists bookmarks, O jumps to related resources in other services, and Y copies. Shift / shows every key for where you are. All of them can be changed in Settings > Keyboard shortcuts.
+- Shells, port forwards and log tails run in terminals inside the AWS window. They keep running while you use the rest of it, are listed in its sidebar, and are counted on the AWS button. Ctrl ] leaves one running and goes back. When an SSO sign-in runs out, the window says so and signs you in again.
+- AWS stays locked until you enter a code from your authenticator app. Canopy shares aws-tui's lock, so unlocking either unlocks both. Changes ask first, and the risky ones need a name typed out: stopping, starting or rebooting an instance, deploying to production, saving a production parameter, applying a cache update, and flushing the whole CloudFront cache. Every change is written to aws-tui's audit log. Turn the code off, set how long an unlock lasts, or turn on dry run (changes go only to the audit log) in Settings > AWS.
+- The AWS window shares aws-tui's last profile and region and its bookmarks.
+- The 3D World has an AWS data centre on the other side of the office from GitHub HQ, for the profile and region the AWS window is on. The server hall has a rack for each EC2 instance, its lights blinking green while it runs, pulsing amber while it starts or stops, and dark when it's stopped. The Beanstalk wing has a tower for each environment, its beacon glowing the environment's health, with a beam of light while a deploy is going. A board lists the environments, and Sam the technician walks the floor saying how things are. Hover over anything for its details, or click it to open it in the AWS window.
+
 ## [0.19.1] - 2026-10-09
 
 - Subagents show up in the 3D World again. Claude Code now runs them in the background by default, and Canopy took each one as finished as soon as it started, so they vanished at once. They now stand behind their session's chair, with a name and a Subagent tag, until they finish.

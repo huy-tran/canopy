@@ -323,6 +323,12 @@ export interface Prefs {
   reviewRemind: number
   /** Repos (owner/name) GitHub HQ and the GitHub window leave out; review requests from them still come through. */
   ghHidden?: string[]
+  /** Ask for a TOTP code before the AWS window reaches AWS, as aws-tui does (on unless turned off). */
+  awsTotp: boolean
+  /** How long an unlock lasts, in hours (4 unless set). */
+  awsUnlockHours?: number
+  /** AWS changes are only written to the audit log, never sent. */
+  awsDryRun: boolean
   /** Opacity of the session window in the workspace simulation, 30-90: the characters always show through it. */
   simGlass?: number
   /** City for the workspace simulation's weather; empty uses the city in the system time zone. */
