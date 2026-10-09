@@ -331,7 +331,7 @@ export class WorkspaceScene {
   private hq: GithubHQ | null = null
   private hqData: HqData = { repos: [], pulls: [], runs: [], loading: true }
   private dc: AwsDataCentre | null = null
-  private dcData: DcData = { profile: '', region: '', instances: [], envs: [], loading: true }
+  private dcData: DcData = { profile: '', region: '', instances: [], envs: [], loading: true, profiles: [] }
   /** x of the side aisles that lead from the back rows down to the common room. */
   private aisleX = 10
   private spots: Spot[] = []
@@ -540,6 +540,8 @@ export class WorkspaceScene {
       return
     }
     if (pick.kind === 'aws') {
+      // A profile's pad only switches the profile; the view stays where it is.
+      if (pick.id.startsWith('profile:')) return
       const p = this.dc?.where(pick.id)
       if (!p) return
       const away = pick.id === 'dc' ? new THREE.Vector3(0, 22, 26) : pick.id.startsWith('wing:') ? new THREE.Vector3(0, 11, 12) : new THREE.Vector3(2.5, 4.5, 6)

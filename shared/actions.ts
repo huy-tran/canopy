@@ -87,7 +87,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'awsRefresh', g: AW, label: 'Refresh', def: ['Ctrl+R', 'F5'], scope: 'aws' },
   { id: 'awsHelp', g: AW, label: 'Show every key on this screen', def: ['Shift+/'], scope: 'aws' },
   { id: 'awsFinder', g: AW, label: 'Find anything across services', def: ['Ctrl+K'], scope: 'aws' },
-  { id: 'awsProfile', g: AW, label: 'Switch profile', def: ['Ctrl+P'], scope: 'aws' },
+  { id: 'awsProfile', g: AW, label: 'Switch profile', def: ['Ctrl+Shift+P', 'Ctrl+P'], scope: 'aws' },
   { id: 'awsRegion', g: AW, label: 'Switch region', def: ['Ctrl+G'], scope: 'aws' },
   { id: 'awsLock', g: AW, label: 'Lock AWS (asks for a TOTP code again)', def: ['Ctrl+L'], scope: 'aws' },
   { id: 'awsBookmark', g: AW, label: 'Bookmark the selected row, or remove it', def: ['B'], scope: 'aws' },

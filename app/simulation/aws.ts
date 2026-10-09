@@ -7,14 +7,16 @@ import { bigScreen, carpet, disposeTree, doorArch, FONT, floorText, figure, type
  * The AWS data centre: a building of its own on the other side of the office from GitHub HQ, for
  * the profile and region the AWS window is on.
  *
- * The server hall has a rack for each EC2 instance: its lights blink green while it runs, pulse
+ * The EC2 Instances room has a rack for each instance: its lights blink green while it runs, pulse
  * amber while it starts or stops, and are dark when it's stopped. The Beanstalk wing has a tower for
  * each environment, its beacon glowing the environment's health, with a beam of light while a deploy
  * is going. A board on the back wall lists the environments, and a technician walks the floor
  * saying how things are.
  *
+ * A row of pads on the plaza, one per profile in its colour, switches the building to that profile.
+ *
  * Picks are `{ kind: 'aws', id }` with ids `ec2:<instance id>`, `eb:<environment>`,
- * `wing:racks|envs` and `dc`.
+ * `profile:<name>`, `wing:racks|envs` and `dc`.
  */
 
 export interface DcData {
@@ -27,11 +29,13 @@ export interface DcData {
   error?: string
   /** AWS is locked behind its TOTP code. */
   locked?: boolean
+  /** Every profile in ~/.aws, each with a pad on the plaza to switch to it. */
+  profiles: { name: string; color: string }[]
 }
 
 const WING_D = 12
 const ROOMS = [
-  { id: 'racks', name: 'Server hall', color: '#ff9900', w: 15 },
+  { id: 'racks', name: 'EC2 Instances', color: '#ff9900', w: 15 },
   { id: 'envs', name: 'Beanstalk', color: '#2e8b57', w: 9 },
 ] as const
 const INNER = ROOMS.reduce((a, r) => a + r.w, 0)
@@ -100,7 +104,7 @@ export class AwsDataCentre {
   private board: ReturnType<typeof bigScreen>
   private boardAt = 0
   private key = ''
-  private data: DcData = { profile: '', region: '', instances: [], envs: [] }
+  private data: DcData = { profile: '', region: '', instances: [], envs: [], profiles: [] }
   private leds: Led[] = []
   private towers: Tower[] = []
   private extras: ReturnType<typeof floorText>[] = []
@@ -125,7 +129,7 @@ export class AwsDataCentre {
     this.paintSign(d)
     this.boardAt = 0
     const key = JSON.stringify([
-      d.profile, d.region, !!d.loading, !!d.locked,
+      d.profile, d.region, !!d.loading, !!d.locked, (d.profiles || []).map(p => p.name),
       d.instances.map(i => [i.id, i.name, i.state]),
       d.envs.map(e => [e.env, e.health, e.status, e.version]),
     ])
@@ -136,6 +140,7 @@ export class AwsDataCentre {
       this.buildRacks(d.instances)
       this.buildTowers(d.envs)
     }
+    this.buildPads(d)
   }
 
   step(t: number, dt: number) {
@@ -298,6 +303,37 @@ export class AwsDataCentre {
     this.leds = []
     this.towers = []
     for (const k of [...this.spots.keys()]) if (!k.startsWith('wing:') && k !== 'dc') this.spots.delete(k)
+  }
+
+  /** A pad per profile along the front of the plaza; the one showing is lit and raised. */
+  private buildPads(d: DcData) {
+    const list = (d.profiles || []).slice(0, 7)
+    const W = 2.6, GAP = 0.35
+    const x0 = -((list.length - 1) * (W + GAP)) / 2
+    list.forEach((p, i) => {
+      const on = p.name === d.profile
+      const g = new THREE.Group()
+      g.position.set(x0 + i * (W + GAP), 0, WING_D / 2 + 4.6)
+      const m = new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: on ? 0.9 : 0.15, roughness: 0.5 })
+      g.add(rbox(W, on ? 0.18 : 0.08, 0.95, m, 0, 0.04))
+      const label = floorText(W - 0.2, 0.7, 'center')
+      label.draw([
+        { text: p.name, size: 0.34, color: on ? '#ffffff' : 'rgba(255,255,255,.8)', weight: 700 },
+        { text: on ? `showing · ${d.region}` : 'click to show', size: 0.2, color: 'rgba(255,255,255,.7)', weight: 500 },
+      ])
+      label.plane.position.y = (on ? 0.18 : 0.08) + 0.01
+      g.add(label.plane)
+      this.extras.push(label)
+      if (on) {
+        const beam = lightPillar(p.color)
+        beam.mesh.scale.set(0.3, 0.45, 0.3)
+        beam.mesh.position.set(0, 0.9, -0.3)
+        g.add(beam.mesh)
+      }
+      tag(g, { kind: 'aws', id: `profile:${p.name}` })
+      this.spots.set(`profile:${p.name}`, g.position.clone())
+      this.dyn.add(g)
+    })
   }
 
   private note(text: string, x: number, z: number, w = 5) {

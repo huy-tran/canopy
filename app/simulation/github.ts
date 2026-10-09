@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import type { GhPull, GhRepo, GhRun } from '#shared/types'
-import { bigScreen, carpet, disposeTree, doorArch, FONT, floorText, figure, type Figure, freeze, geo, hashOf, lightPool, lowWall, mat, mesh, rbox, roundGeo, tag } from './kit'
+import { bigScreen, boxGeo, carpet, coffeeBar, disposeTree, doorArch, FONT, floorText, figure, type Figure, freeze, geo, hashOf, lightPool, lowWall, mat, mesh, plant, rbox, roundGeo, sofa, tag } from './kit'
 
 /**
  * GitHub HQ: a building of its own beside the office, with two rooms and a staff of octocats.
@@ -9,7 +9,9 @@ import { bigScreen, carpet, disposeTree, doorArch, FONT, floorText, figure, type
  * The PR mailroom keeps a parcel in the pigeonholes for each open pull request, coloured by its
  * review. The ones waiting for the user's review sit on the counter, their authors queueing in front
  * of it and getting more impatient the longer they wait, while Mona the clerk carries parcels
- * between the pigeonholes and the counter and calls out who is waiting.
+ * between the pigeonholes and the counter and calls out who is waiting. While they wait, authors
+ * wander off to the lounge at the front: the sofa with the magazines, the coffee bar or the water
+ * cooler, the patient ones most often. When nothing is waiting for you, Mona has a cup of tea.
  *
  * The workflow factory has a production line per repo: a conveyor, a machine with a lamp for each of
  * the repo's workflows, and a chimney that smokes and a beacon that turns while any of them runs.
@@ -295,7 +297,34 @@ interface Author {
   sayAt: number
   sayUntil: number
   lines: string[]
+  /** Their place in the queue. */
+  home: THREE.Vector3
+  /** Where they're off to, a waypoint at a time; empty once there. */
+  path: THREE.Vector3[]
+  /** The lounge seat they have, or null while in the queue. */
+  seat: Seat | null
+  /** When they move on: back to the queue, or off to the lounge. */
+  until: number
+  /** Held in the lounge: a cup at the coffee bar or the cooler, a magazine on the sofa. */
+  cup: THREE.Object3D
+  mag: THREE.Object3D
+  number: number
 }
+
+/** A place in the mailroom's lounge for an author to spend a while. */
+interface Seat {
+  kind: 'sofa' | 'coffee' | 'water'
+  pos: THREE.Vector3
+  /** The way to it from the walkway behind the queue, round the furniture. */
+  via: THREE.Vector3
+  face: number
+  /** Seat height when sitting, or null when standing. */
+  sit: number | null
+  taken: boolean
+}
+
+/** The walkway behind the queue that authors cross the room on. */
+const LANE_Z = 2.6
 
 export class GithubHQ {
   readonly group = new THREE.Group()
@@ -318,6 +347,8 @@ export class GithubHQ {
   private spots = new Map<string, THREE.Vector3>()
   /** Where each room's ceiling light hangs, from the group's origin, and the pool of light under it. */
   readonly glows: { at: THREE.Vector3; pool: THREE.MeshBasicMaterial }[] = []
+  /** The mailroom lounge's places; they stay as the room's contents are rebuilt. */
+  private seats: Seat[] = []
 
   constructor() {
     // High on the back wall, above the pipes and the back row's signs.
@@ -375,7 +406,7 @@ export class GithubHQ {
         ;(p.material as THREE.MeshStandardMaterial).opacity = 0.55 * (1 - k)
       })
     }
-    for (const a of this.authors) this.stepAuthor(a, t)
+    for (const a of this.authors) this.stepAuthor(a, t, dt)
     for (const c of this.cats) this.stepCat(c, t, dt)
     if (t >= this.boardAt) {
       this.boardAt = t + 1
@@ -434,6 +465,7 @@ export class GithubHQ {
       this.glows.push({ at: new THREE.Vector3(x0, 3.4, 0), pool: pool.material })
     }
     this.buildFactoryShell()
+    this.buildLounge()
 
     // A gateway with the name on it, where the path from the office comes onto the plaza.
     const gate = doorArch('GitHub', '#24292f')
@@ -468,6 +500,73 @@ export class GithubHQ {
     b.group.position.set(x0, 2.6, -WING_D / 2 + 0.6)
     this.group.add(b.group)
     tag(b.group, { kind: 'gh', id: 'wing:runs' })
+  }
+
+  /**
+   * The mailroom's lounge, in the front corners either side of the door: a sofa with a side table
+   * of magazines on the left, a coffee bar and a water cooler on the right, and Mona's tea table
+   * behind the counter.
+   */
+  private buildLounge() {
+    const g = this.group
+    const x0 = HQ_WINGS.pulls
+    const v = (x: number, z: number) => new THREE.Vector3(x0 + x, 0, z)
+    const put = (o: THREE.Object3D, x: number, z: number, ry = 0) => {
+      o.position.set(x0 + x, 0, z)
+      o.rotation.y = ry
+      g.add(o)
+      tag(o, { kind: 'gh', id: 'wing:pulls' })
+      return o
+    }
+
+    // The sofa faces the counter, on a rug, with a side table of magazines and a mug.
+    const rug = carpet(3.4, 1.9, '#5b3f8f')
+    rug.position.set(x0 - 3.9, 0, 4.45)
+    g.add(rug)
+    put(sofa('#8250df'), -4.4, 4.75, Math.PI)
+    const table = new THREE.Group()
+    table.add(rbox(0.62, 0.5, 0.55, mat('#6b5440', { roughness: 0.8 }), 0, 0.04))
+    ;['#f2c94c', '#54aeff', '#2da44e'].forEach((c, i) => {
+      const m = rbox(0.34, 0.025, 0.26, mat(c, { roughness: 0.7 }), 0.5 + i * 0.026, 0.01)
+      m.rotation.y = (i - 1) * 0.25
+      m.position.x = -0.08
+      table.add(m)
+    })
+    const mug = mesh(geo('mug', () => new THREE.CylinderGeometry(0.05, 0.045, 0.1, 10)), mat('#e98a5b'))
+    mug.position.set(0.18, 0.58, 0.1)
+    table.add(mug)
+    put(table, -2.95, 4.8)
+    put(plant(41, 0.8), -5.5, 3.3)
+
+    // Refreshments along the right wall, facing into the room.
+    put(coffeeBar(), 5.5, 3.2, -Math.PI / 2)
+    const cooler = new THREE.Group()
+    cooler.add(rbox(0.42, 0.95, 0.42, mat('#e6edf3', { roughness: 0.5 }), 0, 0.05))
+    const tap = mesh(boxGeo(0.08, 0.06, 0.06), mat('#54aeff'), false)
+    tap.position.set(0, 0.75, 0.23)
+    cooler.add(tap)
+    const bottle = mesh(geo('cooler-bottle', () => new THREE.CylinderGeometry(0.16, 0.16, 0.5, 16)), new THREE.MeshStandardMaterial({ color: '#7cc4ff', transparent: true, opacity: 0.6, roughness: 0.1 }))
+    bottle.position.y = 1.2
+    cooler.add(bottle)
+    put(cooler, 5.45, 4.95, -Math.PI / 2)
+    put(plant(77, 0.75), 5.45, 1.35)
+
+    // Mona's tea table, in the back corner behind the counter.
+    const tea = new THREE.Group()
+    tea.add(rbox(0.7, 0.72, 0.6, mat('#6b5440', { roughness: 0.8 }), 0, 0.04))
+    const pot = mesh(geo('teapot', () => new THREE.SphereGeometry(0.13, 16, 12)), mat('#f7f2e6', { roughness: 0.4 }))
+    pot.scale.y = 0.8
+    pot.position.set(-0.12, 0.84, 0)
+    tea.add(pot)
+    const cup = mesh(geo('mug', () => new THREE.CylinderGeometry(0.05, 0.045, 0.1, 10)), mat('#8250df'))
+    cup.position.set(0.16, 0.78, 0.08)
+    tea.add(cup)
+    put(tea, -5.3, -2.6)
+
+    // Where authors go: two places on the sofa, the coffee bar and the cooler.
+    for (const dx of [-0.45, 0.45]) this.seats.push({ kind: 'sofa', pos: v(-4.4 + dx, 4.6), via: v(-4.4 + dx, 3.6), face: Math.PI, sit: 0.08, taken: false })
+    this.seats.push({ kind: 'coffee', pos: v(4.55, 3.2), via: v(3.6, 3.2), face: Math.PI / 2, sit: null, taken: false })
+    this.seats.push({ kind: 'water', pos: v(4.75, 4.95), via: v(3.6, 4.95), face: Math.PI / 2, sit: null, taken: false })
   }
 
   /** The board over the factory: what is running and for how long, or how the latest runs went. */
@@ -542,6 +641,7 @@ export class GithubHQ {
     this.belts = []
     this.smoke = []
     this.authors = []
+    for (const s of this.seats) s.taken = false
     this.stations = []
     for (const k of [...this.spots.keys()]) if (!k.startsWith('wing:') && k !== 'hq') this.spots.delete(k)
   }
@@ -607,6 +707,13 @@ export class GithubHQ {
   private clerkTask(): Task {
     const x0 = HQ_WINGS.pulls
     const cat = this.cats[0]!
+    // A quiet spell: nothing waiting for you, so a cup of tea in the corner now and then.
+    if (!cat.m.load.visible && !this.data.pulls.some(p => p.review === 'mine') && Math.random() < 0.3) {
+      return {
+        to: new THREE.Vector3(x0 - 4.6, 0, -2.6), face: -Math.PI / 2, dwell: 6 + Math.random() * 4, work: true,
+        say: () => pick(['Tea break ☕', 'Quiet day at the counter', 'Kettle’s on 🫖']),
+      }
+    }
     if (!cat.m.load.visible) {
       return { to: new THREE.Vector3(x0 + (Math.random() - 0.5) * 8, 0, -WING_D / 2 + 1.5), face: Math.PI, dwell: 1.3, work: true, carry: true }
     }
@@ -805,24 +912,140 @@ export class GithubHQ {
         ? [`Any chance to look at ${n} today?`, `${n} is ready for you 👀`, 'Just checking in on my PR']
         : [`Got a minute for ${n}?`, `No rush on ${n} 🙂`, 'Fresh PR for you!']
     const phase = (hashOf(p.url) % 1000) / 100
-    this.authors.push({ fig, mood, phase, speech, sayAt: 3 + phase, sayUntil: 0, lines })
+    // A cup in the right hand and a magazine in the left, shown in the lounge.
+    const cup = mesh(geo('mug', () => new THREE.CylinderGeometry(0.05, 0.045, 0.1, 10)), mat(pick(['#e98a5b', '#ffffff', '#8fb7a0', '#7cc4ff'])))
+    cup.position.set(0, -0.47, 0.03)
+    cup.visible = false
+    fig.arms[1].add(cup)
+    const mag = rbox(0.3, 0.02, 0.22, mat(pick(['#f2c94c', '#54aeff', '#2da44e']), { roughness: 0.7 }), 0, 0.005)
+    mag.position.set(0.12, -0.44, 0.08)
+    mag.rotation.x = 1.2
+    mag.visible = false
+    fig.arms[0].add(mag)
+    this.authors.push({
+      fig, mood, phase, speech, sayAt: 3 + phase, sayUntil: 0, lines, home: pos.clone(), path: [], seat: null,
+      until: 4 + phase * 1.5, cup, mag, number: p.number,
+    })
   }
 
-  private stepAuthor(a: Author, t: number) {
-    const f = a.fig
-    // Waiting: a gentle sway; restless: tapping a foot and looking about; cross: hands on hips, bouncing.
-    f.rig.rotation.z = Math.sin(t * 1.2 + a.phase) * 0.03
-    // The restless ones glance back over their shoulder, as if for the reviewer.
-    f.head.rotation.y = a.mood >= 1 ? Math.sin(t * 0.6 + a.phase) * 1.1 : 0
-    f.legs[1].rotation.x = a.mood >= 1 && Math.sin(t * 0.5 + a.phase) > 0 ? Math.max(0, Math.sin(t * 9)) * -0.3 : 0
-    if (a.mood === 2) {
-      f.arms[0].rotation.set(-0.25, 0, -0.55)
-      f.arms[1].rotation.set(-0.25, 0, 0.55)
-      f.rig.position.y = Math.abs(Math.sin(t * 3 + a.phase)) * 0.05
+  /**
+   * Off to the lounge, or not: the fresh ones wander most, the cross ones hardly leave the counter
+   * (and only for water). The way there is along the walkway behind the queue, then round the furniture.
+   */
+  private wander(a: Author, t: number) {
+    const leave = [0.6, 0.35, 0.1][a.mood]!
+    const free = this.seats.filter(s => !s.taken && (a.mood < 2 || s.kind === 'water'))
+    if (!free.length || Math.random() > leave) {
+      a.until = t + 8 + Math.random() * 10
+      return
     }
-    // Something to say every so often; the cross ones more often.
+    const seat = pick(free)
+    seat.taken = true
+    a.seat = seat
+    a.path = [new THREE.Vector3(a.home.x, 0, LANE_Z), new THREE.Vector3(seat.via.x, 0, LANE_Z), seat.via.clone(), seat.pos.clone()]
+    a.until = 0
+  }
+
+  /** Back to their place in the queue, the way they came. */
+  private goBack(a: Author) {
+    const seat = a.seat!
+    a.path = [seat.via.clone(), new THREE.Vector3(seat.via.x, 0, LANE_Z), new THREE.Vector3(a.home.x, 0, LANE_Z), a.home.clone()]
+    seat.taken = false
+    a.seat = null
+    a.until = 0
+    a.cup.visible = a.mag.visible = false
+    // What they said about the lounge stays there.
+    a.speech.style.display = 'none'
+    a.sayUntil = 0
+  }
+
+  /** What they say in the lounge, now and then. */
+  private loungeLine(a: Author) {
+    const n = `#${a.number}`
+    const kind = a.seat?.kind
+    if (kind === 'sofa') return pick(['Catching up on the release notes 📖', `I'll wait here for ${n}`, 'Comfy sofa, this', 'Reading about monorepos…'])
+    if (kind === 'coffee') return pick(['Coffee while I wait ☕', 'One more espresso', `Fuel for ${n}`])
+    return pick(['Staying hydrated 💧', 'Water break', 'Any news on my PR?'])
+  }
+
+  private stepAuthor(a: Author, t: number, dt: number) {
+    const f = a.fig
+    const [la, ra] = f.arms
+    const turnTo = (want: number, rate: number) => {
+      f.group.rotation.y += Math.atan2(Math.sin(want - f.group.rotation.y), Math.cos(want - f.group.rotation.y)) * Math.min(1, dt * rate)
+    }
+    // Start each frame from standing still.
+    f.rig.position.set(0, 0, 0)
+    f.rig.rotation.set(0, 0, 0)
+    f.body.rotation.set(0, 0, 0)
+    f.head.rotation.set(0, 0, 0)
+    f.legs.forEach(l => l.rotation.set(0, 0, 0))
+    la.rotation.set(0, 0, -0.12)
+    ra.rotation.set(0, 0, 0.12)
+
+    if (a.path.length) {
+      // Walking: legs and arms swinging, a little bob, turned the way they're going.
+      const to = a.path[0]!
+      const pos = f.group.position
+      const d = to.clone().sub(pos).setY(0)
+      const dist = d.length()
+      if (dist > 0.05) {
+        pos.add(d.normalize().multiplyScalar(Math.min(dist, 1.4 * dt)))
+        turnTo(Math.atan2(d.x, d.z), 10)
+        f.legs.forEach((l, i) => { l.rotation.x = Math.sin(t * 10 + i * Math.PI) * 0.5 })
+        la.rotation.x = Math.sin(t * 10 + Math.PI) * 0.4
+        ra.rotation.x = Math.sin(t * 10) * 0.4
+        f.rig.position.y = Math.abs(Math.sin(t * 10)) * 0.04
+        return
+      }
+      a.path.shift()
+      if (a.path.length) return
+      // Arrived: settle in at the lounge for a while, or back in the queue.
+      if (a.seat) {
+        a.until = t + (a.seat.kind === 'sofa' ? 14 + Math.random() * 12 : 7 + Math.random() * 5)
+        a.cup.visible = a.seat.kind !== 'sofa'
+        a.mag.visible = a.seat.kind === 'sofa'
+        if (Math.random() < 0.6) a.sayAt = t + 1
+      } else a.until = t + 8 + Math.random() * 10
+    }
+
+    if (a.seat) {
+      // In the lounge: reading on the sofa, or sipping at the bar or the cooler.
+      const seat = a.seat
+      turnTo(seat.face, 6)
+      const ph = t + a.phase
+      if (seat.sit !== null) {
+        f.rig.position.set(0, seat.sit, -0.08)
+        f.legs.forEach((l) => { l.rotation.x = -1.45 })
+        la.rotation.x = -1.15
+        ra.rotation.x = -1.05
+        f.head.rotation.x = 0.25 + Math.sin(ph * 0.5) * 0.04
+        f.body.rotation.x = -0.08
+      } else {
+        const sip = (ph % 6) < 1.3
+        ra.rotation.x = sip ? -2.4 : -0.9
+        f.head.rotation.x = sip ? -0.2 : 0
+        f.rig.rotation.z = Math.sin(t * 1.1 + a.phase) * 0.02
+      }
+      if (t >= a.until) this.goBack(a)
+    } else {
+      // In the queue: a gentle sway; restless: tapping a foot and looking about; cross: hands on hips, bouncing.
+      turnTo(Math.PI, 6)
+      f.rig.rotation.z = Math.sin(t * 1.2 + a.phase) * 0.03
+      // The restless ones glance back over their shoulder, as if for the reviewer.
+      f.head.rotation.y = a.mood >= 1 ? Math.sin(t * 0.6 + a.phase) * 1.1 : 0
+      f.legs[1].rotation.x = a.mood >= 1 && Math.sin(t * 0.5 + a.phase) > 0 ? Math.max(0, Math.sin(t * 9)) * -0.3 : 0
+      if (a.mood === 2) {
+        la.rotation.set(-0.25, 0, -0.55)
+        ra.rotation.set(-0.25, 0, 0.55)
+        f.rig.position.y = Math.abs(Math.sin(t * 3 + a.phase)) * 0.05
+      }
+      if (a.until && t >= a.until) this.wander(a, t)
+    }
+
+    // Something to say every so often; the cross ones more often, and in the lounge about the lounge.
     if (t >= a.sayAt) {
-      a.speech.textContent = pick(a.lines)
+      a.speech.textContent = a.seat ? this.loungeLine(a) : pick(a.lines)
       a.speech.style.display = ''
       a.sayUntil = t + 4.5
       a.sayAt = t + (a.mood === 2 ? 9 : a.mood === 1 ? 16 : 26) + Math.random() * 8
@@ -832,6 +1055,7 @@ export class GithubHQ {
       a.sayUntil = 0
     }
   }
+
 
   // ------------------------------------------------------------ the workflow factory
 

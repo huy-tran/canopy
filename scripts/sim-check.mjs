@@ -28,6 +28,7 @@ const VIEWS = [
   // GitHub HQ beside the office: the whole building, then each room up close.
   { name: 'hq', q: 'view=hq&hour=15&fast=4' },
   { name: 'hq-pulls', q: 'view=hq-pulls&hour=15&fast=4' },
+  { name: 'hq-lounge', q: 'view=hq-lounge&hour=15&fast=40' },
   { name: 'hq-runs', q: 'view=hq-runs&hour=15&fast=4' },
   // The Canopy Core by the stage: calm, then running hot with the main thread lagging.
   { name: 'metrics', q: 'view=metrics&hour=15&fast=4' },

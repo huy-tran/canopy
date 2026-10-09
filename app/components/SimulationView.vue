@@ -91,6 +91,7 @@ const dcData = computed(() => ({
   loading: !AWW.world,
   error: AWW.world?.error,
   locked: !!A.lock && !A.lock.unlocked,
+  profiles: A.profiles.map(p => ({ name: p.name, color: profileColor(p.name) })),
 }))
 watch(dcData, d => scene?.syncAws(d))
 
@@ -336,7 +337,13 @@ function awsInfo(id: string): GhInfo | null {
       lines: A.lock && !A.lock.unlocked ? ['Locked: enter your TOTP code in the AWS window'] : w?.error ? [`Can't read AWS: ${w.error}`] : [`${plural(running, 'instance')} running · ${plural(w?.envs.length || 0, 'environment')}`],
     }
   }
-  if (id === 'wing:racks') return { title: 'Server hall', sub: 'A rack per EC2 instance', lines: ['Blinking green: running · pulsing amber: starting or stopping · dark: stopped', 'Sam the technician says how things are'] }
+  if (id.startsWith('profile:')) {
+    const name = id.slice(8)
+    const region = A.lastRegions[name] || A.profiles.find(p => p.name === name)?.region || ''
+    if (name === A.profile) return { title: name, sub: `Showing · ${A.region}`, lines: ['The profile the data centre and the AWS window are on'], dot: profileColor(name) }
+    return { title: name, sub: region ? `last used in ${region}` : 'no region picked yet', lines: ['Click to show this profile here and in the AWS window'], dot: profileColor(name) }
+  }
+  if (id === 'wing:racks') return { title: 'EC2 Instances', sub: 'A rack per instance', lines: ['Blinking green: running · pulsing amber: starting or stopping · dark: stopped', 'Sam the technician says how things are'] }
   if (id === 'wing:envs') return { title: 'Beanstalk', sub: 'A tower per environment, its beacon its health', lines: ['A beam of light while a deploy is going', 'The board lists each environment and its version'] }
   if (id.startsWith('ec2:')) {
     const i = w?.instances.find(x => x.id === id.slice(4))
@@ -352,6 +359,15 @@ function awsInfo(id: string): GhInfo | null {
 }
 
 function openFromDc(id: string) {
+  // A profile's pad switches to it; the window opens only if it needs a region picked.
+  if (id.startsWith('profile:')) {
+    const name = id.slice(8)
+    if (name === A.profile) return
+    A.useProfile(name)
+    if (A.picker) ui.openAws()
+    else ui.toast({ title: `Showing ${name}`, body: `${A.region} · here and in the AWS window` })
+    return
+  }
   if (id.startsWith('ec2:')) A.jumpTo('EC2', id.slice(4))
   else if (id.startsWith('eb:')) A.jumpTo('Beanstalk', id.slice(3))
   else if (id === 'wing:racks') A.go('EC2')

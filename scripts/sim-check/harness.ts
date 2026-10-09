@@ -42,7 +42,7 @@ scene.syncGithub({
     alerts: i === 0 ? { critical: 1, high: 11, moderate: 13, low: 5, total: 30 } : i === 2 ? { critical: 0, high: 0, moderate: 4, low: 1, total: 5 } : { critical: 0, high: 0, moderate: 0, low: 0, total: 0 },
   })),
   pulls: [
-    ...['mine', 'mine', 'mine'].map((review, i) => ({ url: 'u' + i, repo: repoNames[i]!, number: 40 + i, title: 'Fix it', author: ['sam', 'alex', 'sam'][i]!, createdAt: now - [5, 30, 90][i]! * H, review, checks: null })),
+    ...['mine', 'mine', 'mine', 'mine', 'mine'].map((review, i) => ({ url: 'u' + i, repo: repoNames[i]!, number: 40 + i, title: 'Fix it', author: ['sam', 'alex', 'sam', 'kim', 'lee'][i]!, createdAt: now - [5, 30, 90, 2, 1][i]! * H, review, checks: null })),
     ...Array.from({ length: 22 }, (_, i) => ({ url: 'o' + i, repo: repoNames[i % 10]!, number: 100 + i, title: 'Change', author: 'kim', createdAt: now - i * H, review: (['approved', 'changes', 'waiting', 'draft'] as const)[i % 4], checks: (['pass', 'fail', 'pending', null] as const)[i % 4] })),
   ],
   // Several workflows per repo, as the factory groups them, and a scheduled run it leaves out.
@@ -59,6 +59,7 @@ const states = ['running', 'running', 'running', 'pending', 'running', 'stopped'
 scene.syncAws({
   profile: 'acme-prod',
   region: 'ap-southeast-2',
+  profiles: [{ name: 'acme-dev', color: '#16a34a' }, { name: 'acme-prod', color: '#d7263d' }, { name: 'acme-staging', color: '#f59e0b' }, { name: 'personal', color: '#2f80ed' }],
   instances: states.map((state, i) => ({
     id: `i-0${(i + 10).toString(16)}a1b2c3d4e5f`, name: ['web', 'worker', 'api', 'bastion', 'cron', 'legacy', 'search'][i % 7] + '-' + (i + 1), state, type: ['t3.medium', 'm5.large', 't3.small'][i % 3],
     privIp: `10.0.1.${i + 10}`, pubIp: '', pubDns: '', vpc: 'vpc-1', subnet: 'subnet-1', az: 'ap-southeast-2a', platform: 'linux', ami: 'ami-1', iamRole: '', launchedAt: now - i * H, securityGroups: [], tags: [],
@@ -105,6 +106,24 @@ if (view === 'react') {
   }
 }
 
+// The mailroom's lounge in use: everyone who can goes and sits or gets a drink, and stays.
+if (view === 'hq-lounge') {
+  const hq = scene.hq
+  for (const a of hq.authors) {
+    const seat = hq.seats.find((s: any) => !s.taken && (a.mood < 2 || s.kind === 'water'))
+    if (!seat) continue
+    seat.taken = true
+    a.seat = seat
+    a.path = [seat.pos.clone()]
+    a.fig.group.position.copy(seat.pos)
+  }
+  const step = hq.stepAuthor.bind(hq)
+  hq.stepAuthor = (a: any, t: number, dt: number) => {
+    step(a, t, dt)
+    if (a.seat) a.until = 1e9
+  }
+}
+
 setTimeout(() => {
   scene.fly = null
   const at = (pos: number[], target: number[]) => {
@@ -127,8 +146,10 @@ setTimeout(() => {
   else if (view.startsWith('hq')) {
     // The whole building, or one room from just outside its door.
     const hq = scene.hq.group.position as THREE.Vector3
-    const dx = { 'hq-pulls': HQ_WINGS.pulls, 'hq-runs': HQ_WINGS.runs }[view] ?? null
-    if (dx === null) at([hq.x, 24, hq.z + 30], [hq.x, 0, hq.z + 1])
+    const dx = { 'hq-pulls': HQ_WINGS.pulls, 'hq-runs': HQ_WINGS.runs, 'hq-lounge': HQ_WINGS.pulls }[view] ?? null
+    // The mailroom's lounge, from behind the counter looking out to the door.
+    if (view === 'hq-lounge') at([hq.x + dx!, 7, hq.z - 5], [hq.x + dx!, 0.4, hq.z + 4])
+    else if (dx === null) at([hq.x, 24, hq.z + 30], [hq.x, 0, hq.z + 1])
     else at([hq.x + dx, 9, hq.z + 12], [hq.x + dx, 0.5, hq.z - 0.5])
   }
   else if (view.startsWith('dc')) {
