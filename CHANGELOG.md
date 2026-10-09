@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-09
+
 - Hide the repos you never work on from GitHub HQ and the GitHub window. In Repos, hover a repo and click the eye, or select it and press Shift H, and do the same again to show it back. A hidden repo's pull requests, workflow runs and alerts are no longer read from GitHub, which saves API calls, and your next most active repo takes its place in GitHub HQ. Review requests from hidden repos still come through. Hidden repos stay in the Repos list, dimmed and marked, and the Hidden box lists only them. The Shift H key can be changed in Settings > Keyboard shortcuts.
 
 ## [0.18.0] - 2026-10-09
@@ -181,6 +183,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.19.0]: https://github.com/huy-tran/canopy/releases/tag/v0.19.0
 [0.18.0]: https://github.com/huy-tran/canopy/releases/tag/v0.18.0
 [0.17.0]: https://github.com/huy-tran/canopy/releases/tag/v0.17.0
 [0.16.0]: https://github.com/huy-tran/canopy/releases/tag/v0.16.0
