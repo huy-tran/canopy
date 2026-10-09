@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-09
+
 - GitHub HQ's Pull requests room has a lounge by the door: a sofa with a side table of magazines, a coffee bar and a water cooler. While they wait, authors wander off to sit and read, get a coffee or a drink of water, and talk about it, then come back to the queue. Those with fresh pull requests wander most; those kept waiting for days hardly leave the counter. When nothing is waiting for your review, Mona has a cup of tea at her table behind the counter.
 - AWS has its own window, aws-tui inside Canopy. Open or close it with Ctrl Shift A or the AWS button in the title bar, over the terminals or the 3D World, where it is see-through. It reads your profiles from ~/.aws, as the AWS CLI and aws-tui do, and covers all ten of aws-tui's services:
   - Beanstalk: environments with their health and version, an environment's details and events, and deploying a version to it.
@@ -206,6 +208,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.20.0]: https://github.com/huy-tran/canopy/releases/tag/v0.20.0
 [0.19.1]: https://github.com/huy-tran/canopy/releases/tag/v0.19.1
 [0.19.0]: https://github.com/huy-tran/canopy/releases/tag/v0.19.0
 [0.18.0]: https://github.com/huy-tran/canopy/releases/tag/v0.18.0
