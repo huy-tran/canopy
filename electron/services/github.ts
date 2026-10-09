@@ -175,15 +175,20 @@ export async function workflowRuns(repos: string[]): Promise<GhRun[]> {
   return lists.flat().sort((a, b) => Number(live(b)) - Number(live(a)) || b.startedAt - a.startedAt).slice(0, MAX_RUNS)
 }
 
-/** The repos behind the Canopy projects (from their folders' origins) and the user's most active repos, with their PRs and runs. */
-export async function githubWorld(folders: string[]): Promise<GhWorld> {
+/**
+ * The repos behind the Canopy projects (from their folders' origins) and the user's most active repos, with their PRs and runs.
+ * Hidden repos are left out before anything is read about them, and the next most active take their places.
+ */
+export async function githubWorld(folders: string[], hidden: string[]): Promise<GhWorld> {
   const at = Date.now()
-  const active = await runGh(['api', `/user/repos?sort=pushed&per_page=${MAX_REPOS}&affiliation=owner,collaborator,organization_member`, '--jq', '[.[] | .full_name]'])
+  const skip = new Set(hidden.map(n => n.toLowerCase()))
+  const perPage = Math.min(100, MAX_REPOS + skip.size)
+  const active = await runGh(['api', `/user/repos?sort=pushed&per_page=${perPage}&affiliation=owner,collaborator,organization_member`, '--jq', '[.[] | .full_name]'])
   if (active.err) return { repos: [], pulls: [], runs: [], at, error: active.stderr || active.err.message, problem: problemOf(active.err, active.stderr) }
   const mine = (await Promise.all(folders.map(githubRepoOf))).filter((n): n is string => !!n)
   const canopy = new Set(mine.map(n => n.toLowerCase()))
   const names: string[] = []
-  const seen = new Set<string>()
+  const seen = new Set(skip)
   // Canopy's repos first, so the library always holds them.
   for (const n of [...mine, ...(JSON.parse(active.out || '[]') as string[])]) {
     if (seen.has(n.toLowerCase())) continue

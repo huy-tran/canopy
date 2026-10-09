@@ -58,8 +58,8 @@ export interface CanopyApi {
   gh: {
     /** Open pull requests waiting for the user's review, via the gh CLI. */
     reviews(): Promise<{ ok: boolean; prs: ReviewRequest[]; error?: string; problem?: GhProblem }>
-    /** Repos, open PRs and workflow runs for the 3D World's GitHub HQ: the repos behind these folders and the user's most active. */
-    world(folders: string[]): Promise<GhWorld>
+    /** Repos, open PRs and workflow runs for the 3D World's GitHub HQ: the repos behind these folders and the user's most active, less the hidden ones. */
+    world(folders: string[], hidden: string[]): Promise<GhWorld>
     /** GitHub HQ's last good read, saved on disk, or null before the first. */
     cachedWorld(): Promise<GhWorld | null>
     /** Every workflow run in these repos from the last week. */

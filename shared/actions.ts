@@ -62,6 +62,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'ghMergeCommit', g: GH, label: 'Merge with a merge commit', def: ['M'], scope: 'github' },
   { id: 'ghRebase', g: GH, label: 'Rebase and merge', def: ['R'], scope: 'github' },
   { id: 'ghDeleteBranch', g: GH, label: 'Delete the branch on merge, or not', def: ['D'], scope: 'github' },
+  { id: 'ghHide', g: GH, label: 'Hide the repo from GitHub HQ and the GitHub window, or show it again', def: ['Shift+H'], scope: 'github' },
   { id: 'ghRunWorkflow', g: GH, label: 'Run a workflow in the repo', def: ['W'], scope: 'github' },
   { id: 'ghRerun', g: GH, label: 'Re-run the whole workflow run', def: ['Shift+R'], scope: 'github' },
   { id: 'ghRerunFailed', g: GH, label: 'Re-run the failed jobs', def: ['Shift+F'], scope: 'github' },

@@ -294,8 +294,8 @@ function registerIpc() {
   handle('claude:run', (prompt: string) => runClaude(prompt))
   handle('usage', () => planUsage())
   handle('gh:reviews', () => reviewRequests())
-  handle('gh:world', async (folders: string[]) => {
-    const w = await githubWorld(folders)
+  handle('gh:world', async (folders: string[], hidden: string[]) => {
+    const w = await githubWorld(folders, hidden || [])
     if (!w.error) ghCache.set('world', w)
     return w
   })

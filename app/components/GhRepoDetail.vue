@@ -6,6 +6,7 @@ import type { GhAlert, GhPull, GhRun } from '#shared/types'
 const props = defineProps<{ name: string }>()
 
 const G = useGithubStore()
+const GW = useGhWorldStore()
 const ui = useUiStore()
 const prefs = usePrefsStore()
 
@@ -60,6 +61,7 @@ function openEntry(e: Entry) {
 
 const { sel } = useGhList(() => entries.value, openEntry, () => ({
   ghRunWorkflow: { run: () => { G.dispatch = props.name }, hint: 'run workflow' },
+  ghHide: { run: () => G.toggleHidden(props.name), hint: 'hide / show' },
   ghBrowser: {
     run: () => {
       const e = entries.value[sel.value]
@@ -85,6 +87,15 @@ onMounted(load)
         <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-refresh" :loading="loading" title="Refresh" @click="load" />
         <UButton size="xs" color="primary" variant="subtle" icon="i-hugeicons-play" :label="`Run workflow (${prefs.kl('ghRunWorkflow')})`" @click="G.dispatch = name" />
         <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-copy-01" label="Copy clone command" @click="copyClone" />
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="subtle"
+          :icon="GW.isHidden(name) ? 'i-hugeicons-view' : 'i-hugeicons-view-off-slash'"
+          :label="`${GW.isHidden(name) ? 'Show again' : 'Hide'} (${prefs.kl('ghHide')})`"
+          :title="GW.isHidden(name) ? 'Put it back in GitHub HQ and the GitHub window' : 'Leave it out of GitHub HQ and the GitHub window. Review requests from it still come through.'"
+          @click="G.toggleHidden(name)"
+        />
         <UButton size="xs" color="neutral" variant="subtle" icon="i-hugeicons-link-square-02" label="Open on GitHub" @click="openUrl(url)" />
       </div>
       <div v-if="info" class="flex flex-wrap items-center gap-x-2.5 pl-8 text-[11.5px] text-(--mu)">

@@ -8,11 +8,14 @@ export const GH_TABS: GhTab[] = ['reviews', 'mine', 'repos', 'runs', 'security']
 /**
  * The GitHub view's screens: which one is open (a list, a repo, a PR or a run) and the lists they
  * show, all read with the gh CLI. Workflows and Security cover GitHub HQ's repos: the Canopy
- * projects' repos and the user's most active. Repos lists every repo the user can reach.
+ * projects' repos and the user's most active. Repos lists every repo the user can reach, hidden ones
+ * included so they can be shown again. Hidden repos stay out of the user's own PRs and the alerts,
+ * but never out of review requests: someone asking for a review always gets through.
  */
 export const useGithubStore = defineStore('github', () => {
   const GW = useGhWorldStore()
   const R = useReviewsStore()
+  const ui = useUiStore()
 
   const tab = ref<GhTab>('reviews')
   /** Where the keyboard is: the sidebar (arrows pick a section) or the section's content. */
@@ -23,11 +26,13 @@ export const useGithubStore = defineStore('github', () => {
   const run = ref<{ repo: string; id: number } | null>(null)
 
   const reviews = ref<GhPull[] | null>(null)
-  const mine = ref<GhPull[] | null>(null)
+  const mineAll = ref<GhPull[] | null>(null)
+  const mine = computed(() => mineAll.value?.filter(p => !GW.isHidden(p.repo)) ?? null)
   const repoList = ref<GhRepoInfo[] | null>(null)
   /** The Workflows screen's runs: the same read as GitHub HQ's, so they aren't fetched twice. */
   const runs = computed<GhRun[] | null>(() => GW.world?.runs ?? null)
-  const alerts = ref<GhAlert[] | null>(null)
+  const alertsAll = ref<GhAlert[] | null>(null)
+  const alerts = computed(() => alertsAll.value?.filter(a => !GW.isHidden(a.repo)) ?? null)
   const busy = ref<Partial<Record<GhTab, boolean>>>({})
   const errors = ref<Partial<Record<GhTab, string>>>({})
   /** The repo a workflow is being started in, while the Run workflow dialog is open. */
@@ -98,7 +103,7 @@ export const useGithubStore = defineStore('github', () => {
         errors.value = { ...errors.value, [t]: r.ok ? '' : r.error }
         if (r.ok) {
           if (t === 'reviews') reviews.value = r.pulls
-          else mine.value = r.pulls
+          else mineAll.value = r.pulls
         }
         // Keep the badge on the GitHub button in step.
         if (t === 'reviews') R.poll()
@@ -112,12 +117,20 @@ export const useGithubStore = defineStore('github', () => {
         errors.value = { ...errors.value, runs: GW.world?.error || '' }
       } else if (t === 'security') {
         const list = (await hqRepos()).filter(r => r.alerts?.total)
-        alerts.value = await api.gh.alerts(list.map(r => r.name))
+        alertsAll.value = await api.gh.alerts(list.map(r => r.name))
         errors.value = { ...errors.value, security: GW.world?.error || '' }
       }
     } finally {
       busy.value = { ...busy.value, [t]: false }
     }
+  }
+
+  /** Hides a repo from GitHub HQ and these screens, or shows it again, saying which. */
+  function toggleHidden(name: string) {
+    GW.toggleHidden(name)
+    ui.toast(GW.isHidden(name)
+      ? { title: `Hid ${name}`, body: 'Its pull requests, runs and alerts won’t be read. Review requests from it still come through.' }
+      : { title: `Showing ${name} again`, body: 'It’s back in GitHub HQ and the GitHub window.' })
   }
 
   /** After approving, merging and the like: the lists that may have changed. */
@@ -126,5 +139,5 @@ export const useGithubStore = defineStore('github', () => {
     if (mine.value) load('mine', true)
   }
 
-  return { tab, pane, repo, pr, run, reviews, mine, repoList, runs, alerts, busy, errors, dispatch, go, step, openRepo, openPull, openRun, back, load, changed }
+  return { tab, pane, repo, pr, run, reviews, mine, repoList, runs, alerts, busy, errors, dispatch, go, step, openRepo, openPull, openRun, back, load, changed, toggleHidden }
 })

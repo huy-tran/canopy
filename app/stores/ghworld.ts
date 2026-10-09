@@ -19,13 +19,26 @@ const byUrgency = (a: GhRun, b: GhRun) => Number(live(b)) - Number(live(a)) || b
  * GitHub data for GitHub HQ in the 3D World and the GitHub window: the repos, their open PRs and
  * the week's workflow runs, read while either is open. The last good read is saved on disk, so both
  * fill in straight away on launch while a fresh one comes in. Reads pause while Canopy is hidden,
- * and slow right down when the hour's GitHub API allowance runs low.
+ * and slow right down when the hour's GitHub API allowance runs low. Hidden repos are never read,
+ * and drop out of what's shown the moment they're hidden.
  */
 export const useGhWorldStore = defineStore('ghworld', () => {
   const P = useProjectsStore()
   const R = useReviewsStore()
+  const prefs = usePrefsStore()
 
-  const world = ref<GhWorld | null>(null)
+  /** The repos the user has hidden, lowercased. */
+  const hidden = computed(() => new Set((prefs.prefs.ghHidden || []).map(n => n.toLowerCase())))
+  const isHidden = (repo: string) => hidden.value.has(repo.toLowerCase())
+
+  /** The last read as it came, and as shown: without the hidden repos, so hiding one takes effect at once. */
+  const raw = ref<GhWorld | null>(null)
+  const world = computed<GhWorld | null>(() => {
+    const w = raw.value
+    if (!w || !hidden.value.size) return w
+    const keep = (x: { repo: string }) => !isHidden(x.repo)
+    return { ...w, repos: w.repos.filter(r => !isHidden(r.name)), pulls: w.pulls.filter(keep), runs: w.runs.filter(keep) }
+  })
   const loading = ref(false)
   const limit = ref<GhRateLimit | null>(null)
   let full: ReturnType<typeof setInterval> | null = null
@@ -68,7 +81,7 @@ export const useGhWorldStore = defineStore('ghworld', () => {
     })
   })
 
-  const hidden = () => typeof document !== 'undefined' && document.hidden
+  const offscreen = () => typeof document !== 'undefined' && document.hidden
 
   async function checkLimit(force = false) {
     if (!force && limit.value && Date.now() - limit.value.at < LIMIT_MS) return
@@ -78,15 +91,16 @@ export const useGhWorldStore = defineStore('ghworld', () => {
   /** A full read; skipped while hidden, and spaced right out while the allowance is low. */
   async function read(force = false) {
     if (loading.value) return
-    if (!force && hidden()) return
+    if (!force && offscreen()) return
     await checkLimit()
     if (!force && slow.value && world.value && Date.now() - world.value.at < SLOW_MS) return
     loading.value = true
     try {
       const folders = [...new Set(P.projects.flatMap(p => p.repos.map(r => r.path)).filter(Boolean))]
-      const w = await api.gh.world(folders)
+      // A plain copy: IPC can't send a reactive array.
+      const w = await api.gh.world(folders, [...(prefs.prefs.ghHidden || [])])
       // A failed read keeps the last good one on screen, with its error.
-      world.value = w.error && world.value ? { ...world.value, error: w.error, problem: w.problem } : w
+      raw.value = w.error && raw.value ? { ...raw.value, error: w.error, problem: w.problem } : w
     } finally {
       loading.value = false
     }
@@ -94,17 +108,17 @@ export const useGhWorldStore = defineStore('ghworld', () => {
 
   /** Reads these repos' runs again and swaps them in: after a re-run, a new run, or while one is going. */
   async function refreshRepos(repos: string[]) {
-    const w = world.value
+    const w = raw.value
     if (!w || !repos.length) return
     const fresh = await api.gh.runs(repos)
-    if (world.value !== w) return
+    if (raw.value !== w) return
     const set = new Set(repos)
-    world.value = { ...w, runs: [...w.runs.filter(r => !set.has(r.repo)), ...fresh].sort(byUrgency) }
+    raw.value = { ...w, runs: [...w.runs.filter(r => !set.has(r.repo)), ...fresh].sort(byUrgency) }
   }
 
   /** Follows runs in progress: just the runs of the repos that have one going. */
   async function readLive() {
-    if (hidden() || slow.value || loading.value) return
+    if (offscreen() || slow.value || loading.value) return
     const repos = [...new Set((world.value?.runs || []).filter(live).map(r => r.repo))]
     await refreshRepos(repos)
   }
@@ -118,12 +132,28 @@ export const useGhWorldStore = defineStore('ghworld', () => {
     full = setInterval(() => read(), FULL_MS)
     liveTimer = setInterval(readLive, LIVE_MS)
     // Last time's read first, so there is something to show while the fresh one comes in.
-    if (!world.value && !cacheTried) {
+    if (!raw.value && !cacheTried) {
       cacheTried = true
       const cached = await api.gh.cachedWorld().catch(() => null)
-      if (cached && !world.value) world.value = cached
+      if (cached && !raw.value) raw.value = cached
     }
-    if (!world.value || Date.now() - world.value.at > 60_000) read(true)
+    if (!raw.value || Date.now() - raw.value.at > 60_000) read(true)
+  }
+
+  let refill: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Hides a repo, or shows it again. A read follows shortly, once the user is done toggling: to put
+   * the next most active repo in a hidden one's place, or to read one shown again.
+   */
+  function toggleHidden(repo: string) {
+    const list = prefs.prefs.ghHidden || []
+    prefs.set({ ghHidden: isHidden(repo) ? list.filter(n => n.toLowerCase() !== repo.toLowerCase()) : [...list, repo] })
+    if (refill) clearTimeout(refill)
+    refill = setTimeout(() => {
+      refill = null
+      if (users) read(true)
+    }, 2000)
   }
 
   function stop() {
@@ -137,9 +167,9 @@ export const useGhWorldStore = defineStore('ghworld', () => {
   // Back from the tray or a minimised window: catch up if a read was missed meanwhile.
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && users && (!world.value || Date.now() - world.value.at > FULL_MS)) read()
+      if (!document.hidden && users && (!raw.value || Date.now() - raw.value.at > FULL_MS)) read()
     })
   }
 
-  return { world, pulls, latestRuns, loading, limit, slow, resetsAt, read, readLive, refreshRepos, checkLimit, start, stop }
+  return { world, pulls, latestRuns, loading, limit, slow, resetsAt, isHidden, toggleHidden, read, readLive, refreshRepos, checkLimit, start, stop }
 })

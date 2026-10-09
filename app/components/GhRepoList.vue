@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Every repo the user can reach, the most recently pushed first, like GitHub's own list. Searching
-// covers them all at once, by name, owner and description; Enter opens the first match.
+// covers them all at once, by name, owner and description; Enter opens the first match. Hidden
+// repos stay listed, marked and dimmed, so they can be shown again; "Hidden" lists only them.
 const G = useGithubStore()
 const GW = useGhWorldStore()
 const ui = useUiStore()
@@ -9,12 +10,14 @@ const prefs = usePrefsStore()
 const LATEST = 30
 const query = ref('')
 const archived = ref(false)
+const onlyHidden = ref(false)
+const hiddenCount = computed(() => (G.repoList || []).filter(r => GW.isHidden(r.name)).length)
 const input = ref<{ inputRef?: HTMLInputElement } | null>(null)
 
 /** Each word has to appear somewhere in the name or description, in any order. */
 const matches = computed(() => {
   const words = query.value.toLowerCase().split(/\s+/).filter(Boolean)
-  const list = (G.repoList || []).filter(r => archived.value || !r.archived)
+  const list = (G.repoList || []).filter(r => (onlyHidden.value ? GW.isHidden(r.name) : archived.value || !r.archived))
   if (!words.length) return list.slice(0, LATEST)
   return list.filter((r) => {
     const hay = `${r.name} ${r.description}`.toLowerCase()
@@ -34,6 +37,7 @@ const { sel } = useGhList(() => matches.value, r => G.openRepo(r.name), () => ({
   ghSearch: { run: () => input.value?.inputRef?.focus(), hint: 'search' },
   ghRunWorkflow: { run: () => { const r = matches.value[sel.value]; if (r) G.dispatch = r.name }, hint: 'run workflow' },
   ghBrowser: { run: () => { const r = matches.value[sel.value]; if (r) api.sys.openExternal(r.url) }, hint: 'browser' },
+  ghHide: { run: () => { const r = matches.value[sel.value]; if (r) G.toggleHidden(r.name) }, hint: 'hide / show' },
   ghRefresh: { run: () => G.load('repos', true) },
 }))
 
@@ -49,7 +53,9 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-watch(query, () => { sel.value = 0 })
+watch([query, onlyHidden], () => { sel.value = 0 })
+// Showing the last hidden repo again leaves nothing to list.
+watch(hiddenCount, (n) => { if (!n) onlyHidden.value = false })
 </script>
 
 <template>
@@ -66,13 +72,16 @@ watch(query, () => { sel.value = 0 })
         @keydown="onKey"
       />
       <label class="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-[11.5px] text-(--tx2)">
-        <input v-model="archived" type="checkbox" class="accent-(--grn)">Archived
+        <input v-model="archived" type="checkbox" class="accent-(--grn)" :disabled="onlyHidden">Archived
+      </label>
+      <label v-if="hiddenCount" class="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-[11.5px] text-(--tx2)">
+        <input v-model="onlyHidden" type="checkbox" class="accent-(--grn)">Hidden ({{ hiddenCount }})
       </label>
       <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-refresh" :loading="!!G.busy.repos" title="Refresh" @click="G.load('repos', true)" />
     </div>
     <div class="flex h-8 flex-none items-center px-4 text-[11.5px] text-(--fa)">
       <template v-if="G.repoList">
-        {{ query.trim() ? `${matches.length}${matches.length === 100 ? '+' : ''} matching` : `Latest ${Math.min(LATEST, matches.length)} of ${G.repoList.length}, by last push` }}
+        {{ query.trim() ? `${matches.length}${matches.length === 100 ? '+' : ''} matching` : onlyHidden ? `${hiddenCount} hidden from GitHub HQ, ${prefs.kl('ghHide')} shows one again` : `Latest ${Math.min(LATEST, matches.length)} of ${G.repoList.length}, by last push` }}
       </template>
     </div>
     <div v-if="G.errors.repos" class="px-4 pb-2 text-[12px] text-(--red)">{{ G.errors.repos }}</div>
@@ -82,8 +91,8 @@ watch(query, () => { sel.value = 0 })
       <button
         v-for="(r, i) in matches"
         :key="r.name"
-        class="flex w-full cursor-pointer items-start gap-3 border-b border-(--ln2) px-4 py-2.5 text-left hover:bg-(--hov)"
-        :class="i === sel && 'bg-(--hov) shadow-[inset_2px_0_0_var(--lnk)]'"
+        class="group flex w-full cursor-pointer items-start gap-3 border-b border-(--ln2) px-4 py-2.5 text-left hover:bg-(--hov)"
+        :class="[i === sel && 'bg-(--hov) shadow-[inset_2px_0_0_var(--lnk)]', GW.isHidden(r.name) && 'opacity-60']"
         :data-gh-sel="i === sel"
         @click="G.openRepo(r.name)"
       >
@@ -95,6 +104,7 @@ watch(query, () => { sel.value = 0 })
             <span v-if="r.archived" class="flex-none rounded-full border border-(--amb)/40 px-1.5 text-[10px] text-(--amb)">Archived</span>
             <span v-if="r.fork" class="flex-none rounded-full border border-(--ln) px-1.5 text-[10px] text-(--mu)">Fork</span>
             <span v-if="known.get(r.name.toLowerCase())?.canopy" class="flex-none rounded-full bg-(--grn)/15 px-1.5 text-[10px] text-(--grn)">In Canopy</span>
+            <span v-if="GW.isHidden(r.name)" class="flex-none rounded-full border border-(--ln) px-1.5 text-[10px] text-(--mu)">Hidden</span>
           </div>
           <span v-if="r.description" class="ellipsis text-[12px] text-(--tx2)">{{ r.description }}</span>
           <span class="flex items-center gap-3 text-[11px] text-(--mu)">
@@ -106,6 +116,16 @@ watch(query, () => { sel.value = 0 })
         <span v-if="known.get(r.name.toLowerCase())?.alerts?.critical" class="mt-0.5 flex-none rounded-sm px-1.5 text-[10.5px] font-semibold" :style="{ color: SEV_DOT.critical, background: `color-mix(in oklch, ${SEV_DOT.critical} 15%, transparent)` }">
           {{ known.get(r.name.toLowerCase())!.alerts!.critical }} critical
         </span>
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          :icon="GW.isHidden(r.name) ? 'i-hugeicons-view' : 'i-hugeicons-view-off-slash'"
+          :title="`${GW.isHidden(r.name) ? 'Show in' : 'Hide from'} GitHub HQ and the GitHub window (${prefs.kl('ghHide')})`"
+          class="flex-none opacity-0 group-hover:opacity-100"
+          :class="(i === sel || GW.isHidden(r.name)) && 'opacity-100'"
+          @click.stop="G.toggleHidden(r.name)"
+        />
       </button>
     </div>
   </div>

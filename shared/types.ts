@@ -321,6 +321,8 @@ export interface Prefs {
   reviewNotify: boolean
   /** Remind again every this many minutes while reviews are still waiting; 0 is off. */
   reviewRemind: number
+  /** Repos (owner/name) GitHub HQ and the GitHub window leave out; review requests from them still come through. */
+  ghHidden?: string[]
   /** Opacity of the session window in the workspace simulation, 30-90: the characters always show through it. */
   simGlass?: number
   /** City for the workspace simulation's weather; empty uses the city in the system time zone. */
