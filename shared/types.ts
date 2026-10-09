@@ -27,20 +27,168 @@ export interface ReviewRequest {
   createdAt: number
 }
 
+/** A repo in the 3D World's GitHub HQ: one of the user's most active, or one behind a Canopy project. */
+export interface GhRepo {
+  /** owner/name */
+  name: string
+  url: string
+  private: boolean
+  pushedAt: number
+  /** Behind one of the user's Canopy projects. */
+  canopy: boolean
+  /** Open Dependabot alerts by severity (of the first 100) and in all; null when the user can't see them. */
+  alerts: { critical: number; high: number; moderate: number; low: number; total: number } | null
+  openPulls: number
+}
+
+/** Where an open pull request is: waiting on the user's review, approved, changes asked for, waiting on others, or a draft. */
+export type GhReview = 'mine' | 'approved' | 'changes' | 'waiting' | 'draft'
+
+export interface GhPull {
+  url: string
+  repo: string
+  number: number
+  title: string
+  author: string
+  createdAt: number
+  review: GhReview
+  /** The combined state of its latest commit's checks, if it has any. */
+  checks: 'pass' | 'fail' | 'pending' | null
+}
+
+export interface GhRun {
+  id: number
+  url: string
+  repo: string
+  workflow: string
+  /** What the run is for, such as a commit message or a PR title. */
+  title: string
+  branch: string
+  /** What started it: push, pull_request, schedule, workflow_dispatch and so on. */
+  event: string
+  state: 'queued' | 'running' | 'success' | 'failure' | 'cancelled' | 'skipped'
+  startedAt: number
+}
+
+/** An input a manually run workflow asks for, from its `workflow_dispatch` trigger. */
+export interface GhWorkflowInput {
+  name: string
+  description: string
+  required: boolean
+  default: string
+  type: 'string' | 'choice' | 'boolean' | 'number' | 'environment'
+  /** The choices of a choice input, or the repo's environments for an environment input. */
+  options: string[]
+}
+
+/** A workflow that can be run by hand, with what it asks for. */
+export interface GhDispatchable {
+  id: number
+  name: string
+  path: string
+  inputs: GhWorkflowInput[]
+}
+
+/** A repo in the GitHub view's Repos list. */
+export interface GhRepoInfo {
+  /** owner/name */
+  name: string
+  url: string
+  description: string
+  private: boolean
+  archived: boolean
+  fork: boolean
+  language: string
+  defaultBranch: string
+  stars: number
+  pushedAt: number
+}
+
+/** A pull request opened in the GitHub view, with what's needed to review and merge it. */
+export interface GhPullDetail {
+  url: string
+  repo: string
+  number: number
+  title: string
+  body: string
+  state: 'OPEN' | 'CLOSED' | 'MERGED'
+  draft: boolean
+  author: string
+  createdAt: number
+  base: string
+  head: string
+  additions: number
+  deletions: number
+  files: { path: string; additions: number; deletions: number }[]
+  /** Whether it merges cleanly: MERGEABLE, CONFLICTING or UNKNOWN while GitHub works it out. */
+  mergeable: string
+  /** Why it can or can't merge yet, such as CLEAN, BLOCKED (reviews or checks required) or BEHIND. */
+  mergeState: string
+  /** APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or empty when no review is required. */
+  reviewDecision: string
+  /** Who has reviewed and how, and who is asked to. */
+  reviewers: { login: string; state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING' | 'REQUESTED' }[]
+  checks: { name: string; state: 'pass' | 'fail' | 'pending' | 'skipped'; url: string }[]
+  comments: { author: string; body: string; at: number }[]
+  /** The merge methods the repo allows, and whether the user may merge at all. */
+  merge: { merge: boolean; squash: boolean; rebase: boolean; deleteBranch: boolean; allowed: boolean }
+  /** The signed-in user opened it: GitHub won't let them approve it. */
+  mine: boolean
+}
+
+export interface GhRunDetail {
+  id: number
+  repo: string
+  url: string
+  workflow: string
+  title: string
+  branch: string
+  event: string
+  state: GhRun['state']
+  attempt: number
+  createdAt: number
+  jobs: { id: number; name: string; state: GhRun['state']; startedAt: number; completedAt: number; url: string; steps: { n: number; name: string; state: GhRun['state'] }[] }[]
+}
+
+/** An open Dependabot alert. */
+export interface GhAlert {
+  repo: string
+  number: number
+  severity: 'critical' | 'high' | 'moderate' | 'low'
+  pkg: string
+  ecosystem: string
+  manifest: string
+  summary: string
+  ghsa: string
+  /** The first version with the fix, if there is one yet. */
+  fixed: string | null
+  range: string
+  url: string
+  createdAt: number
+}
+
+/** What a gh call that changes something on GitHub came back with. */
+export interface GhDone { ok: boolean; error?: string }
+
+/** What is left of the hour's GitHub API allowance: REST calls and GraphQL points, and when each resets. */
+export interface GhRateLimit {
+  core: { limit: number; remaining: number; reset: number }
+  graphql: { limit: number; remaining: number; reset: number }
+  at: number
+}
+
+/** Everything the GitHub HQ in the 3D World shows. */
+export interface GhWorld {
+  repos: GhRepo[]
+  pulls: GhPull[]
+  runs: GhRun[]
+  at: number
+  error?: string
+  problem?: GhProblem
+}
+
 /** Why gh could not be used: not installed, not signed in, or anything else (such as being offline). */
 export type GhProblem = 'missing' | 'auth' | 'other'
-
-/** What the GitHub view found on this PC before starting its terminal app. */
-export interface ToolCheck {
-  /** The command line to run, or null when none of the tried commands is installed. */
-  cmd: string | null
-  /** The commands looked for, in order. */
-  tried: string[]
-  /** gh itself is installed. */
-  gh: boolean
-  /** The gh dash extension is installed, an alternative to gh-tui. */
-  ghDash: boolean
-}
 
 export interface Service {
   id: string
@@ -169,8 +317,6 @@ export interface Prefs {
   panelSize: { bottom: number; right: number }
   /** System-wide shortcut that brings Canopy to the front, or hides it when it's already focused. Empty means off. */
   summonKey: string
-  /** Terminal app shown in the GitHub view, such as gh-tui or gh dash. Unset means gh-tui. */
-  githubCmd?: string
   /** Notify when someone requests the user's review on a pull request. */
   reviewNotify: boolean
   /** Remind again every this many minutes while reviews are still waiting; 0 is off. */

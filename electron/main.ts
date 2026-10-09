@@ -4,12 +4,14 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import Store from 'electron-store'
 import electronUpdater from 'electron-updater'
-import type { HookEvent, Persisted, UpdateState } from '../shared/types'
+import type { GhWorld, HookEvent, Persisted, UpdateState } from '../shared/types'
 import { clearSessionSettings, startHookServer, stopHookServer } from './services/hooks'
-import { bufferOf, killAllSessions, killSession, resizeSession, spawnSession, spawnShell, spawnTool, writeSession } from './services/pty'
+import { bufferOf, killAllSessions, killSession, resizeSession, spawnSession, spawnShell, writeSession } from './services/pty'
 import { dayActivity, lastAssistantText, projectHistory, unwatchTranscript, watchTranscript } from './services/transcript'
 import { runClaude } from './services/claude'
-import { findTool, reviewRequests } from './services/github'
+import {
+  allRepos, branches, cancelRun, dispatchables, rateLimit, runWorkflow, githubWorld, mergePull, pullDetail, pullDiff, rerunRun, reviewPull, reviewRequests, runDetail, runLog, searchPulls, securityAlerts, workflowRuns,
+} from './services/github'
 import * as git from './services/git'
 import { startService, stopAllServices, stopService } from './services/devservers'
 import { planUsage } from './services/usage'
@@ -17,10 +19,15 @@ import { appInfo, clearImages, copyImage, listFonts, listShells, openInEditor, s
 
 const { autoUpdater } = electronUpdater
 const DEV_URL = process.env.CANOPY_DEV_URL
+/** Dev only (npm run dev:demo): made-up projects and sessions, in a profile of its own. */
+const DEMO = !!DEV_URL && !!process.env.CANOPY_DEMO
 // Dev only: a separate profile folder runs a second instance alongside the main one (used for UI testing).
 if (DEV_URL && process.env.CANOPY_USER_DATA) app.setPath('userData', process.env.CANOPY_USER_DATA)
+else if (DEMO) app.setPath('userData', path.join(app.getPath('appData'), 'canopy-demo'))
 
 const store = new Store<{ state?: Persisted; bounds?: Electron.Rectangle; maximized?: boolean }>({ name: 'canopy' })
+/** GitHub HQ's last good read, so the 3D World and the GitHub window fill in at once on the next launch. */
+const ghCache = new Store<{ world?: GhWorld }>({ name: 'github-cache' })
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -157,7 +164,7 @@ function createWindow() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
-  if (DEV_URL) win.loadURL(DEV_URL)
+  if (DEV_URL) win.loadURL(DEMO ? `${DEV_URL}/?demo=1` : DEV_URL)
   else win.loadURL('app://canopy/index.html')
 }
 
@@ -232,11 +239,6 @@ function registerIpc() {
     const shell = shells.find(s => s.kind === o.kind) || shells[0]!
     return spawnShell({ ...o, shell }, (id, d) => send('pty:data', id, d), (id, code) => send('pty:exit', id, code))
   })
-  handle('pty:tool', (o: { id: string; cmd: string; dark: boolean; cols: number; rows: number }) => {
-    // gh-tui's theme follows the terminal colours, unless one is set in the environment.
-    const env: Record<string, string> = process.env.GITHUB_TUI_THEME ? {} : { GITHUB_TUI_THEME: o.dark ? 'dark' : 'light' }
-    return spawnTool({ ...o, cwd: app.getPath('home'), env }, (id, d) => send('pty:data', id, d), (id, code) => send('pty:exit', id, code))
-  })
   handle('pty:kill', (id: string) => {
     unwatchTranscript(id)
     killSession(id)
@@ -292,7 +294,28 @@ function registerIpc() {
   handle('claude:run', (prompt: string) => runClaude(prompt))
   handle('usage', () => planUsage())
   handle('gh:reviews', () => reviewRequests())
-  handle('gh:findTool', (custom: string) => findTool(custom))
+  handle('gh:world', async (folders: string[]) => {
+    const w = await githubWorld(folders)
+    if (!w.error) ghCache.set('world', w)
+    return w
+  })
+  handle('gh:cachedWorld', () => ghCache.get('world') ?? null)
+  handle('gh:runs', (repos: string[]) => workflowRuns(repos))
+  handle('gh:rateLimit', () => rateLimit())
+  handle('gh:search', (filter: string) => searchPulls(filter))
+  handle('gh:pull', (url: string) => pullDetail(url))
+  handle('gh:pullDiff', (url: string) => pullDiff(url))
+  handle('gh:review', (url: string, kind: 'approve' | 'request-changes' | 'comment', body: string) => reviewPull(url, kind, body))
+  handle('gh:merge', (url: string, method: 'merge' | 'squash' | 'rebase', deleteBranch: boolean) => mergePull(url, method, deleteBranch))
+  handle('gh:run', (repo: string, id: number) => runDetail(repo, id))
+  handle('gh:runLog', (repo: string, id: number, job?: number) => runLog(repo, id, job))
+  handle('gh:rerun', (repo: string, id: number, failedOnly: boolean) => rerunRun(repo, id, failedOnly))
+  handle('gh:cancel', (repo: string, id: number) => cancelRun(repo, id))
+  handle('gh:alerts', (repos: string[]) => securityAlerts(repos))
+  handle('gh:repos', () => allRepos())
+  handle('gh:dispatchables', (repo: string) => dispatchables(repo))
+  handle('gh:branches', (repo: string) => branches(repo))
+  handle('gh:runWorkflow', (repo: string, id: number, ref: string, inputs: Record<string, string>) => runWorkflow(repo, id, ref, inputs))
 
   handle('sys:openExternal', (url: string) => shell.openExternal(url))
   handle('sys:showInFolder', (p: string) => showInFolder(p))

@@ -25,6 +25,10 @@ const VIEWS = [
   { name: 'common-pool-foos-darts', q: 'view=common&hour=15&fast=10&day=20734' },
   { name: 'common-board-pool-arcade', q: 'view=common&hour=15&fast=10&day=20735' },
   { name: 'common-pong-hockey-darts', q: 'view=common&hour=15&fast=10&day=20741' },
+  // GitHub HQ beside the office: the whole building, then each room up close.
+  { name: 'hq', q: 'view=hq&hour=15&fast=4' },
+  { name: 'hq-pulls', q: 'view=hq-pulls&hour=15&fast=4' },
+  { name: 'hq-runs', q: 'view=hq-runs&hour=15&fast=4' },
 ]
 
 const browser = process.env.CHROME || [

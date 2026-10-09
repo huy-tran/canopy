@@ -4,6 +4,20 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- GitHub has its own window, built on the GitHub CLI, so nothing else needs installing. Open or close it with Ctrl Shift G over the terminals or the 3D World, where it is see-through, or close it with a click outside. It replaces the GitHub view that ran gh-tui, along with the "GitHub terminal app" setting.
+  - Review requests: the pull requests waiting for your review, longest-waiting first.
+  - My pull requests: the ones you opened.
+  - Repos: every repo you can reach, the 30 most recently pushed first, with a search across all of them by name, owner or description. Open one to see its open pull requests, this week's workflow runs and its Dependabot alerts, or copy its clone command.
+  - A pull request's page: its description, reviewers and comments, a highlighted diff file by file, and its checks. Approve, request changes or comment, and merge by merge commit, squash or rebase, optionally deleting the branch.
+  - Workflows: runs from the last week, running ones first. Open one to see its jobs, steps and log, then re-run it, re-run the failed jobs, or cancel it. Scheduled runs are hidden unless you ask for them.
+  - Security: open Dependabot alerts by repo and severity, each with the version that fixes it.
+  - Run a workflow from a repo: pick one of its workflows that can be run by hand, then the branch and its inputs.
+- The GitHub window works from the keyboard, like gh-tui. In the sidebar, Up and Down pick a section and Enter or Right goes into it. In a section, Up and Down (or J and K) move, Enter or Right opens, and Esc or Left goes back, then out to the sidebar. Esc never closes the window: Ctrl Shift G or a click outside does. / searches repos and O opens in the browser. On a pull request, Tab switches between overview, files and checks, A approves, X requests changes, C comments, S, M and R squash, merge or rebase (after asking), and D toggles deleting the branch. W runs a workflow, and on a run Shift R re-runs it, Shift F re-runs the failed jobs and Shift X cancels it. The footer shows the keys for where you are, and all of them can be changed in Settings > Keyboard shortcuts.
+- Clicking a review request notification opens that pull request in the GitHub window.
+- GitHub is read sparingly. The GitHub window and GitHub HQ share one read, which pauses while Canopy is minimised or in the tray, and runs in progress are followed by reading only their repos. The last read is saved, so both fill in at once on launch. If fewer than 500 GitHub API calls are left in the hour, Canopy reads much less until it resets and says so in the GitHub window and on GitHub HQ's sign.
+- The 3D World has a GitHub HQ next to the office, with two rooms and a staff of octocats. Pull requests is a mailroom with a parcel for each open PR, coloured by its review. The ones waiting for your review sit on the counter, with their authors queueing in front and getting more impatient the longer they wait, while Mona the clerk carries parcels about and calls out who is waiting. Workflows is a factory with a production line per repo and a lamp on its machine for each workflow: its belt moves, its chimney smokes and its beacon turns while any of them runs, it turns red when one failed, and its sign shows the repo and the workflows that need a look. Scheduled runs only show while they run or after they fail. A board on the back wall lists what is running and for how long, and Octo and Inky, the foremen, go from machine to machine saying what each one is doing.
+- GitHub HQ shows your Canopy projects' repos and your most active repos on GitHub. Hover over anything for its details, or click it to open it in the GitHub window: a pull request to review, a repo from its factory line, or a run from its lamp.
+
 ## [0.17.0] - 2026-10-09
 
 - A GitHub view runs gh-tui inside Canopy: open it with the GitHub button in the title bar or Ctrl Shift G. It keeps running while closed, so it opens instantly where you left it. Its own Ctrl shortcuts, such as Ctrl K, reach it. Change the app it runs in Settings > General.

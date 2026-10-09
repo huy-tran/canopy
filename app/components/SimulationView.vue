@@ -53,6 +53,21 @@ const rooms = computed<SimRoom[]>(() => P.ordered.map((p) => {
 
 watch([rooms, people], () => scene?.sync(rooms.value, people.value))
 
+// ---------- GitHub HQ ----------
+
+const GW = useGhWorldStore()
+const hqData = computed(() => ({
+  repos: GW.world?.repos || [],
+  pulls: GW.pulls,
+  runs: GW.latestRuns,
+  loading: !GW.world,
+  error: GW.world?.error,
+  slowUntil: GW.slow ? GW.resetsAt : 0,
+}))
+watch(hqData, d => scene?.syncGithub(d))
+// The HQ's clock: authors grow impatient while the view stays open.
+watch(() => Math.floor(ui.now / 600_000), () => scene?.syncGithub(hqData.value))
+
 onMounted(() => {
   scene = new WorkspaceScene({
     container: el.value!,
@@ -60,6 +75,8 @@ onMounted(() => {
     onSelect: (p) => {
       picked.value = p
       menu.value = null
+      // Anything in GitHub HQ opens the GitHub window on it.
+      if (p?.kind === 'gh') openFromHq(p.id)
       // A person opens their session, or a subagent the session that started it, in a modal.
       if (p?.kind === 'person') {
         const who = people.value.find(x => x.id === p.id)
@@ -73,6 +90,8 @@ onMounted(() => {
     onFarewell: id => S.close(id),
   })
   scene.sync(rooms.value, people.value)
+  scene.syncGithub(hqData.value)
+  GW.start()
   paintSky()
 })
 
@@ -90,7 +109,7 @@ watch(() => ui.simTarget, (t) => {
 
 /** Tab and Shift Tab fly between the sessions waiting on you, while nothing else has the keyboard. */
 useEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || menu.value) return
+  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || ui.gh || menu.value) return
   const t = e.target as HTMLElement | null
   if (t?.closest('input, textarea, [contenteditable], .xterm, [role="dialog"]')) return
   e.preventDefault()
@@ -181,6 +200,7 @@ function menuClose() {
 
 onBeforeUnmount(() => {
   if (talkTo.value) setSeeThrough(talkTo.value, false)
+  GW.stop()
   scene?.dispose()
   scene = null
 })
@@ -188,6 +208,81 @@ onBeforeUnmount(() => {
 // ---------- Hover cards and the picked person or room ----------
 
 const hoverScreen = computed(() => (hover.value?.pick.kind === 'screen' ? hover.value.pick.id : null))
+const hoverGh = computed(() => (hover.value?.pick.kind === 'gh' ? ghInfo(hover.value.pick.id) : null))
+
+// ---------- What things in GitHub HQ are ----------
+
+interface GhInfo { title: string; sub: string; lines: string[]; dot?: string; url?: string }
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
+
+/** The card for something in GitHub HQ, from its pick id. */
+function ghInfo(id: string): GhInfo | null {
+  const w = GW.world
+  const pulls = GW.pulls
+  const runs = GW.latestRuns
+  const mine = pulls.filter(p => p.review === 'mine')
+  if (id === 'hq') {
+    return {
+      title: 'GitHub HQ', sub: 'Your repos, pull requests and workflow runs',
+      lines: w?.error ? [`Can't read GitHub: ${w.error}`] : [`${plural(w?.repos.length || 0, 'repo')} · ${plural(pulls.length, 'open PR')}`, mine.length ? `${mine.length} waiting for your review` : 'Nothing waiting for your review'],
+    }
+  }
+  if (id === 'wing:pulls') return { title: 'Pull requests', sub: 'A parcel per open PR, sorted by Mona the clerk', lines: ['On the counter: waiting for your review, with their authors queueing', 'Pigeonholes: green approved · red changes asked · blue waiting · grey draft'] }
+  if (id === 'wing:runs') return { title: 'Workflows', sub: 'A production line for the latest run of each workflow this week', lines: ['The board on the back wall lists what is running and for how long', 'Smoke and a turning beacon: running · green lamp: passed · red: failed · grey: cancelled'] }
+  if (id.startsWith('repo:')) {
+    // A factory line: the repo's workflows and how each last went.
+    const name = id.slice(5)
+    const r = w?.repos.find(x => x.name === name)
+    const mine = runs.filter(x => x.repo === name).sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || b.startedAt - a.startedAt)
+    if (!r && !mine.length) return null
+    const top = mine[0]
+    return {
+      title: name, sub: `${plural(mine.length, 'workflow')} run this week${r ? ` · ${plural(r.openPulls, 'open PR')}` : ''}`,
+      lines: mine.slice(0, 4).map(x => `${x.workflow}: ${RUN_LABEL[x.state].toLowerCase()}${isLive(x) ? '' : `, ${ago(Date.now() - x.startedAt)} ago`}`),
+      dot: top ? RUN_DOT[top.state] : undefined, url: r?.url,
+    }
+  }
+  if (id.startsWith('pr:')) {
+    const p = pulls.find(x => x.url === id.slice(3))
+    if (!p) return null
+    return {
+      title: `${p.repo.split('/').pop()} #${p.number}`, sub: `by ${p.author} · opened ${ago(Date.now() - p.createdAt)} ago`,
+      lines: [p.title, `${REVIEW_LABEL[p.review]}${p.checks ? ` · ${CHECKS_LABEL[p.checks].toLowerCase()}` : ''}`], dot: REVIEW_DOT[p.review], url: p.url,
+    }
+  }
+  if (id.startsWith('run:')) {
+    const [repo, workflow] = id.slice(4).split('|')
+    const r = runs.find(x => x.repo === repo && x.workflow === workflow)
+    if (!r) return null
+    return {
+      title: `${r.workflow}`, sub: `${r.repo} · ${r.branch}`,
+      lines: [r.title, `${RUN_LABEL[r.state]} · started ${ago(Date.now() - r.startedAt)} ago`], dot: RUN_DOT[r.state], url: r.url,
+    }
+  }
+  return null
+}
+
+// ---------- Anything in GitHub HQ opens the GitHub window on it, see-through over the world ----------
+
+const G = useGithubStore()
+
+/** The screen for what was clicked: a PR, a run, a repo, or a wing's list. */
+function openFromHq(id: string) {
+  if (id.startsWith('pr:')) {
+    G.go('reviews')
+    G.openPull(id.slice(3))
+  } else if (id.startsWith('run:')) {
+    const [repo, workflow] = id.slice(4).split('|')
+    const r = GW.world?.runs.find(x => x.repo === repo && x.workflow === workflow)
+    G.go('runs')
+    if (r) G.openRun(r.repo, r.id)
+  } else if (id.startsWith('repo:')) {
+    G.go('repos')
+    G.openRepo(id.slice(5))
+  } else G.go(id === 'wing:runs' ? 'runs' : id === 'wing:repos' ? 'repos' : 'reviews')
+  ui.openGithub()
+}
 const hoverPerson = computed(() => (hover.value?.pick.kind === 'person' ? people.value.find(p => p.id === hover.value!.pick.id) || null : null))
 
 /** Keeps a card beside the pointer and inside the view. */
@@ -338,6 +433,16 @@ function openProject(pid: string, view: 'terminals' | 'overview') {
       <div v-else-if="sessionOf(hoverPerson)" class="mt-1 text-[11px] text-(--fa)">
         {{ SL[hoverPerson.status] }}<template v-if="sessionOf(hoverPerson)!.waitWhat"> · {{ sessionOf(hoverPerson)!.waitWhat }}</template> · {{ usd(S.cost(sessionOf(hoverPerson)!)) }}
       </div>
+    </div>
+
+    <div v-else-if="hoverGh" class="pointer-events-none absolute z-10 w-[280px] sim-card rounded-lg border border-(--ln) px-3 py-2 text-(--tx) shadow-xl" :style="cardAt(280, 120)">
+      <div class="flex items-center gap-1.5 text-[12.5px] font-semibold">
+        <span v-if="hoverGh.dot" class="h-2 w-2 flex-none rounded-full" :style="{ background: hoverGh.dot }" />
+        <span class="ellipsis">{{ hoverGh.title }}</span>
+      </div>
+      <div class="mt-0.5 text-[11px] text-(--fa)">{{ hoverGh.sub }}</div>
+      <div v-for="l in hoverGh.lines" :key="l" class="mt-1 line-clamp-2 text-[11.5px] text-(--tx2)">{{ l }}</div>
+      <div class="mt-1.5 text-[10.5px] text-(--fa)">Click to open</div>
     </div>
 
     <div v-if="pickedRoom && !pickedPerson" class="absolute bottom-3 left-3 min-w-[240px] rounded-xl border border-white/10 bg-black/45 px-3.5 py-3 text-white backdrop-blur">

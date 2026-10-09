@@ -22,6 +22,7 @@ A Windows desktop workspace for running many Claude Code sessions across many cl
 ```bash
 npm install        # npm 11 asks to approve install scripts; allowScripts in package.json covers them
 npm run dev        # Nuxt dev server on :3456 plus Electron
+npm run dev:demo   # the same with made-up projects and fake Claude sessions (nothing runs, nothing is saved)
 npm run build      # nuxt generate + bundle electron/ to dist-electron/
 npm run dist       # build and package a Windows installer into release/
 npm run typecheck  # renderer (vue-tsc) and main process (tsc)

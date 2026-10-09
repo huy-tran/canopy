@@ -6,7 +6,7 @@ const none = async () => null as any
 /** Stand-in used when the renderer is opened in a plain browser (no Electron preload). */
 const browserFallback: CanopyApi = {
   state: { load: none, save: none },
-  pty: { spawn: async () => ({ pid: 0 }), shell: async () => ({ pid: 0 }), tool: async () => ({ pid: 0 }), write: () => {}, resize: () => {}, kill: none, buffer: async () => '', onData: noop, onExit: noop },
+  pty: { spawn: async () => ({ pid: 0 }), shell: async () => ({ pid: 0 }), write: () => {}, resize: () => {}, kill: none, buffer: async () => '', onData: noop, onExit: noop },
   session: { onHook: noop, onUsage: noop },
   git: {
     info: async () => ({ exists: false, isRepo: false, branch: '', stack: '' }),
@@ -29,7 +29,24 @@ const browserFallback: CanopyApi = {
   usage: none,
   gh: {
     reviews: async () => ({ ok: false, prs: [], error: 'Needs the desktop app.', problem: 'other' }),
-    findTool: async c => ({ cmd: null, tried: [c || 'gh-tui'], gh: false, ghDash: false }),
+    world: async () => ({ repos: [], pulls: [], runs: [], at: Date.now(), error: 'Needs the desktop app.', problem: 'other' }),
+    runs: async () => [],
+    cachedWorld: none,
+    rateLimit: none,
+    search: async () => ({ ok: false, pulls: [], error: 'Needs the desktop app.' }),
+    pull: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    pullDiff: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    review: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    merge: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    run: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    runLog: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    rerun: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    cancel: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    alerts: async () => [],
+    repos: async () => ({ ok: false, repos: [], error: 'Needs the desktop app.' }),
+    dispatchables: async () => ({ ok: false, workflows: [], error: 'Needs the desktop app.' }),
+    branches: async () => [],
+    runWorkflow: async () => ({ ok: false, error: 'Needs the desktop app.' }),
   },
   sys: {
     openExternal: async (u) => { window.open(u, '_blank') }, showInFolder: none, openEditor: async () => ({ ok: false, error: 'Needs the desktop app.' }),

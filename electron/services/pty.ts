@@ -56,8 +56,8 @@ export function spawnSession(o: SpawnOpts, onData: (id: string, d: string) => vo
   })
 }
 
-/** Registers a pty under an id, keeping recent output for replay and streaming it on. `liveOnly` drops the exit of a killed or replaced pty. */
-function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void, liveOnly = false) {
+/** Registers a pty under an id, keeping recent output for replay and streaming it on. */
+function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
   const t: Term = { p, buf: [] }
   terms.set(id, t)
   p.onData((d) => {
@@ -66,9 +66,8 @@ function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void,
     onData(id, d)
   })
   p.onExit(({ exitCode }) => {
-    const live = terms.get(id) === t
-    if (live) terms.delete(id)
-    if (live || !liveOnly) onExit(id, exitCode)
+    if (terms.get(id) === t) terms.delete(id)
+    onExit(id, exitCode)
   })
   return { pid: p.pid }
 }
@@ -95,20 +94,6 @@ export function spawnShell(o: { id: string; cwd: string; shell: ShellInfo; cols:
   return track(o.id, p, onData, onExit)
 }
 
-/** A full-screen terminal app such as gh-tui: no Claude hooks, and no shell left behind when it quits. */
-export function spawnTool(o: SpawnOpts & { env?: Record<string, string> }, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
-  killSession(o.id)
-  const shell = process.env.ComSpec || 'cmd.exe'
-  const p = pty.spawn(shell, `/d /s /c "${o.cmd}"`, {
-    name: 'xterm-256color',
-    cols: Math.max(20, o.cols || 120),
-    rows: Math.max(5, o.rows || 30),
-    cwd: o.cwd,
-    env: { ...cleanEnv(), COLORTERM: 'truecolor', ...o.env },
-    useConpty: true,
-  })
-  return track(o.id, p, onData, onExit, true)
-}
 
 export function writeSession(id: string, data: string) {
   terms.get(id)?.p.write(data)

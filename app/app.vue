@@ -33,6 +33,7 @@ useAppShortcuts()
     <CommandPalette />
     <ProjectModal />
     <SessionDetailsModal />
+    <GitHubWindow />
     <FileExplorerModal />
     <SettingsModal />
     <AboutModal />

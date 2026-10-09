@@ -5,9 +5,15 @@ export interface ActionDef {
   g: string
   label: string
   def: string[]
-  /** 'shell' actions only fire while a shell in the dock panel has focus, 'sim' ones only in the workspace simulation; both may reuse keys bound elsewhere. */
-  scope?: 'shell' | 'sim'
+  /**
+   * 'shell' actions only fire while a shell in the dock panel has focus, 'sim' ones only in the
+   * workspace simulation, 'github' ones only in the GitHub window; all may reuse keys bound
+   * elsewhere, and GitHub window keys may be single letters, like gh-tui's.
+   */
+  scope?: 'shell' | 'sim' | 'github'
 }
+
+const GH = 'GitHub window'
 
 export const ACTIONS: ActionDef[] = [
   { id: 'jump', g: 'Navigate', label: 'Jump to a project or session', def: ['Ctrl+Shift+P'] },
@@ -40,6 +46,26 @@ export const ACTIONS: ActionDef[] = [
   { id: 'shellNext', g: 'Shell panel, while it has focus', label: 'Next shell tab', def: ['Ctrl+Alt+→'], scope: 'shell' },
   { id: 'shellPrev', g: 'Shell panel, while it has focus', label: 'Previous shell tab', def: ['Ctrl+Alt+←'], scope: 'shell' },
   { id: 'simTalk', g: '3D World', label: 'Open or close the session of the character in view', def: ['Ctrl+Enter'], scope: 'sim' },
+  { id: 'ghDown', g: GH, label: 'Next item', def: ['J', '↓'], scope: 'github' },
+  { id: 'ghUp', g: GH, label: 'Previous item', def: ['K', '↑'], scope: 'github' },
+  { id: 'ghOpen', g: GH, label: 'Open the selected item, or go from the sidebar into the section', def: ['Enter', '→', 'L'], scope: 'github' },
+  { id: 'ghBack', g: GH, label: 'Back, then out to the sidebar (Esc does the same)', def: ['←', 'Backspace', 'H'], scope: 'github' },
+  { id: 'ghNextTab', g: GH, label: 'Next tab of a pull request', def: ['Tab'], scope: 'github' },
+  { id: 'ghPrevTab', g: GH, label: 'Previous tab of a pull request', def: ['Shift+Tab'], scope: 'github' },
+  { id: 'ghSearch', g: GH, label: 'Search repos', def: ['/'], scope: 'github' },
+  { id: 'ghRefresh', g: GH, label: 'Refresh', def: ['Ctrl+F', 'F5'], scope: 'github' },
+  { id: 'ghBrowser', g: GH, label: 'Open in the browser', def: ['O'], scope: 'github' },
+  { id: 'ghApprove', g: GH, label: 'Approve the pull request', def: ['A'], scope: 'github' },
+  { id: 'ghRequestChanges', g: GH, label: 'Request changes', def: ['X'], scope: 'github' },
+  { id: 'ghComment', g: GH, label: 'Comment on the pull request', def: ['C'], scope: 'github' },
+  { id: 'ghSquash', g: GH, label: 'Squash and merge', def: ['S'], scope: 'github' },
+  { id: 'ghMergeCommit', g: GH, label: 'Merge with a merge commit', def: ['M'], scope: 'github' },
+  { id: 'ghRebase', g: GH, label: 'Rebase and merge', def: ['R'], scope: 'github' },
+  { id: 'ghDeleteBranch', g: GH, label: 'Delete the branch on merge, or not', def: ['D'], scope: 'github' },
+  { id: 'ghRunWorkflow', g: GH, label: 'Run a workflow in the repo', def: ['W'], scope: 'github' },
+  { id: 'ghRerun', g: GH, label: 'Re-run the whole workflow run', def: ['Shift+R'], scope: 'github' },
+  { id: 'ghRerunFailed', g: GH, label: 'Re-run the failed jobs', def: ['Shift+F'], scope: 'github' },
+  { id: 'ghCancel', g: GH, label: 'Cancel the workflow run', def: ['Shift+X'], scope: 'github' },
   { id: 'newProject', g: 'App', label: 'New project', def: ['Ctrl+Shift+N'] },
   { id: 'settings', g: 'App', label: 'Settings', def: ['Ctrl+,'] },
   { id: 'shortcuts', g: 'App', label: 'Keyboard shortcuts', def: ['Ctrl+/'] },

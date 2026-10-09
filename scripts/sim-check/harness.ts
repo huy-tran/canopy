@@ -2,6 +2,7 @@
 // scripts/sim-check.mjs to screenshot. The query string picks the view, time of day and weather.
 import * as THREE from 'three'
 import { WorkspaceScene } from '../../app/simulation/scene'
+import { HQ_WINGS } from '../../app/simulation/github'
 
 const q = new URLSearchParams(location.search)
 const view = q.get('view') || 'all'
@@ -30,6 +31,27 @@ const people: any[] = [
 ].map((p, i) => ({ parentId: null, name: 'P' + i, role: i % 2 ? 'designer' : 'developer', title: 't', line: null, result: null, ...p }))
 people.push({ id: 's0', roomId: 'r1', parentId: 'w4', name: 'Sub', role: 'developer', status: 'working', title: 't', line: null, act: '', result: null })
 scene.sync(rooms, people)
+
+// GitHub HQ: repos with and without alerts, PRs in every review state (three waiting on you, one for days), and runs in every state.
+const now = Date.now(), H = 3_600_000
+const repoNames = ['acme/payments-api', 'acme/web', 'acme/mobile', 'me/dotfiles', 'acme/infra', 'acme/docs', 'acme/design-system', 'me/canopy', 'acme/search', 'acme/billing']
+scene.syncGithub({
+  repos: repoNames.map((name, i) => ({
+    name, url: '', private: i % 3 !== 2, pushedAt: now - i * H, canopy: name.startsWith('me/'), openPulls: 3,
+    alerts: i === 0 ? { critical: 1, high: 11, moderate: 13, low: 5, total: 30 } : i === 2 ? { critical: 0, high: 0, moderate: 4, low: 1, total: 5 } : { critical: 0, high: 0, moderate: 0, low: 0, total: 0 },
+  })),
+  pulls: [
+    ...['mine', 'mine', 'mine'].map((review, i) => ({ url: 'u' + i, repo: repoNames[i]!, number: 40 + i, title: 'Fix it', author: ['sam', 'alex', 'sam'][i]!, createdAt: now - [5, 30, 90][i]! * H, review, checks: null })),
+    ...Array.from({ length: 22 }, (_, i) => ({ url: 'o' + i, repo: repoNames[i % 10]!, number: 100 + i, title: 'Change', author: 'kim', createdAt: now - i * H, review: (['approved', 'changes', 'waiting', 'draft'] as const)[i % 4], checks: (['pass', 'fail', 'pending', null] as const)[i % 4] })),
+  ],
+  // Several workflows per repo, as the factory groups them, and a scheduled run it leaves out.
+  runs: [
+    ...(['running', 'success', 'failure', 'success', 'queued', 'success', 'cancelled', 'success', 'success', 'failure'] as const).map((state, i) => ({
+      id: i, url: '', repo: repoNames[i % 5]!, workflow: ['CI', 'Deploy', 'Lint', 'Release'][Math.floor(i / 5) + (i % 2)]!, title: 't', branch: 'main', event: 'push', state, startedAt: now - i * H,
+    })),
+    { id: 99, url: '', repo: repoNames[0]!, workflow: 'Nightly sweep', title: 't', branch: 'main', event: 'schedule', state: 'success' as const, startedAt: now },
+  ],
+})
 
 scene.setSky({ hour: Number(q.get('hour') ?? 14), sunrise: 6, sunset: 18, sky: q.get('sky') || null })
 
@@ -68,5 +90,12 @@ setTimeout(() => {
   }
   else if (view === 'desks') at([bravo.x + 4, 6, bravo.z + 8], [bravo.x, 0.6, bravo.z])
   else if (view === 'react') at([bravo.x + 2, 4, bravo.z + 5], [bravo.x, 0.8, bravo.z])
+  else if (view.startsWith('hq')) {
+    // The whole building, or one room from just outside its door.
+    const hq = scene.hq.group.position as THREE.Vector3
+    const dx = { 'hq-pulls': HQ_WINGS.pulls, 'hq-runs': HQ_WINGS.runs }[view] ?? null
+    if (dx === null) at([hq.x, 24, hq.z + 30], [hq.x, 0, hq.z + 1])
+    else at([hq.x + dx, 9, hq.z + 12], [hq.x + dx, 0.5, hq.z - 0.5])
+  }
   ;(window as any).simErrors = errors
 }, 400)

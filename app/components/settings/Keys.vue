@@ -82,7 +82,8 @@ function recordKey(combo: string) {
   const scope = ACTIONS.find(a => a.id === r.id)?.scope
   if (RESERVED[combo] && !scope) { msg.value = { kind: 'err', id: r.id, t: RESERVED[combo] + ' Pick another shortcut.' }; return }
   const last = combo.split('+').pop() || ''
-  if (!/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: r.id, t: 'Add Ctrl or Alt to ' + nice + ' so typing still reaches the terminal.' }; return }
+  // The GitHub window has no terminal to type into: single keys work there, as in gh-tui.
+  if (scope !== 'github' && !/Ctrl|Alt/.test(combo) && !/^F\d+$/.test(last)) { msg.value = { kind: 'err', id: r.id, t: 'Add Ctrl or Alt to ' + nice + ' so typing still reaches the terminal.' }; return }
   if (/^Alt\+[1-9]$/.test(combo)) { msg.value = { kind: 'err', id: r.id, t: 'Alt 1-9 already switches projects.' }; return }
   // A shell panel key may match an app-wide one: inside the panel the panel's wins.
   const other = ACTIONS.find(a => a.id !== r.id && a.scope === scope && prefs.keysFor(a.id).includes(combo))

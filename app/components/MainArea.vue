@@ -16,7 +16,6 @@ const showPanel = computed(() => ui.panelShown)
 <template>
   <div class="flex h-full min-w-0 flex-col">
     <SimulationView v-if="ui.sim" />
-    <GitHubView v-else-if="ui.gh" />
     <div v-else-if="!cur" class="grid flex-1 place-items-center">
       <div class="flex flex-col items-center gap-3">
         <span class="text-[14px] font-semibold">No projects yet</span>

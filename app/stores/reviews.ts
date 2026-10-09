@@ -19,11 +19,11 @@ export const useReviewsStore = defineStore('reviews', () => {
   let toldAt = 0
   let timer: ReturnType<typeof setInterval> | null = null
 
-  function notify(title: string, body: string) {
+  function notify(title: string, body: string, url?: string) {
     const pr = prefsStore.prefs
     if (pr.dnd) return
     // Clicking opens the GitHub view.
-    api.sys.notify({ title, body, sid: GH_TERM, silent: !pr.sound })
+    api.sys.notify({ title, body, sid: url ? `${GH_NOTIFY}|${url}` : GH_NOTIFY, silent: !pr.sound })
   }
 
   const line = (p: ReviewRequest) => `${p.repo.split('/').pop()} #${p.number} · ${p.title}`
@@ -63,7 +63,7 @@ export const useReviewsStore = defineStore('reviews', () => {
     }
     if (fresh.length) {
       if (pr.reviewNotify) {
-        if (fresh.length <= 3) fresh.forEach(p => notify(`${p.author} requested your review`, line(p)))
+        if (fresh.length <= 3) fresh.forEach(p => notify(`${p.author} requested your review`, line(p), p.url))
         else notify(`${fresh.length} new review requests`, fresh.slice(0, 3).map(line).join('\n'))
       }
       toldAt = now

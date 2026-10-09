@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useWindowSize } from '@vueuse/core'
 import type { ExplorerLayout, GitChange } from '#shared/types'
-import type { HlSeg } from '~/composables/useHighlighter'
+import type { DiffLine } from '~/utils/diff'
 
 type Mode = 'search' | 'changes' | 'files'
 interface Row { type: 'file' | 'dir'; path: string; name?: string; depth: number; idx: Set<number> | null }
 interface Chg extends GitChange { by: string | null; byTitle: string; writing: boolean }
-interface Line { n: string; sign: string; t: string; bg: string; sc: string; tc: string; hunk: boolean; segs: HlSeg[] }
+type Line = DiffLine
 
 const ui = useUiStore()
 const S = useSessionsStore()
@@ -311,47 +311,6 @@ const editingBy = computed(() => {
   return c?.by ? `Edited by Claude · ${c.byTitle}` : null
 })
 
-const mkAdd = (n: number, t: string): Line => ({ n: String(n), sign: '+', t, bg: 'var(--addbg)', sc: 'var(--grn)', tc: 'var(--ttx)', hunk: false, segs: plainSegs(t) })
-const mkDel = (n: number, t: string): Line => ({ n: String(n), sign: '-', t, bg: 'var(--delbg)', sc: 'var(--red)', tc: 'var(--ttx)', hunk: false, segs: plainSegs(t) })
-const mkCtx = (n: number, t: string): Line => ({ n: String(n), sign: ' ', t, bg: 'transparent', sc: 'var(--fa)', tc: 'var(--tx3)', hunk: false, segs: plainSegs(t) })
-const mkHunk = (t: string): Line => ({ n: '', sign: '', t, bg: 'var(--pbg)', sc: 'var(--fa)', tc: 'var(--mu)', hunk: true, segs: plainSegs(t) })
-const mkLine = (n: number, t: string): Line => ({ n: String(n), sign: ' ', t, bg: 'transparent', sc: 'var(--fa)', tc: 'var(--ttx)', hunk: false, segs: plainSegs(t) })
-
-/** Unified diff text into hunk/add/del/context rows with old/new line numbers. */
-function parseDiff(txt: string): Line[] {
-  const R: Line[] = []
-  let o = 0, n = 0, inHunk = false
-  for (const raw of txt.split('\n')) {
-    const line = raw.replace(/\r$/, '')
-    const m = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
-    if (m) {
-      o = +m[1]!
-      n = +m[2]!
-      inHunk = true
-      R.push(mkHunk(line))
-      continue
-    }
-    if (line.startsWith('diff --git')) {
-      inHunk = false
-      continue
-    }
-    if (!inHunk) {
-      if (/^Binary files /.test(line)) R.push(mkHunk('Binary file'))
-      continue
-    }
-    if (line.startsWith('\\')) continue
-    const c = line[0], t = line.slice(1)
-    if (c === '+') R.push(mkAdd(n++, t))
-    else if (c === '-') R.push(mkDel(o++, t))
-    else if (c === ' ') {
-      R.push(mkCtx(n, t))
-      o++
-      n++
-    }
-  }
-  return R
-}
-
 function fileLines(txt: string): Line[] {
   const L = txt.replace(/\r\n/g, '\n').split('\n')
   if (L.length > 1 && L[L.length - 1] === '') L.pop()
@@ -387,21 +346,8 @@ async function loadPreview() {
   preview.value = lines
 
   // Highlight each block of code (the file, or each diff hunk) as a unit, then swap the segments in.
-  const blocks: Line[][] = []
-  let blk: Line[] = []
-  for (const ln of lines) {
-    if (ln.hunk) {
-      if (blk.length) blocks.push(blk)
-      blk = []
-    } else blk.push(ln)
-  }
-  if (blk.length) blocks.push(blk)
-  const res = await Promise.all(blocks.map(b => highlightLines(b.map(l => l.t), s.path)))
-  if (token !== prevToken || res.every(r => !r)) return
-  blocks.forEach((b, bi) => {
-    const r = res[bi]
-    if (r) b.forEach((l, li) => { l.segs = r[li] || l.segs })
-  })
+  const lit = await highlightDiff(lines, s.path)
+  if (token !== prevToken || !lit) return
   preview.value = [...lines]
 }
 

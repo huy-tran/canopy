@@ -4,10 +4,11 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import type { Act, Status, ToolResult } from '#shared/types'
 import type { Sky } from '~/composables/useWeather'
 import {
-  airHockey, arcade, beanBag, bigScreen, blueprintGround, boardGame, book, carpet, coffeeBar, consoleBench, controller, cue, dartboard, deskPod, disposeKit,
+  airHockey, arcade, beanBag, bigScreen, blueprintGround, boardGame, book, boxGeo, carpet, coffeeBar, consoleBench, controller, cue, dartboard, deskPod, disposeKit,
   disposeTree, doorArch, drumKit, drumstick, type Figure, figure, floorLamp, floorText, FONT, foosball, guitar, hashOf, lightPillar, lightPool, lowWall, mat,
   mesh, micStand, oklch, type Pick, pingPong, plant, poolTable, type Role, seeded, runeCircle, type Seat, sofa, spark, speaker, stage, stringLights, tag, tint, woodFloor,
 } from './kit'
+import { GithubHQ, HQ_PATH_Z, HQ_SIZE, type HqData } from './github'
 
 /**
  * The Canopy workspace as an open-plan office. Each project is a room behind low walls in its
@@ -72,6 +73,8 @@ const SONG = 34
 const ENCORE = 7
 /** The x of the two clear lanes through the common room and past either side of the stage. */
 const STAGE_LANE = 7.2
+/** Open ground between the office and GitHub HQ. */
+const HQ_GAP = 7
 const WALK_SPEED = 2.4
 /** Room lights with a real light source; more rooms than this make do with glowing lamps. */
 const MAX_ROOM_LIGHTS = 16
@@ -254,6 +257,10 @@ export class WorkspaceScene {
   private sign: ReturnType<typeof floorText> | null = null
   private signKey = ''
   private bounds = { w: 20, d: 20, cz: 0 }
+  /** The office and GitHub HQ beside it, for the camera, the sun and the weather. */
+  private world = { cx: 0, w: 20, d: 20, cz: 0 }
+  private hq: GithubHQ | null = null
+  private hqData: HqData = { repos: [], pulls: [], runs: [], loading: true }
   /** x of the side aisles that lead from the back rows down to the common room. */
   private aisleX = 10
   private spots: Spot[] = []
@@ -365,13 +372,20 @@ export class WorkspaceScene {
     }
   }
 
+  /** The repos, PRs and runs GitHub HQ shows. */
+  syncGithub(d: HqData) {
+    this.hqData = d
+    this.hq?.sync(d)
+  }
+
   /** Fly back out to see the whole workspace. */
   resetView(animate = true) {
     this.follow = null
-    const size = Math.max(this.bounds.w, this.bounds.d)
+    // Wide enough for the office and GitHub HQ side by side, in a narrower view too.
+    const size = Math.max(this.world.w * Math.max(1, 1.55 / Math.max(0.5, this.camera.aspect)), this.world.d)
     // A little towards the common room, which is where most of the fun is.
-    const target = v3(0, this.bounds.cz + 1)
-    const pos = new THREE.Vector3(size * 0.22, size * 0.55 + 6, target.z + size * 0.62 + 8)
+    const target = v3(this.world.cx, this.bounds.cz + 1)
+    const pos = new THREE.Vector3(target.x + size * 0.04, size * 0.58 + 6, target.z + size * 0.74 + 8)
     if (animate) this.flyTo(pos, target)
     else {
       this.camera.position.copy(pos)
@@ -390,6 +404,14 @@ export class WorkspaceScene {
       this.flyTo(p.pos.clone().add(offset), p.pos.clone())
       this.fly!.offset = offset
       this.follow = { id: pick.id, last: p.pos.clone() }
+      return
+    }
+    if (pick.kind === 'gh') {
+      const p = this.hq?.where(pick.id)
+      if (!p) return
+      // The whole building, a wing, or up close to one thing in it.
+      const away = pick.id === 'hq' ? new THREE.Vector3(0, 22, 26) : pick.id.startsWith('wing:') ? new THREE.Vector3(0, 11, 12) : new THREE.Vector3(2.5, 4.5, 6)
+      this.flyTo(p.clone().add(away), p)
       return
     }
     const room = this.rooms.get(pick.id)
@@ -434,13 +456,14 @@ export class WorkspaceScene {
     this.sun.color.copy(a.sun).lerp(b.sun, k)
     this.sun.intensity = (a.sunI + (b.sunI - a.sunI) * k) * dim
     // The sun crosses the sky through the day; at night the moon sits high in the east.
-    const s = Math.max(this.bounds.w, this.bounds.d)
+    const { cx, cz } = this.world
+    const s = Math.max(this.world.w, this.world.d)
     const { hour, sunrise, sunset } = this.sky
     const p = clamp01((hour - sunrise) / Math.max(1, sunset - sunrise))
     const up = d > 0 ? Math.max(0.3, Math.sin(Math.PI * p)) : 0.9
     const across = d > 0 ? Math.cos(Math.PI * p) : 0.4
-    this.sun.position.set(across * s * 0.8, s * (0.3 + 0.7 * up), this.bounds.cz + s * 0.55)
-    this.sun.target.position.set(0, 0, this.bounds.cz)
+    this.sun.position.set(cx + across * s * 0.8, s * (0.3 + 0.7 * up), cz + s * 0.55)
+    this.sun.target.position.set(cx, 0, cz)
     this.scene.fog = this.sky.sky === 'fog' ? new THREE.Fog(bg.clone(), s * 0.5, s * 1.9) : null
   }
 
@@ -454,10 +477,10 @@ export class WorkspaceScene {
     }
     const kind = this.sky.sky
     if (kind !== 'rain' && kind !== 'storm' && kind !== 'snow') return
-    const { w, d, cz } = this.bounds
-    const n = Math.round(Math.min(2600, Math.max(500, w * d * (kind === 'snow' ? 0.5 : 0.9))))
+    const { cx, w, d, cz } = this.world
+    const n = Math.round(Math.min(3200, Math.max(500, w * d * (kind === 'snow' ? 0.5 : 0.9))))
     const drift = new Float32Array(n)
-    const rand = () => [(Math.random() - 0.5) * w, Math.random() * 14, cz + (Math.random() - 0.5) * d] as const
+    const rand = () => [cx + (Math.random() - 0.5) * w, Math.random() * 14, cz + (Math.random() - 0.5) * d] as const
     if (kind === 'snow') {
       const pos = new Float32Array(n * 3)
       for (let i = 0; i < n; i++) {
@@ -561,6 +584,8 @@ export class WorkspaceScene {
   // ------------------------------------------------------------ building
 
   private clearBuilt() {
+    this.hq?.dispose()
+    this.hq = null
     for (const o of this.built) {
       this.floor.remove(o)
       disposeTree(o)
@@ -602,7 +627,16 @@ export class WorkspaceScene {
     const front = HALL + COMMON_D + STAGE_D + 1
     this.bounds = { w: Math.max(maxW, commonW) + 8, d: front - back + 2, cz: (front + back) / 2 }
 
-    this.add(blueprintGround(Math.max(this.bounds.w, this.bounds.d) * 3)).position.z = this.bounds.cz
+    // GitHub HQ stands on its own ground to the right of the office, level with the common room.
+    const hqX = this.bounds.w / 2 + HQ_GAP + HQ_SIZE.w / 2
+    const hqZ = HALL + COMMON_D / 2 - HQ_SIZE.cz
+    const left = -this.bounds.w / 2, right = hqX + HQ_SIZE.w / 2
+    const near = Math.min(this.bounds.cz - this.bounds.d / 2, hqZ + HQ_SIZE.cz - HQ_SIZE.d / 2)
+    const far = Math.max(this.bounds.cz + this.bounds.d / 2, hqZ + HQ_SIZE.cz + HQ_SIZE.d / 2)
+    this.world = { cx: (left + right) / 2, w: right - left, d: far - near, cz: (near + far) / 2 }
+
+    const ground = this.add(blueprintGround(Math.max(this.world.w, this.world.d) * 3))
+    ground.position.set(this.world.cx, ground.position.y, this.world.cz)
     this.add(woodFloor(this.bounds.w, this.bounds.d)).position.z = this.bounds.cz
 
     rows.forEach((row, ri) => {
@@ -622,12 +656,23 @@ export class WorkspaceScene {
     })
     this.buildCommon(commonW)
     this.buildStage()
+
+    const hq = new GithubHQ()
+    hq.group.position.set(hqX, 0, hqZ)
+    this.add(hq.group)
+    hq.sync(this.hqData)
+    this.hq = hq
+    // A path across to it from the office floor, onto its plaza.
+    const pathLen = HQ_GAP + 0.4
+    const path = this.add(mesh(boxGeo(pathLen, 0.06, 2.6), mat('#3a3f4b', { roughness: 0.95 }), false))
+    path.position.set(this.bounds.w / 2 + pathLen / 2 - 0.2, -0.02, hqZ + HQ_PATH_Z)
+
     for (const p of out) {
       p.spot = null
       if (p.mode === 'leisure' || (p.mode === 'walk' && p.dest === 'leisure')) this.goLeisure(p, true)
     }
 
-    const s = Math.max(this.bounds.w, this.bounds.d)
+    const s = Math.max(this.world.w, this.world.d)
     this.applySky()
     this.makeWeather()
     const cam = this.sun.shadow.camera
@@ -1359,6 +1404,7 @@ export class WorkspaceScene {
     this.stepCommon(t)
     this.stepBand(t)
     this.stepPeople(t, dt)
+    this.hq?.step(t, dt)
     this.stepPuffs(t, dt)
     this.stepWeather(t, dt)
     this.stepFly(t)

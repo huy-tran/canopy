@@ -30,7 +30,9 @@ export default defineNuxtPlugin({
     const ui = useUiStore()
 
     // ---------- Saved state ----------
-    const saved = await api.state.load().catch(() => null)
+    // Demo mode (npm run dev:demo) starts from made-up data and never saves.
+    const demo = isDemo()
+    const saved = demo ? null : await api.state.load().catch(() => null)
     if (saved) {
       P.projects = (saved.projects || []).map(p => ({ ...p, repos: p.repos.map(r => ({ ...r, services: r.services || [] })) }))
       // Before P.sel, so selecting the project restores its panel.
@@ -53,6 +55,7 @@ export default defineNuxtPlugin({
       recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels,
     }))
     watch(() => [P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, JSON.stringify(S.saved), S.focus, ui.recaps, ui.recapHours, ui.panels], () => {
+      if (demo) return
       clearTimeout(saveT)
       saveT = setTimeout(() => api.state.save(snapshot()), 300)
     }, { deep: true })
@@ -106,16 +109,13 @@ export default defineNuxtPlugin({
     }, { immediate: true })
 
     configureTerminals({
-      isAppKey: (e, sid) => {
+      isAppKey: (e) => {
         const cb = comboOf(e)
         if (!cb) return false
         if (/^Alt\+[1-9]$/.test(cb)) return true
-        const id = matchAction(prefs.keys, cb)
-        // gh-tui's own keys are Ctrl plus a letter (Ctrl K palette, Ctrl R re-run...): those reach it, bar its toggle and quit.
-        if (sid === GH_TERM && /^Ctrl\+[A-Z]$/.test(cb) && id !== 'github' && id !== 'quit') return false
-        return !!id || (ui.sim && !!matchAction(prefs.keys, cb, 'sim'))
+        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim'))
       },
-      onImagePaste: (sid, f) => { if (sid !== GH_TERM && S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
+      onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
       onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },
       onImageClick: (sid, n) => ui.openLightbox(sid, n),
       onFocus: (sid) => {
@@ -128,10 +128,18 @@ export default defineNuxtPlugin({
     // ---------- Main process events ----------
     api.session.onHook(e => S.onHook(e))
     api.session.onUsage(u => S.onUsage(u))
-    api.pty.onExit((id, code) => (id === GH_TERM ? ui.onGithubExit(code) : S.onExit(id, code)))
+    api.pty.onExit((id, code) => S.onExit(id, code))
     api.svc.onData((id, d) => V.onData(id, d))
     api.svc.onStatus((id, s, code) => V.onStatus(id, s, code))
-    api.sys.onNotifyClick(sid => (sid === GH_TERM ? ui.openGithub() : ui.focusSession(sid)))
+    api.sys.onNotifyClick((sid) => {
+      // A review request: the GitHub window, on that PR when the notification was about one.
+      const [kind, url] = sid.split('|')
+      if (kind !== GH_NOTIFY) return ui.focusSession(sid)
+      const G = useGithubStore()
+      G.go('reviews')
+      if (url) G.openPull(url)
+      ui.openGithub()
+    })
     api.sys.onNotifyAction?.((sid, key) => ui.answer(sid, key))
     api.upd.onStatus((s) => { ui.upd = s })
     api.upd.state().then((s) => { if (s) ui.upd = s })
@@ -164,6 +172,14 @@ export default defineNuxtPlugin({
     }
     setInterval(pollGit, 5000)
     watch(() => P.sel, pollGit, { immediate: true })
+
+    if (demo) {
+      // Fake sessions only: nothing to resume, and nothing that starts Claude.
+      seedDemo()
+      reopened = true
+      ui.toast({ title: 'Demo mode', body: 'Made-up projects and sessions. Nothing runs and nothing is saved.' })
+      return
+    }
 
     // ---------- Resume on launch ----------
     // Sessions open at quit come back as they were: each Claude session resumes its own conversation.
