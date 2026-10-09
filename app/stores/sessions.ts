@@ -266,7 +266,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
       case 'PostToolUse': {
         // A background subagent's tool call returns at once; it ends with SubagentStop instead.
-        if (isSubagentTool(p.tool_name)) setSubagents(s.id, (subagents.value[s.id] || []).filter(a => a.bg || a.id !== String(p.tool_use_id)))
+        // Agents run in the background by default, so the launch result says whether it was one.
+        if (isSubagentTool(p.tool_name)) {
+          const id = String(p.tool_use_id), r = p.tool_response && typeof p.tool_response === 'object' ? p.tool_response : {}
+          const list = subagents.value[s.id] || []
+          if (r.isAsync || r.status === 'async_launched') setSubagents(s.id, list.map(a => (a.id === id ? { ...a, bg: true, agentId: r.agentId ? String(r.agentId) : a.agentId } : a)))
+          else setSubagents(s.id, list.filter(a => a.bg || a.id !== id))
+        }
         const f = p.tool_input?.file_path || p.tool_input?.notebook_path
         const rel = f ? relPath(s.cwd, String(f)) : ''
         patch(s.id, {
@@ -288,9 +294,10 @@ export const useSessionsStore = defineStore('sessions', () => {
         break
       }
       case 'SubagentStop': {
-        // Nothing ties this event to a tool call, so the oldest background subagent of that type ends.
+        // Matched by agent id; without one, the oldest unmatched background subagent of that type ends.
         const list = subagents.value[s.id] || []
-        const done = list.find(a => a.bg && a.type === p.agent_type) || list.find(a => a.bg)
+        const done = (p.agent_id && list.find(a => a.agentId === String(p.agent_id)))
+          || list.find(a => a.bg && !a.agentId && a.type === p.agent_type) || list.find(a => a.bg && !a.agentId)
         if (done) setSubagents(s.id, list.filter(a => a !== done))
         break
       }

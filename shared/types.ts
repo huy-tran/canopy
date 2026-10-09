@@ -402,6 +402,8 @@ export interface Subagent {
   desc: string
   /** Started in the background: it outlives its tool call and ends with SubagentStop. */
   bg: boolean
+  /** Claude Code's id for a background subagent, which its SubagentStop carries. */
+  agentId?: string
   at: number
 }
 
