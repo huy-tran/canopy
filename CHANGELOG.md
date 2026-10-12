@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Approving, requesting changes on, commenting on and merging a pull request in the GitHub window now show what they are doing, with a spinner and a line such as "Approving…" or "Squash and merge #12 into master…".
+- Merging a pull request asks for confirmation in the bar at the bottom of the pull request, where a click can no longer be lost behind a dialog. Enter confirms and Esc cancels.
+- Delete branch is ticked by default when you merge, squash or rebase a pull request.
+
 ## [0.20.0] - 2026-10-09
 
 - GitHub HQ's Pull requests room has a lounge by the door: a sofa with a side table of magazines, a coffee bar and a water cooler. While they wait, authors wander off to sit and read, get a coffee or a drink of water, and talk about it, then come back to the queue. Those with fresh pull requests wander most; those kept waiting for days hardly leave the counter. When nothing is waiting for your review, Mona has a cup of tea at her table behind the counter.

@@ -59,6 +59,7 @@ const composing = ref<'approve' | 'request-changes' | 'comment' | null>(null)
 const body = ref('')
 const sending = ref(false)
 const REVIEW_VERB = { 'approve': 'Approve', 'request-changes': 'Request changes', 'comment': 'Comment' } as const
+const SENDING = { 'approve': 'Approving', 'request-changes': 'Asking for changes', 'comment': 'Posting your comment' } as const
 
 function compose(kind: 'approve' | 'request-changes' | 'comment') {
   composing.value = kind
@@ -111,13 +112,13 @@ const methods = computed(() => {
   return (['squash', 'merge', 'rebase'] as const).filter(k => m?.[k]).map(k => ({ label: METHOD_LABEL[k], value: k }))
 })
 const method = ref<'merge' | 'squash' | 'rebase'>('squash')
-const deleteBranch = ref(false)
+const deleteBranch = ref(true)
 const merging = ref(false)
 
 watch(pull, (p, was) => {
   if (!p || was) return
   if (!methods.value.some(m => m.value === method.value)) method.value = methods.value[0]?.value || 'merge'
-  deleteBranch.value = p.merge.deleteBranch
+  deleteBranch.value = true
 })
 
 /** Why it can't be merged from here, or a warning that GitHub may still refuse. */
@@ -135,20 +136,23 @@ const mergeNote = computed(() => {
   return null
 })
 
+// The confirmation sits in the action bar rather than in a dialog over the window, so it can't be lost behind it.
+const confirmingMerge = ref(false)
+
 function askMerge() {
-  const p = pull.value
-  if (!p || merging.value) return
-  ui.confirm = {
-    title: `${METHOD_LABEL[method.value]} #${p.number}?`,
-    body: `Merges "${p.title}" into ${p.base} in ${p.repo}.${deleteBranch.value ? ` Deletes ${p.head} on GitHub.` : ''}`,
-    ok: METHOD_LABEL[method.value],
-    run: doMerge,
-  }
+  if (!pull.value || merging.value) return
+  confirmingMerge.value = true
+}
+
+function cancelMerge() {
+  confirmingMerge.value = false
+  focusGhWindow()
 }
 
 async function doMerge() {
   const p = pull.value
-  if (!p) return
+  if (!p || merging.value) return
+  confirmingMerge.value = false
   merging.value = true
   focusGhWindow()
   const r = await api.gh.merge(props.url, method.value, deleteBranch.value)
@@ -221,7 +225,12 @@ function stepFile(d: number) {
 }
 
 useGhKeys(() => ({
-  keys: composing.value ? {} : {
+  // Working or confirming: Enter and Esc answer the question, and nothing else fires underneath.
+  modal: merging.value || sending.value || confirmingMerge.value,
+  keys: merging.value || sending.value ? {} : confirmingMerge.value ? {
+    ghOpen: { run: doMerge, hint: 'confirm' },
+    ghBack: { run: cancelMerge, hint: 'cancel' },
+  } : composing.value ? {} : {
     ghApprove: { run: () => reviewBy('approve'), hint: 'approve' },
     ghRequestChanges: { run: () => reviewBy('request-changes'), hint: 'request changes' },
     ghComment: { run: () => reviewBy('comment'), hint: 'comment' },
@@ -352,6 +361,7 @@ onMounted(load)
         <span class="text-[12px] font-medium">{{ REVIEW_VERB[composing] }}<span class="font-normal text-(--fa)"> · {{ composing === 'approve' ? 'a comment is optional' : 'say what you think' }} · Ctrl Enter to send</span></span>
         <UTextarea
           v-model="body"
+          :disabled="sending"
           :rows="3"
           autoresize
           :maxrows="10"
@@ -362,8 +372,28 @@ onMounted(load)
           @keydown="onComposeKey"
         />
         <div class="flex justify-end gap-2">
-          <UButton size="sm" color="neutral" variant="ghost" label="Cancel" @click="cancelCompose" />
-          <UButton size="sm" :color="composing === 'request-changes' ? 'error' : 'primary'" :loading="sending" :label="REVIEW_VERB[composing]" @click="sendReview" />
+          <span v-if="sending" class="mr-auto flex items-center gap-1.5 text-[12px] text-(--tx2)">
+            <UIcon name="i-hugeicons-loading-03" class="size-4 animate-spin text-(--amb)" />{{ SENDING[composing] }}…
+          </span>
+          <UButton size="sm" color="neutral" variant="ghost" label="Cancel" :disabled="sending" @click="cancelCompose" />
+          <UButton size="sm" :color="composing === 'request-changes' ? 'error' : 'primary'" :loading="sending" :disabled="sending" :label="REVIEW_VERB[composing]" @click="sendReview" />
+        </div>
+      </div>
+
+      <!-- Merging: what is happening, so the click never looks ignored -->
+      <div v-else-if="merging" class="flex flex-none items-center gap-2 border-t border-(--ln) bg-(--chrome) px-4 py-3 text-[12px] text-(--tx2)">
+        <UIcon name="i-hugeicons-loading-03" class="size-4 animate-spin text-(--amb)" />
+        <span>{{ METHOD_LABEL[method] }} #{{ pull.number }} into {{ pull.base }}…</span>
+        <span class="text-(--fa)">GitHub can take a few seconds</span>
+      </div>
+
+      <!-- Asking before the merge goes ahead -->
+      <div v-else-if="confirmingMerge" class="flex flex-none flex-col gap-2 border-t border-(--ln) bg-(--chrome) px-4 py-3">
+        <span class="text-[12px] font-medium">{{ METHOD_LABEL[method] }} #{{ pull.number }}?<span class="font-normal text-(--fa)"> · Enter to confirm, Esc to cancel</span></span>
+        <span class="text-[12px] text-(--tx2)">Merges "{{ pull.title }}" into {{ pull.base }} in {{ pull.repo }}.<template v-if="deleteBranch"> Deletes {{ pull.head }} on GitHub.</template></span>
+        <div class="flex justify-end gap-2">
+          <UButton size="sm" color="neutral" variant="ghost" label="Cancel" @click="cancelMerge" />
+          <UButton size="sm" color="success" icon="i-hugeicons-git-merge" :label="`Confirm ${METHOD_LABEL[method].toLowerCase()}`" @click="doMerge" />
         </div>
       </div>
 

@@ -35,7 +35,8 @@ watch(open, (on) => { if (on) setTimeout(focusRoot, 60) }, { immediate: true })
  */
 function back() {
   const top = ghLayers()[0]
-  if (top?.modal && top.keys.ghBack) return top.keys.ghBack.run()
+  // A dialog with no Back key is busy (merging, sending): Esc waits for it rather than leaving the PR.
+  if (top?.modal) return top.keys.ghBack?.run()
   G.back()
 }
 
