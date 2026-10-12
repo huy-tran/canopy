@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-10-12
+
 - In the 3D World, the AWS terminal is now see-through like the rest of the window.
 
 ## [0.22.1] - 2026-10-12
@@ -226,6 +228,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.22.2]: https://github.com/huy-tran/canopy/releases/tag/v0.22.2
 [0.22.1]: https://github.com/huy-tran/canopy/releases/tag/v0.22.1
 [0.22.0]: https://github.com/huy-tran/canopy/releases/tag/v0.22.0
 [0.21.0]: https://github.com/huy-tran/canopy/releases/tag/v0.21.0
