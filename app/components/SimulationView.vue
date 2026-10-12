@@ -139,6 +139,8 @@ watch(() => ui.simTarget, (t) => {
   picked.value = pick
   scene?.focus(pick)
   if (t.talk && t.kind === 'person') talkTo.value = t.id
+  // Stepping with Ctrl Tab keeps the session terminal on whoever is in view.
+  else if (t.follow && t.kind === 'person' && talkTo.value) talkTo.value = t.id
 })
 
 /** Tab and Shift Tab fly between the sessions waiting on you, while nothing else has the keyboard. */

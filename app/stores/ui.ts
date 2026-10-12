@@ -32,8 +32,8 @@ export const useUiStore = defineStore('ui', () => {
   const details = ref(false)
   /** The workspace simulation fills the main area in place of the selected project. */
   const sim = ref(false)
-  /** A character or room the simulation flies the camera to; `at` makes a repeat click count. */
-  const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number; talk?: boolean } | null>(null)
+  /** A character or room the simulation flies the camera to; `at` makes a repeat click count. `follow` (stepping with the keys) carries an open session terminal along. */
+  const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number; talk?: boolean; follow?: boolean } | null>(null)
   /** Bumped by the shortcut that opens or closes the session window of the character in view. */
   const simTalk = ref(0)
   /** The GitHub window is open, over the terminals or the 3D World. */
@@ -150,7 +150,7 @@ export const useUiStore = defineStore('ui', () => {
     if (!w.length) return
     const cur = simTarget.value?.kind === 'person' ? w.findIndex(s => s.id === simTarget.value!.id) : -1
     const i = cur < 0 ? (dir > 0 ? 0 : w.length - 1) : (cur + dir + w.length) % w.length
-    simTarget.value = { kind: 'person', id: w[i]!.id, at: Date.now() }
+    simTarget.value = { kind: 'person', id: w[i]!.id, at: Date.now(), follow: true }
   }
 
   function nextWaiting() {
@@ -176,7 +176,7 @@ export const useUiStore = defineStore('ui', () => {
     if (!ss.length) return
     const i = at ? ss.findIndex(s => s.id === at.id) : -1
     const next = i < 0 ? (dir > 0 ? ss[0]! : ss[ss.length - 1]!) : ss[(i + dir + ss.length) % ss.length]!
-    simTarget.value = { kind: 'person', id: next.id, at: Date.now() }
+    simTarget.value = { kind: 'person', id: next.id, at: Date.now(), follow: true }
   }
 
   function cycle(dir: number) {
