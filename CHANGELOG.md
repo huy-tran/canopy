@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-12
+
 - In the 3D World, stepping through sessions with Ctrl Tab and Ctrl Shift Tab now carries an open session terminal along to whoever you land on, instead of leaving it on the old one.
 - Canopy is locked down further: only its own window can give it commands, links from outside open only as web pages, the page is held to a strict content policy, and the small server that hears from Claude Code only accepts events with a secret key.
 - Folder, branch, pull request and repository names are checked before Canopy passes them to git, GitHub or your editor, so an odd name can no longer be read as a command. Previews and diffs stay inside the project folder, and S3 uploads and image saves only touch files you picked or Canopy saved itself.
@@ -218,6 +220,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.22.0]: https://github.com/huy-tran/canopy/releases/tag/v0.22.0
 [0.21.0]: https://github.com/huy-tran/canopy/releases/tag/v0.21.0
 [0.20.0]: https://github.com/huy-tran/canopy/releases/tag/v0.20.0
 [0.19.1]: https://github.com/huy-tran/canopy/releases/tag/v0.19.1
