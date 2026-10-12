@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Fixes a check that could wrongly refuse to preview or diff a file that no longer exists when the project sits behind a shortcut or short folder name. The 0.22.0 installer was never published because of it, so this release carries everything from 0.22.0.
+
 ## [0.22.0] - 2026-10-12
 
 - In the 3D World, stepping through sessions with Ctrl Tab and Ctrl Shift Tab now carries an open session terminal along to whoever you land on, instead of leaving it on the old one.
