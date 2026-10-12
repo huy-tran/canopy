@@ -4,11 +4,15 @@ import path from 'node:path'
 
 /** True when `child` is `root` or sits inside it (symlinks resolved when the path exists). */
 export function isInside(root: string, child: string): boolean {
-  const real = (p: string) => {
+  // A path that doesn't exist yet (a deleted file, a new one) is resolved from its nearest parent that does,
+  // so symlinks and Windows short names are treated the same on both sides.
+  const real = (p: string): string => {
+    const abs = path.resolve(p)
     try {
-      return fs.realpathSync.native(p)
+      return fs.realpathSync.native(abs)
     } catch {
-      return path.resolve(p)
+      const parent = path.dirname(abs)
+      return parent === abs ? abs : path.join(real(parent), path.basename(abs))
     }
   }
   const rel = path.relative(real(root), real(child))
