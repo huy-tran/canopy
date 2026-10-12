@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-12
+
 - Fixes a check that could wrongly refuse to preview or diff a file that no longer exists when the project sits behind a shortcut or short folder name. The 0.22.0 installer was never published because of it, so this release carries everything from 0.22.0.
 
 ## [0.22.0] - 2026-10-12
@@ -222,6 +224,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.22.1]: https://github.com/huy-tran/canopy/releases/tag/v0.22.1
 [0.22.0]: https://github.com/huy-tran/canopy/releases/tag/v0.22.0
 [0.21.0]: https://github.com/huy-tran/canopy/releases/tag/v0.21.0
 [0.20.0]: https://github.com/huy-tran/canopy/releases/tag/v0.20.0
