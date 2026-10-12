@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-12
+
 - Approving, requesting changes on, commenting on and merging a pull request in the GitHub window now show what they are doing, with a spinner and a line such as "Approving…" or "Squash and merge #12 into master…".
 - Merging a pull request asks for confirmation in the bar at the bottom of the pull request, where a click can no longer be lost behind a dialog. Enter confirms and Esc cancels.
 - Delete branch is ticked by default when you merge, squash or rebase a pull request.
@@ -212,6 +214,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.21.0]: https://github.com/huy-tran/canopy/releases/tag/v0.21.0
 [0.20.0]: https://github.com/huy-tran/canopy/releases/tag/v0.20.0
 [0.19.1]: https://github.com/huy-tran/canopy/releases/tag/v0.19.1
 [0.19.0]: https://github.com/huy-tran/canopy/releases/tag/v0.19.0
