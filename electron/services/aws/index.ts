@@ -8,6 +8,7 @@ import { ebEnvs, ec2Instances, ecResources, rdsInstances } from './compute'
 import { params } from './params'
 import { dryRunFrom, gateOpen, settings } from './core'
 import { isEnrolled, unlockedUntil } from './totp'
+import { errMessage } from '../../../shared/errors'
 
 export * from './core'
 export * from './compute'
@@ -98,7 +99,7 @@ export function cliCommand(ctx: AwsCtx, o:
       return { cmd: `${base(ctx)} logs tail --follow --format short "${o.group}"` }
     }
     return { cmd: `aws sso login --profile ${ctx.profile}` }
-  } catch (e: any) {
-    return { error: String(e?.message || e) }
+  } catch (e) {
+    return { error: errMessage(e) }
   }
 }

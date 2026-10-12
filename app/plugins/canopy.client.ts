@@ -49,11 +49,11 @@ export default defineNuxtPlugin({
     let saveT: ReturnType<typeof setTimeout> | undefined
     /** Until saved sessions are reopened, keep writing the saved list so an early save can't drop it. */
     let reopened = false
-    const snapshot = (): Persisted => JSON.parse(JSON.stringify({
+    const snapshot = (): Persisted => plain({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, stripOn: ui.stripOn,
       sessions: reopened ? S.saved : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
       recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels,
-    }))
+    })
     /** When the first unsaved change came; saves wait for a quiet moment, but never longer than SAVE_MAX after it. */
     let dirtySince = 0
     const SAVE_MAX = 2000

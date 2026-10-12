@@ -39,6 +39,8 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm test
+
       # A draft made up front stops electron-builder creating one release per uploaded file.
       - name: Create a draft release from the changelog entry
         run: |

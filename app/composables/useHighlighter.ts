@@ -1,6 +1,6 @@
 // Shiki syntax highlighting, line by line, coloured through the app's --syn-* variables so it follows light/dark.
 import { createCssVariablesTheme, createHighlighterCore } from 'shiki/core'
-import type { HighlighterCore, LanguageRegistration } from 'shiki/core'
+import type { HighlighterCore, LanguageRegistration, ThemeRegistrationRaw } from 'shiki/core'
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
 
 export interface HlSeg {
@@ -77,7 +77,7 @@ const loaded = new Map<string, Promise<boolean>>()
 
 function highlighter() {
   if (!hlP) {
-    hlP = createHighlighterCore({ themes: [THEME as any], langs: [], engine: createOnigurumaEngine(import('shiki/wasm')) })
+    hlP = createHighlighterCore({ themes: [THEME as ThemeRegistrationRaw], langs: [], engine: createOnigurumaEngine(import('shiki/wasm')) })
   }
   return hlP
 }

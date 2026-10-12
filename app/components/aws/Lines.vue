@@ -37,7 +37,6 @@ function pretty(text: string) {
   }
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Each line as HTML: the level word coloured, find matches marked. */
@@ -48,10 +47,10 @@ const rendered = computed(() => {
   return props.lines.map((l) => {
     const text = pretty(l.text)
     const color = LEVEL.find(([r]) => r.test(text))?.[1]
-    let html = esc(text)
+    let html = escapeHtml(text)
     let first = -1
     if (re) {
-      html = html.replace(new RegExp(reEsc(esc(q!)), 'gi'), (m) => {
+      html = html.replace(new RegExp(reEsc(escapeHtml(q!)), 'gi'), (m) => {
         const i = n++
         if (first < 0) first = i
         return `<mark data-m="${i}" class="${i === props.at ? 'cur' : ''}">${m}</mark>`

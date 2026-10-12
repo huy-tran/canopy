@@ -86,7 +86,7 @@ const ft = useAwsTable<ShFinding>({
   openHint: 'details',
   back: () => { mode.value = fromResults.value ? 'results' : 'insights' },
   keys: f => ({
-    awsRefresh: { run: () => findings.load(JSON.parse(JSON.stringify(lastQuery.value))) },
+    awsRefresh: { run: () => findings.load(plain(lastQuery.value)) },
     awsShSuppressed: { run: () => { suppressed.value = !suppressed.value }, hint: 'suppressed' },
     ...(f ? { awsCopy: { run: () => copyFinding(f) } } : {}),
   }),
@@ -175,7 +175,7 @@ onMounted(() => insights.load(false))
     :row-key="f => f.id"
     empty="No findings with these severities."
     @open="f => { finding = f; mode = 'finding' }"
-    @refresh="findings.load(JSON.parse(JSON.stringify(lastQuery)))"
+    @refresh="findings.load(plain(lastQuery))"
   >
     <template #before>
       <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-arrow-left-01" title="Back" @click="mode = fromResults ? 'results' : 'insights'" />

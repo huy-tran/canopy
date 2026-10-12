@@ -4,6 +4,7 @@
 // A screen can also take the very next key itself, for a choice such as a sort column.
 import type { Ref } from 'vue'
 import type { AwsCtx, AwsResult, AwsTab } from '#shared/aws'
+import { errMessage } from '#shared/errors'
 
 export interface AwsKey {
   run: () => void
@@ -67,7 +68,7 @@ export function useAwsLoad<T, A extends unknown[]>(fn: (ctx: AwsCtx, ...a: A) =>
     const mine = ++n
     busy.value = true
     // A call that throws (it couldn't reach the main process, say) shows as an error, never a spinner forever.
-    const r = await S.call(fn(S.c(), ...a)).catch((e: any): AwsResult<T> => ({ ok: false, error: String(e?.message || e), problem: 'other' }))
+    const r = await S.call(fn(S.c(), ...a)).catch((e: unknown): AwsResult<T> => ({ ok: false, error: errMessage(e), problem: 'other' }))
     if (mine !== n) return r
     busy.value = false
     if (r.ok) {

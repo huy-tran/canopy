@@ -14,7 +14,10 @@ function workDir() {
 
 export function runClaude(prompt: string, o: { model?: string; timeoutMs?: number } = {}): Promise<{ ok: boolean; text: string; error?: string }> {
   return new Promise((resolve) => {
-    const args = ['-p', '--output-format', 'text', '--model', o.model || 'haiku']
+    const model = o.model || 'haiku'
+    // The command line goes through cmd.exe (claude may be a .cmd file), so the model name must be plain.
+    if (!/^[\w.[\]-]+$/.test(model)) return resolve({ ok: false, text: '', error: `Not a model name: ${model}` })
+    const args = ['-p', '--output-format', 'text', '--model', model]
     const child = spawn('claude', args, { cwd: workDir(), env: cleanEnv(), shell: true, windowsHide: true })
     let out = '', err = ''
     const timer = setTimeout(() => {

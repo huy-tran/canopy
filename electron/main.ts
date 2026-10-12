@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, session, shell, Tray } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -19,7 +19,9 @@ import * as git from './services/git'
 import { startService, stopAllServices, stopService } from './services/devservers'
 import { planUsage } from './services/usage'
 import { countIpc, countPty, sampleMetrics } from './services/metrics'
-import { appInfo, clearImages, copyImage, listFonts, listShells, openInEditor, saveImage, showInFolder } from './services/system'
+import { appInfo, clearImages, copyImage, listFonts, listShells, openInEditor, saveImage, savedImage, showInFolder } from './services/system'
+import { isInside, webUrl } from './services/guard'
+import { errMessage } from '../shared/errors'
 
 const { autoUpdater } = electronUpdater
 const DEV_URL = process.env.CANOPY_DEV_URL
@@ -38,8 +40,36 @@ const awsCache = new Store<{ world?: AwsWorld }>({ name: 'aws-cache' })
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+/** Files picked in the upload dialog: the only local files an S3 upload will read. */
+const pickedUploads = new Set<string>()
 /** Notifications still on screen; kept referenced so their button events arrive. */
 const live = new Set<Notification>()
+
+/** What the app's page may load. Nothing from outside except the weather lookup; no plugins, frames or form posts. */
+const CSP = [
+  "default-src 'self'",
+  // Nuxt writes its start-up data into an inline script; Shiki compiles WebAssembly.
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://geocoding-api.open-meteo.com https://api.open-meteo.com",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+].join('; ')
+
+/** True for pages of this app: the packaged app:// origin, or the dev server. */
+function isAppUrl(url: string) {
+  try {
+    const u = new URL(url)
+    if (DEV_URL) return u.origin === new URL(DEV_URL).origin
+    return u.protocol === 'app:' && u.host === 'canopy'
+  } catch {
+    return false
+  }
+}
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
@@ -149,7 +179,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // The preload only imports electron and ../shared, which a sandboxed preload can do too; keep this on.
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   })
   if (store.get('maximized')) win.maximize()
@@ -179,10 +212,20 @@ function createWindow() {
       win?.hide()
     }
   })
+  // Links open in the browser, as http(s) only; the window itself never leaves the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    const link = webUrl(url)
+    if (link) shell.openExternal(link)
     return { action: 'deny' }
   })
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!isAppUrl(url)) {
+      e.preventDefault()
+      const link = webUrl(url)
+      if (link) shell.openExternal(link)
+    }
+  })
+  win.webContents.on('will-attach-webview', e => e.preventDefault())
   if (DEV_URL) win.loadURL(DEMO ? `${DEV_URL}/?demo=1` : DEV_URL)
   else win.loadURL('app://canopy/index.html')
 }
@@ -221,7 +264,7 @@ function wireUpdater() {
   autoUpdater.on('update-not-available', () => setUpd({ status: 'current' }))
   autoUpdater.on('download-progress', p => setUpd({ ...(upd || { status: 'downloading' }), status: 'downloading', pct: p.percent, total: p.total }))
   autoUpdater.on('update-downloaded', i => setUpd({ ...(upd || {}), status: 'ready', version: i.version }))
-  autoUpdater.on('error', e => setUpd({ status: 'error', error: String(e?.message || e) }))
+  autoUpdater.on('error', e => setUpd({ status: 'error', error: errMessage(e) }))
 }
 
 async function checkUpdates() {
@@ -232,15 +275,23 @@ async function checkUpdates() {
   }
   try {
     await autoUpdater.checkForUpdates()
-  } catch (e: any) {
-    setUpd({ status: 'error', error: String(e?.message || e) })
+  } catch (e) {
+    setUpd({ status: 'error', error: errMessage(e) })
   }
 }
 
 // ---------- IPC ----------
 
+/** Commands are only taken from the app's own window, never from a page or frame that ended up somewhere else. */
+function trusted(e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) {
+  return !!win && e.sender === win.webContents && isAppUrl(e.senderFrame?.url || '')
+}
+
 function handle(channel: string, fn: (...args: any[]) => any) {
-  ipcMain.handle(channel, (_e, ...args) => fn(...args))
+  ipcMain.handle(channel, (e, ...args) => {
+    if (!trusted(e)) throw new Error(`Blocked ${channel} from an unknown page.`)
+    return fn(...args)
+  })
 }
 
 function ptyData(id: string, d: string) {
@@ -318,11 +369,17 @@ function registerAws() {
     s3PickUpload: async () => {
       const r = await dialog.showOpenDialog(win!, { properties: ['openFile', 'multiSelections'] })
       if (r.canceled) return []
+      for (const p of r.filePaths) pickedUploads.add(p)
       const sizes = aws.fileSizes(r.filePaths)
       return r.filePaths.map((p, i) => ({ path: p, size: sizes[i] || 0 }))
     },
     s3Existing: (ctx, bucket, region, keys) => aws.s3Existing(ctx, bucket, region, keys),
-    s3Upload: (ctx, bucket, region, file, key) => aws.s3Upload(ctx, bucket, region, file, key),
+    s3Upload: async (ctx, bucket, region, file, key) => {
+      if (!pickedUploads.has(file)) return { ok: false as const, error: 'Pick the file in the upload dialog first.', problem: 'other' as const }
+      const r = await aws.s3Upload(ctx, bucket, region, file, key)
+      if (r.ok) pickedUploads.delete(file)
+      return r
+    },
     params: (ctx, force) => aws.params(ctx, force),
     paramValue: (ctx, meta, version) => aws.paramValue(ctx, meta, version),
     paramHistory: (ctx, name) => aws.paramHistory(ctx, name),
@@ -350,8 +407,8 @@ function registerIpc() {
     unwatchTranscript(id)
     send('pty:exit', id, code)
   }))
-  ipcMain.on('pty:write', (_e, id: string, d: string) => writeSession(id, d))
-  ipcMain.on('pty:resize', (_e, id: string, c: number, r: number) => resizeSession(id, c, r))
+  ipcMain.on('pty:write', (e, id: string, d: string) => { if (trusted(e)) writeSession(id, d) })
+  ipcMain.on('pty:resize', (e, id: string, c: number, r: number) => { if (trusted(e)) resizeSession(id, c, r) })
   handle('pty:shell', async (o: { id: string; cwd: string; kind: string; cols: number; rows: number }) => {
     const shells = await listShells()
     const shell = shells.find(s => s.kind === o.kind) || shells[0]!
@@ -373,8 +430,8 @@ function registerIpc() {
     try {
       await git.mergeWorktree(repo, wt, branch, base)
       return { ok: true }
-    } catch (e: any) {
-      return { ok: false, error: String(e?.message || e) }
+    } catch (e) {
+      return { ok: false, error: errMessage(e) }
     }
   })
 
@@ -446,12 +503,8 @@ function registerIpc() {
 
   // Web links only: a link from outside (an AWS finding's remediation, say) never reaches another protocol handler.
   handle('sys:openExternal', (url: string) => {
-    try {
-      const u = new URL(url)
-      if (u.protocol === 'https:' || u.protocol === 'http:') return shell.openExternal(u.href)
-    } catch {
-      // Not a URL.
-    }
+    const link = webUrl(url)
+    if (link) return shell.openExternal(link)
   })
   handle('sys:showInFolder', (p: string) => showInFolder(p))
   handle('sys:openEditor', (editor: string, folder: string, file?: string) => openInEditor(editor, folder, file))
@@ -466,6 +519,7 @@ function registerIpc() {
   handle('sys:saveImage', (sid: string, name: string, bytes: Uint8Array) => saveImage(sid, name, bytes))
   handle('sys:copyImage', (file: string) => copyImage(file))
   handle('sys:saveImageAs', async (file: string) => {
+    savedImage(file)
     const r = await dialog.showSaveDialog(win!, { defaultPath: path.join(app.getPath('pictures'), path.basename(file)) })
     if (r.canceled || !r.filePath) return null
     fs.copyFileSync(file, r.filePath)
@@ -505,7 +559,7 @@ function registerIpc() {
   })
 
   handle('upd:check', () => checkUpdates())
-  handle('upd:download', () => autoUpdater.downloadUpdate().catch(e => setUpd({ status: 'error', error: String(e?.message || e) })))
+  handle('upd:download', () => autoUpdater.downloadUpdate().catch(e => setUpd({ status: 'error', error: errMessage(e) })))
   handle('upd:install', () => {
     quitting = true
     autoUpdater.quitAndInstall()
@@ -516,12 +570,23 @@ function registerIpc() {
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.canopy.app')
   Menu.setApplicationMenu(null)
+  // Copy buttons use the clipboard; nothing else (camera, microphone, location...) is ever granted.
+  const allowed = (permission: string, origin: string) => (permission === 'clipboard-sanitized-write' || permission === 'clipboard-read') && isAppUrl(origin)
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => cb(allowed(permission, details.requestingUrl)))
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => allowed(permission, origin))
   const root = path.join(__dirname, '..', '.output', 'public')
-  protocol.handle('app', (req) => {
+  protocol.handle('app', async (req) => {
     const u = new URL(req.url)
     let p = path.join(root, decodeURIComponent(u.pathname))
-    if (!p.startsWith(root) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) p = path.join(root, 'index.html')
-    return net.fetch(pathToFileURL(p).toString())
+    // Inside the app's folder only, and the front page for anything that isn't a file.
+    if (!isInside(root, p)) return new Response('Not found', { status: 404 })
+    const st = await fs.promises.stat(p).catch(() => null)
+    if (!st || st.isDirectory()) p = path.join(root, 'index.html')
+    const res = await net.fetch(pathToFileURL(p).toString())
+    // Set here, on what the page is served with: responses from a custom protocol don't pass through webRequest.
+    const headers = new Headers(res.headers)
+    headers.set('Content-Security-Policy', CSP)
+    return new Response(res.body, { status: res.status, headers })
   })
   clearSessionSettings()
   await startHookServer(onHook)

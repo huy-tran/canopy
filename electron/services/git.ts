@@ -3,7 +3,9 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { isInside, safeRef, safeSegment } from './guard'
 import type { GitChange, GitStatus, RepoInfo } from '../../shared/types'
+import { errMessage } from '../../shared/errors'
 
 function git(cwd: string, args: string[], okCodes: number[] = [0]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -137,6 +139,8 @@ export async function files(cwd: string): Promise<string[]> {
 }
 
 export async function diff(cwd: string, file: string): Promise<string> {
+  // The untracked-file fallback below reads any path git is given, so keep it inside the project.
+  if (!isInside(cwd, path.join(cwd, file))) return ''
   try {
     const out = await git(cwd, ['diff', 'HEAD', '--no-color', '-U3', '--', file])
     if (out.trim()) return out
@@ -153,6 +157,8 @@ export async function diff(cwd: string, file: string): Promise<string> {
 
 export function readFile(cwd: string, file: string): string {
   const full = path.join(cwd, file)
+  // A path such as ../../.ssh/id_rsa, or a symlink pointing out of the project, is not a file of the project.
+  if (!isInside(cwd, full)) return ''
   try {
     const st = fs.statSync(full)
     if (st.size > 1024 * 1024) return `File is too large to preview (${Math.round(st.size / 1024)} KB).`
@@ -165,14 +171,16 @@ export function readFile(cwd: string, file: string): string {
 }
 
 export async function worktreeAdd(repo: string, base: string, slug: string): Promise<{ path: string; branch: string }> {
-  const wtPath = `${repo}.worktrees${path.sep}${slug}`
+  const wtPath = `${repo}.worktrees${path.sep}${safeSegment(slug)}`
   const branch = `wt/${slug}`
-  await git(repo, ['worktree', 'add', '-b', branch, wtPath, base || 'HEAD'])
+  await git(repo, ['worktree', 'add', '-b', branch, wtPath, base ? safeRef(base) : 'HEAD'])
   return { path: wtPath, branch }
 }
 
 /** Merges the worktree branch into base in the main folder, then removes the worktree. */
 export async function mergeWorktree(repo: string, wtPath: string, branch: string, base: string): Promise<void> {
+  safeRef(branch)
+  safeRef(base)
   const cur = (await git(repo, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
   if (cur !== base) await git(repo, ['checkout', base])
   await git(repo, ['merge', '--no-edit', branch])
@@ -188,8 +196,8 @@ async function attempt(fn: () => Promise<unknown>): Promise<GitResult> {
   try {
     await fn()
     return { ok: true }
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) }
+  } catch (e) {
+    return { ok: false, error: errMessage(e) }
   }
 }
 

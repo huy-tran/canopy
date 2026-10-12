@@ -55,6 +55,7 @@ export function spawnSession(o: SpawnOpts, onData: (id: string, d: string) => vo
   const settings = writeSessionSettings(o.id)
   const full = withHooks(o.cmd || 'claude', settings)
   const shell = process.env.ComSpec || 'cmd.exe'
+  // `o.cmd` is the command the user set for the project (Settings > Projects) and runs as typed, in cmd.exe: only the app's own window can send it (see trusted() in main.ts).
   // A raw command line: node-pty would otherwise re-escape the quotes inside `full` for cmd.
   const p = pty.spawn(shell, `/d /s /c "${full}"`, {
     name: 'xterm-256color',

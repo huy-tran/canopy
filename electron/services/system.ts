@@ -4,7 +4,9 @@ import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { isInside, noShellMeta, safeSegment } from './guard'
 import type { AppInfo, ShellInfo } from '../../shared/types'
+import { errMessage } from '../../shared/errors'
 
 const EDITOR_CLI: Record<string, string[]> = {
   'VS Code': ['code'],
@@ -13,9 +15,10 @@ const EDITOR_CLI: Record<string, string[]> = {
   'Zed': ['zed'],
 }
 
-function run(cmd: string, args: string[]): Promise<{ ok: boolean; out: string }> {
+/** `viaShell` is only for npm's claude.cmd, which Windows can't start directly; every other call here is a plain .exe. */
+function run(cmd: string, args: string[], viaShell = false): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    execFile(cmd, args, { windowsHide: true, encoding: 'utf8', timeout: 8000, shell: true }, (err, stdout) => resolve({ ok: !err, out: (stdout || '').trim() }))
+    execFile(cmd, args, { windowsHide: true, encoding: 'utf8', timeout: 8000, shell: viaShell }, (err, stdout) => resolve({ ok: !err, out: (stdout || '').trim() }))
   })
 }
 
@@ -26,7 +29,17 @@ async function which(name: string): Promise<string> {
 
 /** Opens a folder (and optionally a file in it) with the editor's CLI. */
 export async function openInEditor(editor: string, folder: string, file?: string): Promise<{ ok: boolean; error?: string }> {
-  for (const cli of EDITOR_CLI[editor] || []) {
+  const cmds = EDITOR_CLI[editor] || []
+  if (cmds.length) {
+    // Editors start through .cmd files, which run in cmd.exe: a name with & or % in it would run as a command.
+    try {
+      noShellMeta(folder)
+      if (file) noShellMeta(file)
+    } catch (e) {
+      return { ok: false, error: errMessage(e) }
+    }
+  }
+  for (const cli of cmds) {
     const bin = await which(cli)
     if (!bin) continue
     const args = file ? (editor === 'PhpStorm' ? [folder, file] : [folder, '-g', file]) : [folder]
@@ -47,7 +60,7 @@ let infoCache: AppInfo | null = null
 export async function appInfo(): Promise<AppInfo> {
   if (infoCache) return infoCache
   const claudePath = await which('claude')
-  const v = claudePath ? await run('claude', ['--version']) : { ok: false, out: '' }
+  const v = claudePath ? await run('claude', ['--version'], true) : { ok: false, out: '' }
   const rel = os.release().split('.')
   const build = +(rel[2] || 0)
   infoCache = {
@@ -71,7 +84,7 @@ export async function listFonts(): Promise<{ name: string; nerd: boolean; mono: 
   const keys = ['HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts']
   const families = new Set<string>()
   for (const key of keys) {
-    const r = await run('reg', ['query', `"${key}"`])
+    const r = await run('reg', ['query', key])
     for (const line of r.out.split(/\r?\n/)) {
       const m = line.match(/^\s{4}(.+?)\s{4}REG_SZ/)
       if (!m) continue
@@ -87,27 +100,36 @@ export async function listFonts(): Promise<{ name: string; nerd: boolean; mono: 
     .map(name => ({ name, nerd: /nerd font/i.test(name), mono: MONO.test(name) || /monofur/i.test(name) }))
 }
 
+const IMAGES = () => path.join(app.getPath('userData'), 'images')
+
 function imagesDir(sid: string) {
-  const d = path.join(app.getPath('userData'), 'images', sid)
+  const d = path.join(IMAGES(), safeSegment(sid))
   fs.mkdirSync(d, { recursive: true })
   return d
 }
 
 /** Saves PNG bytes (from a paste event) so the path can be handed to Claude. */
 export function saveImage(sid: string, name: string, bytes: Uint8Array): string {
-  const file = path.join(imagesDir(sid), name.replace(/[^\w.-]/g, '_'))
+  const file = path.join(imagesDir(sid), safeSegment(name.replace(/[^\w.-]/g, '_').replace(/^\.+/, '_')))
   fs.writeFileSync(file, Buffer.from(bytes))
   return file
 }
 
+/** Only pictures Canopy saved itself: the renderer can't use these to read or copy other files. */
+export function savedImage(file: string): string {
+  if (typeof file !== 'string' || !isInside(IMAGES(), file)) throw new Error('Not a saved image.')
+  return file
+}
+
 export async function copyImage(file: string) {
+  savedImage(file)
   const png = nativeImage.createFromPath(file).toPNG()
   await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })])
 }
 
 export function clearImages() {
   try {
-    fs.rmSync(path.join(app.getPath('userData'), 'images'), { recursive: true, force: true })
+    fs.rmSync(IMAGES(), { recursive: true, force: true })
   } catch {
     // Nothing to clear.
   }

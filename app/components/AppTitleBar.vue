@@ -41,7 +41,7 @@ async function versionInfo() {
 }
 
 async function releaseNotes() {
-  const url = (appConfig.canopy as any)?.releaseNotesUrl
+  const url = appConfig.canopy.releaseNotesUrl
   if (url) api.sys.openExternal(url)
   else ui.toast({ title: 'Release notes', body: (await versionInfo()) })
 }
@@ -49,7 +49,7 @@ async function releaseNotes() {
 async function reportIssue() {
   const info = await versionInfo()
   navigator.clipboard.writeText(info).catch(() => {})
-  const url = (appConfig.canopy as any)?.issuesUrl
+  const url = appConfig.canopy.issuesUrl
   if (url) api.sys.openExternal(url)
   ui.toast({ title: 'Opening the issue tracker', body: 'Version info is copied to your clipboard.' })
 }

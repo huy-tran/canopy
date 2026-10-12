@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMessage } from '#shared/errors'
 import { useWindowSize } from '@vueuse/core'
 import type { ExplorerLayout, GitChange } from '#shared/types'
 import type { DiffLine } from '~/utils/diff'
@@ -353,8 +354,8 @@ async function loadPreview() {
       lines = parseDiff(await fetchText('diff', c, s.path))
       if (!lines.length) lines = fileLines(await fetchText('file', c, s.path))
     } else lines = fileLines(await fetchText('file', c, s.path))
-  } catch (e: any) {
-    lines = [mkHunk(String(e?.message || e))]
+  } catch (e) {
+    lines = [mkHunk(errMessage(e))]
   }
   if (token !== prevToken) return
   if (s.path !== shownPath) {
@@ -513,7 +514,6 @@ const LAYOUT: ExplorerLayout = { tree: 0.42, w: 1120, h: 700, max: false, wrap: 
 const TOP = 28
 const MIN_W = 560, MIN_H = 360
 const lay = computed<ExplorerLayout>(() => ({ ...LAYOUT, ...prefs.prefs.explorer }))
-const clamp = (v: number, lo: number, hi: number) => Math.round(Math.max(lo, Math.min(hi, v)))
 
 function setLay(p: Partial<ExplorerLayout>) {
   prefs.set({ explorer: { ...lay.value, ...p } })
@@ -522,7 +522,7 @@ function setLay(p: Partial<ExplorerLayout>) {
 /** Maximized fills the window below the title bar; otherwise the saved size, kept on screen. */
 const box = computed(() => lay.value.max
   ? { w: vw.value - 16, h: vh.value - TOP - 8 }
-  : { w: clamp(lay.value.w, MIN_W, vw.value - 32), h: clamp(lay.value.h, MIN_H, vh.value - TOP - 28) })
+  : { w: clampInt(lay.value.w, MIN_W, vw.value - 32), h: clampInt(lay.value.h, MIN_H, vh.value - TOP - 28) })
 
 const contentProps = computed(() => ({
   onOpenAutoFocus: onAutoFocus,
@@ -555,8 +555,8 @@ function startResize(e: MouseEvent, sx: -1 | 0 | 1, sy: 0 | 1) {
   const cursor = sx && sy ? (sx > 0 ? 'nwse-resize' : 'nesw-resize') : sx ? 'ew-resize' : 'ns-resize'
   drag(e, cursor, (dx, dy) => setLay({
     max: false,
-    w: clamp(from.w + dx * sx * 2, MIN_W, vw.value - 32),
-    h: clamp(from.h + dy * sy, MIN_H, vh.value - TOP - 28),
+    w: clampInt(from.w + dx * sx * 2, MIN_W, vw.value - 32),
+    h: clampInt(from.h + dy * sy, MIN_H, vh.value - TOP - 28),
   }))
 }
 

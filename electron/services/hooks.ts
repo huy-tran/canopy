@@ -1,5 +1,6 @@
 // Receives Claude Code hook events. Each session runs with `--settings <file>` whose hooks
 // pipe the hook's stdin JSON to this local server with curl (ships with Windows 10+).
+import crypto from 'node:crypto'
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -8,24 +9,37 @@ import { app } from 'electron'
 export type HookHandler = (sid: string, event: string, payload: Record<string, any>) => void
 
 let port = 0
+/** Part of every hook URL, so a web page or another local program can't post made-up session events. */
+const token = crypto.randomBytes(16).toString('hex')
+/** Hook payloads are small; anything bigger is not from Claude Code. */
+const MAX_BODY = 8 * 1024 * 1024
 let server: http.Server | null = null
 
 export function startHookServer(onEvent: HookHandler): Promise<number> {
   return new Promise((resolve, reject) => {
     server = http.createServer((req, res) => {
-      const m = (req.url || '').match(/^\/h\/([\w-]+)$/)
-      if (req.method !== 'POST' || !m) {
+      const m = (req.url || '').match(/^\/h\/([\w-]+)\/([\w-]+)$/)
+      if (req.method !== 'POST' || !m || m[1] !== token || req.headers.origin) {
         res.writeHead(404).end()
         return
       }
       const chunks: Buffer[] = []
-      req.on('data', c => chunks.push(c))
+      let size = 0
+      req.on('data', (c: Buffer) => {
+        size += c.length
+        if (size > MAX_BODY) {
+          res.writeHead(413).end()
+          req.destroy()
+          return
+        }
+        chunks.push(c)
+      })
       req.on('end', () => {
         // Empty 204: hook stdout is shown to Claude for some events, so say nothing.
         res.writeHead(204).end()
         try {
           const payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
-          onEvent(m[1]!, String(payload.hook_event_name || ''), payload)
+          onEvent(m[2]!, String(payload.hook_event_name || ''), payload)
         } catch {
           // Ignore malformed hook bodies.
         }
@@ -52,7 +66,8 @@ function hooksDir() {
 
 /** Writes the per-session settings file and returns its path. */
 export function writeSessionSettings(sid: string): string {
-  const cmd = `curl -s -m 3 -X POST -H "Content-Type: application/json" --data-binary @- http://127.0.0.1:${port}/h/${sid}`
+  if (!/^[\w-]+$/.test(sid)) throw new Error('Not a session id.')
+  const cmd = `curl -s -m 3 -X POST -H "Content-Type: application/json" --data-binary @- http://127.0.0.1:${port}/h/${token}/${sid}`
   const hook = [{ hooks: [{ type: 'command', command: cmd }] }]
   const settings = {
     hooks: {

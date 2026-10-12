@@ -183,7 +183,7 @@ function arm(i: number, e: MouseEvent) {
 function dragStart(i: number, e: DragEvent) {
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
-    try { e.dataTransfer.setData('text/plain', String(i)) } catch {}
+    try { e.dataTransfer.setData('text/plain', String(i)) } catch { /* Some drags refuse data; the drag still works. */ }
   }
   drag.value = i
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { Layout, Project } from '#shared/types'
+import type { Layout, Project, Repo } from '#shared/types'
 
 const props = defineProps<{ project: Project }>()
 
@@ -26,6 +26,10 @@ const menuOpen = computed({
   get: () => ui.newMenu,
   set: (v: boolean) => { ui.newMenu = v },
 })
+
+/** A menu row that carries the repo it stands for. */
+type RepoMenuItem = DropdownMenuItem & { repo: Repo }
+const repoOf = (item: DropdownMenuItem) => (item as RepoMenuItem).repo
 
 const menuItems = computed<DropdownMenuItem[][]>(() => [
   [{ label: 'New session in', type: 'label' as const }],
@@ -92,32 +96,32 @@ const defaultShell = computed(() => S.shellLabel(prefs.prefs.shell))
           <UButton color="neutral" variant="outline" size="xs" icon="i-hugeicons-add-01" :label="ui.wide ? 'Session' : undefined" class="flex-none" />
         </UTooltip>
         <template #repo="{ item }">
-          <div class="flex w-full flex-col gap-1.5 rounded-md border-t border-(--ln2) p-2">
+          <div v-for="r in [repoOf(item)]" :key="r.id" class="flex w-full flex-col gap-1.5 rounded-md border-t border-(--ln2) p-2">
             <div class="flex items-center gap-2">
-              <span class="mono rounded-sm bg-(--chip) px-[5px] py-px text-[10.5px] text-(--tx2)">{{ (item as any).repo.label }}</span>
-              <span class="ellipsis mono flex-1 text-[11px] text-(--mu)">{{ (item as any).repo.path }}</span>
+              <span class="mono rounded-sm bg-(--chip) px-[5px] py-px text-[10.5px] text-(--tx2)">{{ r.label }}</span>
+              <span class="ellipsis mono flex-1 text-[11px] text-(--mu)">{{ r.path }}</span>
             </div>
-            <div v-if="busyCount((item as any).repo.id)" class="text-[11px] leading-[1.4] text-(--amb)">
-              {{ busyCount((item as any).repo.id) }} session{{ busyCount((item as any).repo.id) === 1 ? '' : 's' }} already in this folder. A worktree avoids edit conflicts.
+            <div v-if="busyCount(r.id)" class="text-[11px] leading-[1.4] text-(--amb)">
+              {{ busyCount(r.id) }} session{{ busyCount(r.id) === 1 ? '' : 's' }} already in this folder. A worktree avoids edit conflicts.
             </div>
             <div class="grid grid-cols-[1fr_1fr_auto] gap-1.5">
               <UButton
-                :color="busyCount((item as any).repo.id) ? 'neutral' : 'primary'"
-                :variant="busyCount((item as any).repo.id) ? 'outline' : 'solid'"
+                :color="busyCount(r.id) ? 'neutral' : 'primary'"
+                :variant="busyCount(r.id) ? 'outline' : 'solid'"
                 size="xs"
                 class="h-[26px] justify-center font-normal"
                 label="Same folder"
-                @click="start((item as any).repo.id, false)"
+                @click="start(r.id, false)"
               />
               <UTooltip text="New git worktree on its own branch">
                 <UButton
-                  :color="busyCount((item as any).repo.id) ? 'primary' : 'neutral'"
-                  :variant="busyCount((item as any).repo.id) ? 'solid' : 'outline'"
+                  :color="busyCount(r.id) ? 'primary' : 'neutral'"
+                  :variant="busyCount(r.id) ? 'solid' : 'outline'"
                   size="xs"
                   class="h-[26px] justify-center font-normal"
                   icon="i-hugeicons-git-fork"
                   label="New worktree"
-                  @click="start((item as any).repo.id, true)"
+                  @click="start(r.id, true)"
                 />
               </UTooltip>
               <div class="flex">
@@ -129,10 +133,10 @@ const defaultShell = computed(() => S.shellLabel(prefs.prefs.shell))
                     class="h-[26px] justify-center rounded-r-none font-normal"
                     icon="i-hugeicons-command-line"
                     label="Shell"
-                    @click="ui.openShell((item as any).repo.id, { docked: false })"
+                    @click="ui.openShell(r.id, { docked: false })"
                   />
                 </UTooltip>
-                <UDropdownMenu :items="shellItems((item as any).repo.id)" :content="{ align: 'end', sideOffset: 4 }" :ui="{ content: 'w-[220px]' }">
+                <UDropdownMenu :items="shellItems(r.id)" :content="{ align: 'end', sideOffset: 4 }" :ui="{ content: 'w-[220px]' }">
                   <UButton
                     color="neutral"
                     variant="outline"

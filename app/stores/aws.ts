@@ -156,7 +156,7 @@ export const useAwsStore = defineStore('aws', () => {
     const had = isBookmarked(t, id)
     const list = had ? bookmarks.value.filter(b => !(b.tab === t && b.id === id)) : [...bookmarks.value, { tab: t, region: region.value, id, label, added_at: new Date().toISOString() }]
     allBookmarks.value = { ...allBookmarks.value, [profile.value]: list }
-    api.aws.saveBookmarks(profile.value, JSON.parse(JSON.stringify(list)))
+    api.aws.saveBookmarks(profile.value, plain(list))
     ui.toast({ title: had ? 'Bookmark removed' : 'Bookmarked', body: `${t} · ${label}` })
   }
 

@@ -16,6 +16,7 @@ const value = computed({
   },
 })
 
+type SegTab = { title?: string; hint?: string | number }
 const H = { sm: 'h-[18px] px-[7px] text-[11px]', md: 'h-5 px-[9px] text-[11.5px]', lg: 'h-[22px] px-2.5 text-[11.5px]' }
 </script>
 
@@ -34,8 +35,8 @@ const H = { sm: 'h-[18px] px-[7px] text-[11px]', md: 'h-5 px-[9px] text-[11.5px]
     }"
   >
     <template #default="{ item }">
-      <span :title="(item as any).title">{{ item.label }}</span>
-      <span v-if="(item as any).hint != null" class="mono ml-1.5 text-[10.5px] text-(--fa)">{{ (item as any).hint }}</span>
+      <span :title="(item as SegTab).title">{{ item.label }}</span>
+      <span v-if="(item as SegTab).hint != null" class="mono ml-1.5 text-[10.5px] text-(--fa)">{{ (item as SegTab).hint }}</span>
     </template>
   </UTabs>
 </template>

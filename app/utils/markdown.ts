@@ -1,12 +1,11 @@
 // A small Markdown renderer for PR descriptions and comments: headings, lists, quotes, code,
 // bold, italics and links. Everything is escaped first, so the text can't inject HTML.
 import { api } from './bridge'
-
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+import { escapeHtml } from './html'
 
 function inline(s: string) {
   const codes: string[] = []
-  let t = esc(s).replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`)
+  let t = escapeHtml(s).replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`)
   t = t
     .replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (_, alt, url) => `<a data-href="${url}">${alt || 'image'}</a>`)
     .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, '<a data-href="$2">$1</a>')
@@ -41,7 +40,7 @@ export function markdown(src: string): string {
       endList()
       const code: string[] = []
       while (++i < lines.length && !/^\s*```/.test(lines[i]!)) code.push(lines[i]!)
-      out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`)
+      out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
       continue
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/)

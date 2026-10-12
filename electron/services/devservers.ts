@@ -36,6 +36,7 @@ export function startService(o: { id: string; cwd: string; cmd: string; port?: s
   const cur = procs.get(o.id)
   if (cur && cur.status !== 'stopped') return
   const shell = process.env.ComSpec || 'cmd.exe'
+  // `o.cmd` is the command the user set for the service, run as typed; only the app's own window can send it (see trusted() in main.ts).
   const p = pty.spawn(shell, `/d /s /c "${o.cmd}"`, {
     name: 'xterm-256color', cols: 160, rows: 40, cwd: o.cwd,
     env: { ...cleanEnv(), FORCE_COLOR: '1' },

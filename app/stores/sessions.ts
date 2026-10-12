@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { Activity, Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, Subagent, UsageUpdate } from '#shared/types'
 import { costOf, modelLabel } from '#shared/pricing'
+import { errMessage } from '#shared/errors'
 
 function relPath(cwd: string, file: string) {
   const f = file.replace(/\\/g, '/'), c = cwd.replace(/\\/g, '/').replace(/\/$/, '')
@@ -105,8 +106,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         cwd = res.path
         branch = res.branch
         wt = { path: res.path, base: r.branch || 'main' }
-      } catch (e: any) {
-        useUiStore().toast({ title: 'Could not create a worktree', body: String(e?.message || e), hue: p.hue, error: true })
+      } catch (e) {
+        useUiStore().toast({ title: 'Could not create a worktree', body: errMessage(e), hue: p.hue, error: true })
         return null
       }
     }
@@ -124,7 +125,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     ensureTerminal(id)
     const { cols, rows } = terminalSize(id)
     api.pty.spawn({ id, cwd, cmd, cols, rows }).catch((e) => {
-      writeToTerminal(id, `\r\n\x1b[31mCould not start "${cmd}": ${String(e?.message || e)}\x1b[0m\r\n`)
+      writeToTerminal(id, `\r\n\x1b[31mCould not start "${cmd}": ${errMessage(e)}\x1b[0m\r\n`)
     })
     useGitStore().refresh(cwd)
     return s
@@ -148,7 +149,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       return s
     }
     api.pty.shell({ id, cwd, kind, cols, rows }).catch((e) => {
-      writeToTerminal(id, `\r\n\x1b[31mCould not start ${shellLabel(kind)}: ${String(e?.message || e)}\x1b[0m\r\n`)
+      writeToTerminal(id, `\r\n\x1b[31mCould not start ${shellLabel(kind)}: ${errMessage(e)}\x1b[0m\r\n`)
     })
     return s
   }

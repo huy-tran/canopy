@@ -2,7 +2,9 @@
 // review requests, the GitHub window's PRs, repos, runs and alerts, and GitHub HQ in the 3D World.
 import { execFile } from 'node:child_process'
 import os from 'node:os'
+import { isRepoName, safeId, safePullUrl, safeRef, safeRepo } from './guard'
 import { load as loadYaml } from 'js-yaml'
+import { errMessage } from '../../shared/errors'
 import type {
   GhAlert, GhDispatchable, GhDone, GhRateLimit, GhProblem, GhPull, GhPullDetail, GhRepo, GhRepoInfo, GhRun, GhRunDetail, GhWorkflowInput, GhWorld, ReviewRequest,
 } from '../../shared/types'
@@ -35,7 +37,7 @@ export function reviewRequests(): Promise<{ ok: boolean; prs: ReviewRequest[]; e
         }))
         resolve({ ok: true, prs })
       } catch (e: any) {
-        resolve({ ok: false, prs: [], error: String(e?.message || e), problem: 'other' })
+        resolve({ ok: false, prs: [], error: errMessage(e), problem: 'other' })
       }
     })
   })
@@ -51,6 +53,18 @@ const MAX_RUNS = 1500
 const RUNS_PER_REPO = 50
 /** Runs older than this are left out of the factory. */
 const RUN_DAYS = 7
+
+const isRepo = isRepoName
+
+/** A failed result when a value from the renderer isn't safe to hand to gh, otherwise null. */
+function unsafe(...checks: (() => unknown)[]): GhDone | null {
+  try {
+    for (const c of checks) c()
+    return null
+  } catch (e) {
+    return { ok: false, error: errMessage(e) }
+  }
+}
 
 /** Runs gh from the home folder, so commands such as `pr merge --delete-branch` never touch a local checkout. */
 function runGh(args: string[]): Promise<{ out: string; err: Error | null; stderr: string }> {
@@ -75,7 +89,7 @@ function githubRepoOf(cwd: string): Promise<string | null> {
       // SSH host aliases such as "github-work" still point at github.com.
       if (!m || !/github/i.test(m[1]!)) return resolve(null)
       const name = m[2]!.replace(/^\/+/, '')
-      resolve(/^[\w.-]+\/[\w.-]+$/.test(name) ? name : null)
+      resolve(isRepoName(name) ? name : null)
     })
   })
 }
@@ -158,7 +172,7 @@ function runState(status: string, conclusion: string | null): GhRun['state'] {
  */
 export async function workflowRuns(repos: string[]): Promise<GhRun[]> {
   const since = Date.now() - RUN_DAYS * 86_400_000
-  const lists = await pool(repos, 6, async (repo) => {
+  const lists = await pool(repos.filter(isRepo), 6, async (repo) => {
     const r = await runGh(['api', `/repos/${repo}/actions/runs?per_page=${RUNS_PER_REPO}`, '--jq', RUN_JQ])
     if (r.err) return []
     try {
@@ -201,7 +215,7 @@ export async function githubWorld(folders: string[], hidden: string[]): Promise<
     const runs = await workflowRuns(repos.map(r => r.name))
     return { repos, pulls, runs, at }
   } catch (e: any) {
-    return { repos: [], pulls: [], runs: [], at, error: String(e?.message || e), problem: e?.problem || 'other' }
+    return { repos: [], pulls: [], runs: [], at, error: errMessage(e), problem: e?.problem || 'other' }
   }
 }
 
@@ -254,7 +268,7 @@ export async function searchPulls(filter: string): Promise<{ ok: boolean; pulls:
     })
     return { ok: true, pulls }
   } catch (e: any) {
-    return { ok: false, pulls: [], error: String(e?.message || e), problem: 'other' }
+    return { ok: false, pulls: [], error: errMessage(e), problem: 'other' }
   }
 }
 
@@ -273,7 +287,8 @@ function checkOf(c: any): GhPullDetail['checks'][number] {
 /** A PR with its files, reviews, checks and comments, and the repo's merge settings. */
 export async function pullDetail(url: string): Promise<{ ok: boolean; pull?: GhPullDetail; error?: string }> {
   const repo = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//)?.[1]
-  if (!repo) return { ok: false, error: `Not a pull request link: ${url}` }
+  const bad = unsafe(() => safePullUrl(url))
+  if (bad || !repo) return bad ?? { ok: false, error: `Not a pull request link: ${url}` }
   const [pr, settings, me] = await Promise.all([
     runGh(['pr', 'view', url, '--json', PR_FIELDS]),
     runGh(['repo', 'view', repo, '--json', 'mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,deleteBranchOnMerge,viewerPermission']),
@@ -305,18 +320,22 @@ export async function pullDetail(url: string): Promise<{ ok: boolean; pull?: GhP
       },
     }
   } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) }
+    return { ok: false, error: errMessage(e) }
   }
 }
 
 /** The PR's changes as one unified diff. */
 export async function pullDiff(url: string): Promise<{ ok: boolean; diff?: string; error?: string }> {
+  const bad = unsafe(() => safePullUrl(url))
+  if (bad) return bad
   const r = await runGh(['pr', 'diff', url, '--color', 'never'])
   return r.err ? { ok: false, error: r.stderr || r.err.message } : { ok: true, diff: r.out }
 }
 
 /** Approves, asks for changes on, or comments on a PR. */
 export async function reviewPull(url: string, kind: 'approve' | 'request-changes' | 'comment', body: string): Promise<GhDone> {
+  const bad = unsafe(() => safePullUrl(url), () => { if (!['approve', 'request-changes', 'comment'].includes(kind)) throw new Error('Unknown review type.') })
+  if (bad) return bad
   const args = ['pr', 'review', url, `--${kind}`]
   if (body.trim()) args.push('--body', body.trim())
   return done(await runGh(args))
@@ -324,6 +343,8 @@ export async function reviewPull(url: string, kind: 'approve' | 'request-changes
 
 /** Merges a PR by merge commit, squash or rebase, optionally deleting its branch on GitHub. */
 export async function mergePull(url: string, method: 'merge' | 'squash' | 'rebase', deleteBranch: boolean): Promise<GhDone> {
+  const bad = unsafe(() => safePullUrl(url), () => { if (!['merge', 'squash', 'rebase'].includes(method)) throw new Error('Unknown merge method.') })
+  if (bad) return bad
   const args = ['pr', 'merge', url, `--${method}`]
   if (deleteBranch) args.push('--delete-branch')
   return done(await runGh(args))
@@ -332,6 +353,8 @@ export async function mergePull(url: string, method: 'merge' | 'squash' | 'rebas
 const RUN_FIELDS = 'jobs,name,displayTitle,status,conclusion,headBranch,event,url,createdAt,attempt,workflowName,databaseId'
 
 export async function runDetail(repo: string, id: number): Promise<{ ok: boolean; run?: GhRunDetail; error?: string }> {
+  const bad = unsafe(() => safeRepo(repo), () => safeId(id))
+  if (bad) return bad
   const r = await runGh(['run', 'view', String(id), '-R', repo, '--json', RUN_FIELDS])
   if (r.err) return { ok: false, error: r.stderr || r.err.message }
   try {
@@ -349,12 +372,14 @@ export async function runDetail(repo: string, id: number): Promise<{ ok: boolean
       },
     }
   } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) }
+    return { ok: false, error: errMessage(e) }
   }
 }
 
 /** A job's log, or the failed steps' logs of the whole run; only the last few thousand lines. */
 export async function runLog(repo: string, id: number, job?: number): Promise<{ ok: boolean; log?: string; error?: string }> {
+  const bad = unsafe(() => safeRepo(repo), () => safeId(id), () => job && safeId(job))
+  if (bad) return bad
   const args = job ? ['run', 'view', '--job', String(job), '-R', repo, '--log'] : ['run', 'view', String(id), '-R', repo, '--log-failed']
   const r = await runGh(args)
   if (r.err) return { ok: false, error: r.stderr || r.err.message }
@@ -363,10 +388,14 @@ export async function runLog(repo: string, id: number, job?: number): Promise<{ 
 }
 
 export async function rerunRun(repo: string, id: number, failedOnly: boolean): Promise<GhDone> {
+  const bad = unsafe(() => safeRepo(repo), () => safeId(id))
+  if (bad) return bad
   return done(await runGh(['run', 'rerun', String(id), '-R', repo, ...(failedOnly ? ['--failed'] : [])]))
 }
 
 export async function cancelRun(repo: string, id: number): Promise<GhDone> {
+  const bad = unsafe(() => safeRepo(repo), () => safeId(id))
+  if (bad) return bad
   return done(await runGh(['run', 'cancel', String(id), '-R', repo]))
 }
 
@@ -377,7 +406,7 @@ const RANK = { critical: 0, high: 1, moderate: 2, low: 3 }
 
 /** Open Dependabot alerts in these repos, most severe first. Repos whose alerts the user can't see are skipped. */
 export async function securityAlerts(repos: string[]): Promise<GhAlert[]> {
-  const lists = await pool(repos, 6, async (repo) => {
+  const lists = await pool(repos.filter(isRepo), 6, async (repo) => {
     const r = await runGh(['api', '--paginate', `/repos/${repo}/dependabot/alerts?state=open&per_page=100`, '--jq', ALERT_JQ])
     if (r.err) return []
     try {
@@ -405,7 +434,7 @@ export async function allRepos(): Promise<{ ok: boolean; repos: GhRepoInfo[]; er
     })
     return { ok: true, repos: repos.sort((a, b) => b.pushedAt - a.pushedAt) }
   } catch (e: any) {
-    return { ok: false, repos: [], error: String(e?.message || e), problem: 'other' }
+    return { ok: false, repos: [], error: errMessage(e), problem: 'other' }
   }
 }
 
@@ -424,9 +453,16 @@ function dispatchOf(yamlText: string): { inputs?: Record<string, any> } | null |
 
 /** The repo's workflows that can be run by hand, with the inputs each asks for. */
 export async function dispatchables(repo: string): Promise<{ ok: boolean; workflows: GhDispatchable[]; error?: string }> {
+  if (!isRepo(repo)) return { ok: false, workflows: [], error: `Not a GitHub repo: ${String(repo)}` }
   const list = await runGh(['workflow', 'list', '-R', repo, '--json', 'id,name,path,state'])
   if (list.err) return { ok: false, workflows: [], error: list.stderr || list.err.message }
-  const active = (JSON.parse(list.out || '[]') as any[]).filter(w => w.state === 'active' && /\.ya?ml$/.test(w.path))
+  let listed: { id: number; name: string; path: string; state: string }[]
+  try {
+    listed = JSON.parse(list.out || '[]')
+  } catch (e) {
+    return { ok: false, workflows: [], error: errMessage(e) }
+  }
+  const active = listed.filter(w => w.state === 'active' && /\.ya?ml$/.test(w.path))
   let environments: string[] | null = null
   const envs = async () => {
     if (!environments) {
@@ -460,6 +496,7 @@ export async function dispatchables(repo: string): Promise<{ ok: boolean; workfl
 
 /** The repo's branches, its default branch first. */
 export async function branches(repo: string): Promise<string[]> {
+  if (!isRepo(repo)) return []
   const [list, info] = await Promise.all([
     runGh(['api', '--paginate', `/repos/${repo}/branches?per_page=100`, '--jq', '.[].name']),
     runGh(['repo', 'view', repo, '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name']),
@@ -471,6 +508,8 @@ export async function branches(repo: string): Promise<string[]> {
 
 /** Starts a workflow on a branch, with its inputs. */
 export async function runWorkflow(repo: string, id: number, ref: string, inputs: Record<string, string>): Promise<GhDone> {
+  const bad = unsafe(() => safeRepo(repo), () => safeId(id), () => safeRef(ref), () => { for (const k of Object.keys(inputs)) if (!/^[\w-]+$/.test(k)) throw new Error(`Not an input name: ${k}`) })
+  if (bad) return bad
   const args = ['workflow', 'run', String(id), '-R', repo, '--ref', ref]
   for (const [k, v] of Object.entries(inputs)) args.push('-f', `${k}=${v}`)
   return done(await runGh(args))

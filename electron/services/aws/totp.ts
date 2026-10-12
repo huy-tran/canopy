@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import QRCode from 'qrcode'
 import type { AwsEnrolment } from '../../../shared/aws'
+import { errMessage } from '../../../shared/errors'
 
 const DIR = path.join(os.homedir(), '.aws-tui')
 const SECRET = path.join(DIR, 'totp.secret')
@@ -131,8 +132,8 @@ export function unlock(input: string, ttlHours: number): { ok: boolean; error?: 
   } else {
     try {
       ok = validCode(code, fs.readFileSync(SECRET, 'utf8').trim())
-    } catch (e: any) {
-      return { ok: false, error: `Could not read the TOTP secret: ${e?.message || e}` }
+    } catch (e) {
+      return { ok: false, error: `Could not read the TOTP secret: ${errMessage(e)}` }
     }
   }
   if (!ok) {
