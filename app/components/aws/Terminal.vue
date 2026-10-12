@@ -1,21 +1,28 @@
 <script setup lang="ts">
 // An AWS CLI session in a terminal: an SSM shell, a port forward, aws logs tail, or an SSO sign-in.
 // It keeps running when you go back to the services; the sidebar lists it until it's closed.
-import { attachTerminal, detachTerminal, focusTerminal } from '~/utils/terminals'
+import { attachTerminal, detachTerminal, focusTerminal, setSeeThrough } from '~/utils/terminals'
 
 const props = defineProps<{ id: string }>()
 
+const ui = useUiStore()
 const A = useAwsStore()
 const prefs = usePrefsStore()
 const host = ref<HTMLElement | null>(null)
 const t = computed(() => A.terms.find(x => x.id === props.id))
+
+// Over the 3D World the window is see-through (see .sim-glass), so the terminal is drawn clear too.
+watch(() => ui.sim, on => setSeeThrough(props.id, on), { immediate: true })
 
 onMounted(() => {
   if (!host.value) return
   attachTerminal(props.id, host.value)
   setTimeout(() => focusTerminal(props.id), 80)
 })
-onBeforeUnmount(() => { if (host.value) detachTerminal(props.id, host.value) })
+onBeforeUnmount(() => {
+  setSeeThrough(props.id, false)
+  if (host.value) detachTerminal(props.id, host.value)
+})
 
 const leave = () => { A.term = null }
 

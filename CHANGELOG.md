@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- In the 3D World, the AWS terminal is now see-through like the rest of the window.
+
 ## [0.22.1] - 2026-10-12
 
 - Fixes a check that could wrongly refuse to preview or diff a file that no longer exists when the project sits behind a shortcut or short folder name. The 0.22.0 installer was never published because of it, so this release carries everything from 0.22.0.
