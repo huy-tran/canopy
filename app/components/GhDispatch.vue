@@ -2,7 +2,8 @@
 // Runs a workflow by hand: pick one of the repo's workflow_dispatch workflows, then the branch and
 // its inputs. Keyboard first: j/k and Enter to pick, Tab through the form, Ctrl Enter to run.
 import { useEventListener } from '@vueuse/core'
-import type { GhDispatchable } from '#shared/types'
+import { errMessage } from '#shared/errors'
+import type { GhDispatchable, GhDone } from '#shared/types'
 
 const props = defineProps<{ repo: string }>()
 
@@ -50,8 +51,15 @@ async function run() {
   if (!ref_.value) return ui.toast({ title: 'Pick a branch to run it on', error: true })
   if (missing.value.length) return ui.toast({ title: 'Fill in the required inputs', body: missing.value.join(', '), error: true })
   running.value = true
-  const r = await api.gh.runWorkflow(props.repo, w.id, ref_.value, values.value)
-  running.value = false
+  let r: GhDone
+  try {
+    // The form's values are a Vue proxy, which IPC can't carry.
+    r = await api.gh.runWorkflow(props.repo, w.id, ref_.value, plain(values.value))
+  } catch (e) {
+    r = { ok: false, error: errMessage(e) }
+  } finally {
+    running.value = false
+  }
   if (!r.ok) return ui.toast({ title: `Could not run ${w.name}`, body: r.error, error: true })
   ui.toast({ title: `Started ${w.name} on ${ref_.value}`, body: `${props.repo} · it shows in Workflows in a few seconds` })
   close()
