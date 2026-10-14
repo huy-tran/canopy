@@ -131,8 +131,7 @@ export default defineNuxtPlugin({
       onImageClick: (sid, n) => ui.openLightbox(sid, n),
       onFocus: (sid) => {
         const s = S.byId(sid)
-        // Docked shells live in the dock panel, not among the panes: focusing one must not change the active session.
-        if (s && !s.docked && S.focusedId(s.pid) !== sid) S.setFocus(s.pid, sid)
+        if (s && S.focusedId(s.pid) !== sid) S.setFocus(s.pid, sid)
       },
       openUrl: url => api.sys.openExternal(url),
     })

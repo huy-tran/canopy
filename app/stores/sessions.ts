@@ -71,12 +71,11 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   function focusedId(pid: string | null): string | null {
     if (!pid) return null
-    const ss = ofProject(pid)
-    const f = ss.find(s => s.id === focus.value[pid]) || ss[0]
-    return f ? f.id : null
+    return pickFocused(ofProject(pid), focus.value[pid])
   }
 
   function setFocus(pid: string, sid: string | null) {
+    if (sid && !canFocus(byId(sid))) return
     focus.value = { ...focus.value, [pid]: sid }
   }
 
