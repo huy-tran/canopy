@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Run workflow follows whatever the workflow asks for. Switching branch reads that branch's workflow file again, as GitHub's own form does, and keeps what you typed where the same input is still asked for. An optional choice, number or environment you leave empty is no longer sent, which GitHub used to refuse. If a repo's environments can't be read, you can type the environment name instead.
+
 ## [0.23.1] - 2026-10-14
 
 - Run workflow in the GitHub window works again. It used to spin forever without starting anything, and now it starts the workflow, or tells you why it could not.
