@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-10-14
+
 - Run workflow in the GitHub window works again. It used to spin forever without starting anything, and now it starts the workflow, or tells you why it could not.
 
 ## [0.23.0] - 2026-10-14
@@ -236,6 +238,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.23.1]: https://github.com/huy-tran/canopy/releases/tag/v0.23.1
 [0.23.0]: https://github.com/huy-tran/canopy/releases/tag/v0.23.0
 [0.22.2]: https://github.com/huy-tran/canopy/releases/tag/v0.22.2
 [0.22.1]: https://github.com/huy-tran/canopy/releases/tag/v0.22.1
