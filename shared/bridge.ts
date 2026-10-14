@@ -115,7 +115,7 @@ export interface CanopyApi {
   git: {
     info(path: string): Promise<RepoInfo>
     status(cwd: string): Promise<GitStatus>
-    files(cwd: string): Promise<string[]>
+    files(cwd: string, ignored?: boolean): Promise<string[]>
     diff(cwd: string, file: string): Promise<string>
     read(cwd: string, file: string): Promise<string>
     worktreeAdd(repo: string, base: string, slug: string): Promise<{ path: string; branch: string }>

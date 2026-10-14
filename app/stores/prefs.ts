@@ -31,6 +31,7 @@ export const DEFAULT_PREFS: Prefs = {
   dnd: false,
   termTheme: 'dark',
   shell: 'powershell',
+  showIgnored: false,
   panelDock: 'bottom',
   panelSize: { bottom: 260, right: 460 },
   summonKey: 'Alt+Space',

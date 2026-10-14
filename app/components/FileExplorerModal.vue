@@ -12,6 +12,7 @@ type Line = DiffLine
 const ui = useUiStore()
 const S = useSessionsStore()
 const G = useGitStore()
+const prefs = usePrefsStore()
 
 const SLB: Record<string, string> = { M: 'Modified', A: 'Added', D: 'Deleted' }
 const SCc: Record<string, string> = { M: 'var(--amb)', A: 'var(--grn)', D: 'var(--red)' }
@@ -91,11 +92,20 @@ async function reset() {
   openDirs.value = changeDirs()
   files.value = []
   cache.clear()
-  const [, list] = await Promise.all([G.refresh(e.cwd), api.git.files(e.cwd).catch(() => [] as string[])])
+  const [, list] = await Promise.all([G.refresh(e.cwd), api.git.files(e.cwd, !!prefs.prefs.showIgnored).catch(() => [] as string[])])
   if (loadKey !== key) return
   files.value = list
   openDirs.value = [...new Set([...openDirs.value, ...changeDirs()])]
 }
+
+/** The list again when "Show ignored files" is switched, keeping the folders open and the search as they are. */
+watch(() => !!prefs.prefs.showIgnored, async (on) => {
+  const e = ex.value
+  if (!e) return
+  const key = loadKey
+  const list = await api.git.files(e.cwd, on).catch(() => [] as string[])
+  if (loadKey === key) files.value = list
+})
 
 watch(() => (ex.value ? `${ex.value.repoId}|${ex.value.cwd}` : ''), (k) => {
   if (k) reset()
@@ -508,7 +518,6 @@ watch(() => [si.value, q.value, ex.value?.tab, ex.value?.repoId], () => {
 
 // ---------- Window size, tree width and wrapping (remembered in prefs) ----------
 
-const prefs = usePrefsStore()
 const { width: vw, height: vh } = useWindowSize()
 const LAYOUT: ExplorerLayout = { tree: 0.42, w: 1120, h: 700, max: false, wrap: false }
 const TOP = 28
@@ -663,6 +672,16 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
               :ui="{ root: 'items-center cursor-pointer px-[14px] pt-2 pb-[2px]', base: 'size-[13px] rounded-sm ring-(--bb)', wrapper: 'ms-2', label: 'text-[12px] font-normal text-(--tx3) cursor-pointer' }"
               @mousedown.prevent
               @update:model-value="() => { sel = 0; refocus() }"
+            />
+            <UCheckbox
+              v-if="mode !== 'changes'"
+              :model-value="!!prefs.prefs.showIgnored"
+              color="neutral"
+              size="xs"
+              label="Show files .gitignore leaves out (.env, ...)"
+              :ui="{ root: 'items-center cursor-pointer px-[14px] pt-2 pb-[2px]', base: 'size-[13px] rounded-sm ring-(--bb)', wrapper: 'ms-2', label: 'text-[12px] font-normal text-(--tx3) cursor-pointer' }"
+              @mousedown.prevent
+              @update:model-value="(v: boolean | 'indeterminate') => prefs.set({ showIgnored: v === true })"
             />
             <div v-if="mode === 'search'" class="px-[14px] pt-2 pb-[2px] text-[11.5px] text-(--fa)">
               {{ rows.length }} match{{ rows.length === 1 ? '' : 'es' }} in all files

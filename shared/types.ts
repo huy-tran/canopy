@@ -311,6 +311,8 @@ export interface Prefs {
   termTheme: 'dark' | 'app'
   /** Default plain shell for new shell terminals. */
   shell: ShellKind
+  /** The Files window also lists files .gitignore leaves out, such as .env. */
+  showIgnored: boolean
   /** Where the shells and dev server logs panel docks. */
   panelDock: PanelDock
   /** Panel height when docked at the bottom and width when docked on the right, in px. */

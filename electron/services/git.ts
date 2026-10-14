@@ -128,13 +128,48 @@ export async function status(cwd: string): Promise<GitStatus> {
   }
 }
 
-/** Tracked plus untracked files, honouring .gitignore. */
-export async function files(cwd: string): Promise<string[]> {
+/** Folders a listing of a plain (non-git) folder skips: dependencies and build output. */
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.venv', '__pycache__', 'dist', 'build', '.nuxt', '.output'])
+/** A listing stops here, so a huge folder can't flood the window. */
+const LIST_MAX = 20000
+
+/** Every file of a folder that isn't a git repo, as "/" paths: breadth first, without the skipped folders or any link. */
+async function walk(root: string): Promise<string[]> {
+  const out: string[] = []
+  const queue = ['']
+  while (queue.length && out.length < LIST_MAX) {
+    const rel = queue.shift()!
+    let entries: fs.Dirent[]
+    try {
+      entries = await fsp.readdir(path.join(root, rel), { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const e of entries) {
+      // Links and junctions could lead out of the project.
+      if (e.isSymbolicLink()) continue
+      const p = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        if (!SKIP_DIRS.has(e.name)) queue.push(p)
+      } else if (e.isFile() && out.length < LIST_MAX) out.push(p)
+    }
+  }
+  return out.sort()
+}
+
+/** Tracked plus untracked files, honouring .gitignore; with `ignored`, the ignored ones too. A folder that isn't a repo lists what is on disk. */
+export async function files(cwd: string, opts: { ignored?: boolean } = {}): Promise<string[]> {
   try {
-    const out = await git(cwd, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])
-    return [...new Set(out.split('\0').filter(Boolean))].sort()
+    const list = (await git(cwd, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])).split('\0')
+    if (opts.ignored) {
+      // `--directory` gives an ignored folder (node_modules, vendor) as one entry ending in "/", dropped here,
+      // so only ignored files outside such folders come in: .env, but not what is inside .vscode/.
+      const ignored = await git(cwd, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'])
+      list.push(...ignored.split('\0').filter(f => !f.endsWith('/')))
+    }
+    return [...new Set(list.filter(Boolean))].sort()
   } catch {
-    return []
+    return walk(cwd)
   }
 }
 

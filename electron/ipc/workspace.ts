@@ -40,7 +40,7 @@ export function registerWorkspaceIpc() {
 
   handle('git:info', (p: string) => git.repoInfo(p))
   handle('git:status', (p: string) => git.status(p))
-  handle('git:files', (p: string) => git.files(p))
+  handle('git:files', (p: string, ignored?: boolean) => git.files(p, { ignored: !!ignored }))
   handle('git:diff', (p: string, f: string) => git.diff(p, f))
   handle('git:read', (p: string, f: string) => git.readFile(p, f))
   handle('git:worktreeAdd', (repo: string, base: string, slug: string) => git.worktreeAdd(repo, base, slug))
