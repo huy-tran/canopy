@@ -35,7 +35,7 @@ export function registerGithubIpc() {
   handle('gh:cancel', (repo: string, id: number) => cancelRun(repo, id))
   handle('gh:alerts', (repos: string[]) => securityAlerts(repos))
   handle('gh:repos', () => allRepos())
-  handle('gh:dispatchables', (repo: string) => dispatchables(repo))
+  handle('gh:dispatchables', (repo: string, ref?: string) => dispatchables(repo, ref))
   handle('gh:branches', (repo: string) => branches(repo))
   handle('gh:runWorkflow', (repo: string, id: number, ref: string, inputs: Record<string, string>) => runWorkflow(repo, id, ref, inputs))
 }

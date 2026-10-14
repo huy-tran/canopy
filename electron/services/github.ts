@@ -441,7 +441,7 @@ export async function allRepos(): Promise<{ ok: boolean; repos: GhRepoInfo[]; er
 // ---------------------------------------------------------------- running a workflow by hand
 
 /** The `workflow_dispatch` trigger of a workflow file, or undefined when it can't be run by hand. */
-function dispatchOf(yamlText: string): { inputs?: Record<string, any> } | null | undefined {
+export function dispatchOf(yamlText: string): { inputs?: Record<string, any> } | null | undefined {
   const doc = loadYaml(yamlText) as any
   // YAML 1.1 readers turn the key `on` into true; js-yaml keeps it, but allow both.
   const on = doc?.on ?? doc?.true
@@ -451,9 +451,30 @@ function dispatchOf(yamlText: string): { inputs?: Record<string, any> } | null |
   return undefined
 }
 
-/** The repo's workflows that can be run by hand, with the inputs each asks for. */
-export async function dispatchables(repo: string): Promise<{ ok: boolean; workflows: GhDispatchable[]; error?: string }> {
+/** The inputs a workflow_dispatch trigger declares. `envs` is asked only when an environment input needs the repo's environments. */
+export async function inputsOf(trigger: { inputs?: Record<string, any> } | null, envs: () => Promise<string[]>): Promise<GhWorkflowInput[]> {
+  const inputs: GhWorkflowInput[] = []
+  for (const [name, def] of Object.entries<any>(trigger?.inputs || {})) {
+    const type = (['choice', 'boolean', 'number', 'environment'].includes(def?.type) ? def.type : 'string') as GhWorkflowInput['type']
+    inputs.push({
+      name, type, description: String(def?.description || ''), required: !!def?.required,
+      default: def?.default == null ? '' : String(def.default),
+      options: type === 'choice' ? (def?.options || []).map(String) : type === 'environment' ? await envs() : [],
+    })
+  }
+  return inputs
+}
+
+/**
+ * The repo's workflows that can be run by hand, with the inputs each asks for. Read from `ref` when given, else the
+ * default branch: a workflow file can ask for different inputs on another branch, as GitHub's own form shows.
+ */
+export async function dispatchables(repo: string, ref?: string): Promise<{ ok: boolean; workflows: GhDispatchable[]; error?: string }> {
   if (!isRepo(repo)) return { ok: false, workflows: [], error: `Not a GitHub repo: ${String(repo)}` }
+  if (ref) {
+    const bad = unsafe(() => safeRef(ref))
+    if (bad) return { ok: false, workflows: [], error: bad.error }
+  }
   const list = await runGh(['workflow', 'list', '-R', repo, '--json', 'id,name,path,state'])
   if (list.err) return { ok: false, workflows: [], error: list.stderr || list.err.message }
   let listed: { id: number; name: string; path: string; state: string }[]
@@ -472,21 +493,12 @@ export async function dispatchables(repo: string): Promise<{ ok: boolean; workfl
     return environments
   }
   const found = await pool(active, 6, async (w): Promise<GhDispatchable | null> => {
-    const r = await runGh(['api', `/repos/${repo}/contents/${w.path}`, '--jq', '.content'])
+    const r = await runGh(['api', `/repos/${repo}/contents/${w.path}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`, '--jq', '.content'])
     if (r.err) return null
     try {
       const trigger = dispatchOf(Buffer.from(r.out.replace(/\\n|\s/g, ''), 'base64').toString('utf8'))
       if (trigger === undefined) return null
-      const inputs: GhWorkflowInput[] = []
-      for (const [name, def] of Object.entries<any>(trigger?.inputs || {})) {
-        const type = (['choice', 'boolean', 'number', 'environment'].includes(def?.type) ? def.type : 'string') as GhWorkflowInput['type']
-        inputs.push({
-          name, type, description: String(def?.description || ''), required: !!def?.required,
-          default: def?.default == null ? '' : String(def.default),
-          options: type === 'choice' ? (def?.options || []).map(String) : type === 'environment' ? await envs() : [],
-        })
-      }
-      return { id: w.id, name: w.name, path: w.path, inputs }
+      return { id: w.id, name: w.name, path: w.path, inputs: await inputsOf(trigger, envs) }
     } catch {
       return null
     }

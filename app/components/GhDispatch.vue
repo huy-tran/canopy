@@ -32,9 +32,28 @@ function close() {
   focusGhWindow()
 }
 
+/** A different branch can have a different workflow file, so its inputs are read again, as GitHub's own form does. */
+watch(ref_, async (r, was) => {
+  if (!r || !was || !workflows.value) return
+  const w = await api.gh.dispatchables(props.repo, r)
+  // Another branch was picked meanwhile, or the read failed: leave the form as it is.
+  if (r !== ref_.value || !w.ok) return
+  workflows.value = w.workflows
+  if (!chosen.value) return
+  const now = w.workflows.find(x => x.path === chosen.value!.path)
+  if (!now) {
+    const name = chosen.value.name
+    chosen.value = null
+    ui.toast({ title: `${name} can't be run by hand on ${r}`, body: 'Its workflow file is missing there, or has no workflow_dispatch trigger.', error: true })
+    return
+  }
+  values.value = carryValues(now.inputs, values.value)
+  chosen.value = now
+})
+
 function choose(w: GhDispatchable) {
   chosen.value = w
-  values.value = Object.fromEntries(w.inputs.map(i => [i.name, i.default || (i.type === 'boolean' ? 'false' : i.options[0] || '')]))
+  values.value = startValues(w.inputs)
   nextTick(() => (form.value?.querySelector('select, input') as HTMLElement | null)?.focus())
 }
 
@@ -53,8 +72,8 @@ async function run() {
   running.value = true
   let r: GhDone
   try {
-    // The form's values are a Vue proxy, which IPC can't carry.
-    r = await api.gh.runWorkflow(props.repo, w.id, ref_.value, plain(values.value))
+    // sendValues makes a plain object: the form's own values are a Vue proxy, which IPC can't carry.
+    r = await api.gh.runWorkflow(props.repo, w.id, ref_.value, sendValues(w.inputs, values.value))
   } catch (e) {
     r = { ok: false, error: errMessage(e) }
   } finally {
@@ -165,7 +184,8 @@ onMounted(load)
               @change="values[inp.name] = ($event.target as HTMLInputElement).checked ? 'true' : 'false'"
             >{{ values[inp.name] === 'true' ? 'true' : 'false' }}
           </span>
-          <select v-else-if="inp.type === 'choice' || inp.type === 'environment'" v-model="values[inp.name]" class="h-[30px] rounded-md border border-(--ln) bg-(--inp) px-2 text-[12.5px] text-(--tx)">
+          <!-- An environment input whose environments could not be read is typed in, so a required one can still be run. -->
+          <select v-else-if="(inp.type === 'choice' || inp.type === 'environment') && inp.options.length" v-model="values[inp.name]" class="h-[30px] rounded-md border border-(--ln) bg-(--inp) px-2 text-[12.5px] text-(--tx)">
             <option v-if="!inp.required" value="">(none)</option>
             <option v-for="o in inp.options" :key="o" :value="o">{{ o }}</option>
           </select>

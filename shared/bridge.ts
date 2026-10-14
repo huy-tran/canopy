@@ -171,7 +171,7 @@ export interface CanopyApi {
     /** Every repo the user can reach, most recently pushed first. */
     repos(): Promise<{ ok: boolean; repos: GhRepoInfo[]; error?: string; problem?: GhProblem }>
     /** The repo's workflows that can be run by hand, with their inputs. */
-    dispatchables(repo: string): Promise<{ ok: boolean; workflows: GhDispatchable[]; error?: string }>
+    dispatchables(repo: string, ref?: string): Promise<{ ok: boolean; workflows: GhDispatchable[]; error?: string }>
     branches(repo: string): Promise<string[]>
     runWorkflow(repo: string, id: number, ref: string, inputs: Record<string, string>): Promise<GhDone>
   }
