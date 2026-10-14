@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The Files window has a tick box, "Show files .gitignore leaves out", so files such as .env show up there as they do in a terminal. It remembers your choice, and the window now also lists the files of a folder that is not a git repository.
+- Opening Terminals from the second session no longer jumps back to the first session. The session you were in stays active.
+- Canopy checks your projects for changes every 15 seconds instead of every 5, and straight away when you come back to its window, so it does less work while it sits idle.
+
 ## [0.22.2] - 2026-10-12
 
 - In the 3D World, the AWS terminal is now see-through like the rest of the window.
