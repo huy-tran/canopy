@@ -175,6 +175,8 @@ export default defineNuxtPlugin({
     watch(() => ui.gh, (on) => { if (!on) setTimeout(R.poll, 2000) })
 
     // ---------- Git status for the selected project's sessions and repos ----------
+    // Claude's edits and the end of a turn refresh it as they happen (see onHook), so this poll only catches the rest: Bash commands,
+    // edits in an editor, git in a terminal. Coming back to the window checks at once.
     // Not while the window is hidden or minimised: nobody sees it, and each poll starts git processes.
     const pollGit = () => {
       const p = P.current
@@ -182,9 +184,10 @@ export default defineNuxtPlugin({
       const cwds = new Set<string>([...p.repos.map(r => r.path), ...S.ofProject(p.id).map(s => s.cwd)])
       cwds.forEach(c => G.refresh(c))
     }
-    setInterval(pollGit, 5000)
+    setInterval(pollGit, 15_000)
     watch(() => P.sel, pollGit, { immediate: true })
     document.addEventListener('visibilitychange', pollGit)
+    window.addEventListener('focus', pollGit)
 
     if (demo) {
       // Fake sessions only: nothing to resume, and nothing that starts Claude.
