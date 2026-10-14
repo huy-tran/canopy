@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Run workflow in the GitHub window works again. It used to spin forever without starting anything, and now it starts the workflow, or tells you why it could not.
+
 ## [0.23.0] - 2026-10-14
 
 - The Files window has a tick box, "Show files .gitignore leaves out", so files such as .env show up there as they do in a terminal. It remembers your choice, and the window now also lists the files of a folder that is not a git repository.
