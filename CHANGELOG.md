@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-15
+
 - Canopy can now be built and run on Linux, aimed at Omarchy, and releases include an AppImage. It has not yet been tried there. Terminals, shells, dev servers, editors, fonts and the file manager use the Linux equivalents, and the About window shows the system. Windows is unchanged.
 
 ## [0.23.2] - 2026-10-14
@@ -244,6 +246,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.24.0]: https://github.com/huy-tran/canopy/releases/tag/v0.24.0
 [0.23.2]: https://github.com/huy-tran/canopy/releases/tag/v0.23.2
 [0.23.1]: https://github.com/huy-tran/canopy/releases/tag/v0.23.1
 [0.23.0]: https://github.com/huy-tran/canopy/releases/tag/v0.23.0
