@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Canopy can now be built and run on Linux, aimed at Omarchy, and releases include an AppImage. It has not yet been tried there. Terminals, shells, dev servers, editors, fonts and the file manager use the Linux equivalents, and the About window shows the system. Windows is unchanged.
+
 ## [0.23.2] - 2026-10-14
 
 - Run workflow follows whatever the workflow asks for. Switching branch reads that branch's workflow file again, as GitHub's own form does, and keeps what you typed where the same input is still asked for. An optional choice, number or environment you leave empty is no longer sent, which GitHub used to refuse. If a repo's environments can't be read, you can type the environment name instead.
