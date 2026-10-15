@@ -24,6 +24,7 @@
     "dev:electron": "node scripts/build-electron.mjs && wait-on -t 120000 http-get://localhost:3456 && cross-env CANOPY_DEV_URL=http://localhost:3456 electron .",
     "build": "nuxt generate && node scripts/build-electron.mjs",
     "dist": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
     "typecheck": "nuxt typecheck && tsc -p tsconfig.electron.json",
     "test": "vitest run",
     "sim:check": "node scripts/sim-check.mjs",
@@ -103,6 +104,12 @@
     "win": {
       "target": "nsis",
       "icon": "build/canopy.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "public/brand/canopy-512.png",
+      "category": "Development",
+      "executableName": "canopy"
     },
     "nsis": {
       "oneClick": false,

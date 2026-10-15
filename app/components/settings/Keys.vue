@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ACTIONS, RESERVED, clashes, comboOf, type ActionDef } from '#shared/actions'
 import { DEFAULT_PREFS } from '~/stores/prefs'
+import { fileManager, isWin } from '~/utils/platform'
 
 type Msg =
   | { kind: 'err'; id: string; t: string }
@@ -214,7 +215,7 @@ const CAP = 'mono h-[18px] min-w-0 px-[5px] text-[10.5px] font-normal normal-cas
     <div v-if="!groups.length" class="px-2 py-2.5 text-[12px] text-(--fa)">No shortcuts match.</div>
 
     <div class="flex flex-col">
-      <div class="label-caps px-2 pt-2 pb-1">Anywhere in Windows</div>
+      <div class="label-caps px-2 pt-2 pb-1">{{ isWin ? 'Anywhere in Windows' : 'Anywhere on the desktop' }}</div>
       <div class="flex flex-col gap-1.5 rounded-lg px-2 py-[5px] hover:bg-(--hov)" :class="(rec?.id === SUMMON || msg?.id === SUMMON) && 'bg-(--sel)'">
         <div class="flex min-h-[26px] items-center gap-2.5">
           <div class="flex min-w-0 flex-1 flex-col gap-[2px]">

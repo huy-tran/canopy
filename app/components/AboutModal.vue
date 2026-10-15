@@ -21,7 +21,7 @@ const rows = computed(() => {
     ['Node.js', i?.node],
     ['Claude Code', i?.claudeVersion],
     ['Claude path', i?.claudePath],
-    ['Windows', i?.windows],
+    ['System', i?.os],
   ].map(([key, v]) => ({ k: key!, v: v || '-' }))
 })
 

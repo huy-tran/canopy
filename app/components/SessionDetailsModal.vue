@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { k } from '~/utils/format'
+import { fileManager } from '~/utils/platform'
 
 // Session details (Ctrl Shift D) for the focused session.
 const ui = useUiStore()
@@ -38,7 +39,7 @@ async function openFolder() {
   const fs = s.value, cur = p.value
   if (!fs || !cur) return
   await api.sys.showInFolder(fs.cwd)
-  ui.toast({ title: 'Opening folder in Explorer', body: fs.cwd, hue: cur.hue })
+  ui.toast({ title: `Opening folder in ${fileManager}`, body: fs.cwd, hue: cur.hue })
 }
 
 function copyId() {

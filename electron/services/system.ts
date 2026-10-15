@@ -5,24 +5,27 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { isInside, noShellMeta, safeSegment } from './guard'
-import type { AppInfo, ShellInfo } from '../../shared/types'
+import type { AppInfo, ShellInfo, ShellKind } from '../../shared/types'
 import { errMessage } from '../../shared/errors'
+import { findOnPath, IS_WIN, posixShell } from './shellcmd'
 
+// Arch ships VS Code's open build as code-oss and Zed as zeditor.
 const EDITOR_CLI: Record<string, string[]> = {
-  'VS Code': ['code'],
+  'VS Code': ['code', 'code-oss'],
   'Cursor': ['cursor'],
   'PhpStorm': ['phpstorm', 'phpstorm64'],
-  'Zed': ['zed'],
+  'Zed': ['zed', 'zeditor'],
 }
 
-/** `viaShell` is only for npm's claude.cmd, which Windows can't start directly; every other call here is a plain .exe. */
+/** `viaShell` is only for npm's claude.cmd, which Windows can't start directly; every other call here is a plain program. */
 function run(cmd: string, args: string[], viaShell = false): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    execFile(cmd, args, { windowsHide: true, encoding: 'utf8', timeout: 8000, shell: viaShell }, (err, stdout) => resolve({ ok: !err, out: (stdout || '').trim() }))
+    execFile(cmd, args, { windowsHide: true, encoding: 'utf8', timeout: 8000, shell: viaShell && IS_WIN }, (err, stdout) => resolve({ ok: !err, out: (stdout || '').trim() }))
   })
 }
 
 async function which(name: string): Promise<string> {
+  if (!IS_WIN) return findOnPath(name) || ''
   const r = await run('where', [name])
   return r.ok ? r.out.split(/\r?\n/)[0]!.trim() : ''
 }
@@ -30,7 +33,7 @@ async function which(name: string): Promise<string> {
 /** Opens a folder (and optionally a file in it) with the editor's CLI. */
 export async function openInEditor(editor: string, folder: string, file?: string): Promise<{ ok: boolean; error?: string }> {
   const cmds = EDITOR_CLI[editor] || []
-  if (cmds.length) {
+  if (cmds.length && IS_WIN) {
     // Editors start through .cmd files, which run in cmd.exe: a name with & or % in it would run as a command.
     try {
       noShellMeta(folder)
@@ -57,12 +60,25 @@ export function showInFolder(p: string) {
 
 let infoCache: AppInfo | null = null
 
+/** "Windows 11 x64 (10.0.26200)" or "Arch Linux x64 (6.12.1-arch1-1)". */
+function systemName(): string {
+  if (IS_WIN) {
+    const build = +(os.release().split('.')[2] || 0)
+    return `Windows ${build >= 22000 ? '11' : '10'} ${os.arch()} (${os.release()})`
+  }
+  let name = os.type()
+  try {
+    name = fs.readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)"?/m)?.[1] || name
+  } catch {
+    // No os-release: keep the kernel's name.
+  }
+  return `${name} ${os.arch()} (${os.release()})`
+}
+
 export async function appInfo(): Promise<AppInfo> {
   if (infoCache) return infoCache
   const claudePath = await which('claude')
   const v = claudePath ? await run('claude', ['--version'], true) : { ok: false, out: '' }
-  const rel = os.release().split('.')
-  const build = +(rel[2] || 0)
   infoCache = {
     version: app.getVersion(),
     electron: process.versions.electron,
@@ -70,7 +86,7 @@ export async function appInfo(): Promise<AppInfo> {
     node: process.versions.node,
     claudeVersion: v.ok ? (v.out.match(/[\d.]+/)?.[0] || v.out) : 'Not found',
     claudePath: claudePath || 'Not found on PATH',
-    windows: `${build >= 22000 ? '11' : '10'} ${os.arch()} (${os.release()})`,
+    os: systemName(),
   }
   return infoCache
 }
@@ -79,8 +95,22 @@ const MONO = /mono|code|consol|courier|cascadia|hack|iosevka|menlo|inconsolata|t
 
 const STYLE_WORDS = /\b(thin|hairline|extra ?light|ultra ?light|light|semi ?light|book|regular|normal|medium|semi ?bold|demi ?bold|bold|extra ?bold|ultra ?bold|heavy|black|italic|oblique|condensed|semi ?condensed|expanded)\b/gi
 
-/** Font families installed for the machine and the user, read from the registry. */
+/** Font families from fontconfig: "fc-list : family" prints one line per face, "Family,Alias", and the first name is the real one. */
+async function listFontsFc(): Promise<{ name: string; nerd: boolean; mono: boolean }[]> {
+  const r = await run('fc-list', [':', 'family'])
+  const families = new Set<string>()
+  for (const line of r.out.split('\n')) {
+    const name = (line.split(',')[0] || '').replace(/\\(.)/g, '$1').trim()
+    if (name) families.add(name)
+  }
+  return [...families]
+    .sort((a, b) => a.localeCompare(b))
+    .map(name => ({ name, nerd: /nerd font/i.test(name), mono: MONO.test(name) }))
+}
+
+/** Font families installed for the machine and the user: the registry on Windows, fontconfig elsewhere. */
 export async function listFonts(): Promise<{ name: string; nerd: boolean; mono: boolean }[]> {
+  if (!IS_WIN) return listFontsFc()
   const keys = ['HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts']
   const families = new Set<string>()
   for (const key of keys) {
@@ -137,9 +167,33 @@ export function clearImages() {
 
 let shellCache: ShellInfo[] | null = null
 
+const POSIX_SHELLS: Record<string, { kind: ShellKind; label: string }> = {
+  bash: { kind: 'bash', label: 'Bash' },
+  zsh: { kind: 'zsh', label: 'Zsh' },
+  fish: { kind: 'fish', label: 'Fish' },
+  sh: { kind: 'sh', label: 'sh' },
+}
+
+/** The shells in /etc/shells that Canopy knows, the user's own first. */
+function listPosixShells(): ShellInfo[] {
+  let lines: string[] = []
+  try {
+    lines = fs.readFileSync('/etc/shells', 'utf8').split('\n').map(l => l.trim())
+  } catch {
+    // No /etc/shells: the user's own shell alone.
+  }
+  const out: ShellInfo[] = []
+  for (const exe of [posixShell(), ...lines.filter(l => l.startsWith('/'))]) {
+    const known = POSIX_SHELLS[path.basename(exe)]
+    if (known && fs.existsSync(exe) && !out.some(s => s.kind === known.kind)) out.push({ ...known, exe })
+  }
+  return out.length ? out : [{ kind: 'sh', label: 'sh', exe: '/bin/sh' }]
+}
+
 /** Plain shells installed on this machine, in the order they are offered. */
 export async function listShells(): Promise<ShellInfo[]> {
   if (shellCache) return shellCache
+  if (!IS_WIN) return (shellCache = listPosixShells())
   const out: ShellInfo[] = []
   const pwsh = await which('pwsh')
   if (pwsh) out.push({ kind: 'pwsh', label: 'PowerShell 7', exe: pwsh })

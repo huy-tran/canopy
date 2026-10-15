@@ -7,7 +7,7 @@ export type Editor = 'VS Code' | 'Cursor' | 'PhpStorm' | 'Zed'
 export type ThemePref = 'dark' | 'light' | 'system'
 export type WaitStyle = 'both' | 'highlight' | 'badge'
 export type PanelDock = 'bottom' | 'right'
-export type ShellKind = 'pwsh' | 'powershell' | 'gitbash' | 'wsl' | 'cmd'
+export type ShellKind = 'pwsh' | 'powershell' | 'gitbash' | 'wsl' | 'cmd' | 'bash' | 'zsh' | 'fish' | 'sh'
 
 /** A plain shell found on this machine. */
 export interface ShellInfo {
@@ -527,7 +527,8 @@ export interface AppInfo {
   node: string
   claudeVersion: string
   claudePath: string
-  windows: string
+  /** The operating system, such as "Windows 11 x64 (10.0.26200)" or "Arch Linux x64 (6.12.1)". */
+  os: string
 }
 
 /** One Claude Code session's activity within a day, for the daily summary. */

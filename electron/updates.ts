@@ -30,7 +30,8 @@ export function wireUpdater() {
 
 export async function checkUpdates() {
   setUpd({ status: 'checking' })
-  if (!app.isPackaged) {
+  // Linux updates itself only as an AppImage; a package from the distro's own tools is updated by those.
+  if (!app.isPackaged || (process.platform === 'linux' && !process.env.APPIMAGE)) {
     setTimeout(() => setUpd({ status: 'current' }), 900)
     return
   }

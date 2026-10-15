@@ -3,6 +3,7 @@ import { errMessage } from '#shared/errors'
 import { useWindowSize } from '@vueuse/core'
 import type { ExplorerLayout, GitChange } from '#shared/types'
 import type { DiffLine } from '~/utils/diff'
+import { fileManager, joinPath } from '~/utils/platform'
 
 type Mode = 'search' | 'changes' | 'files'
 interface Row { type: 'file' | 'dir'; path: string; name?: string; depth: number; idx: Set<number> | null }
@@ -399,7 +400,7 @@ const dirInfo = computed(() => {
 
 // ---------- Actions ----------
 
-const winPath = (path: string) => cwd.value.replace(/[\\/]$/, '') + '\\' + path.replace(/\//g, '\\')
+const winPath = (path: string) => joinPath(cwd.value, path)
 
 async function openFile(path: string) {
   const p = proj.value
@@ -813,7 +814,7 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
               Copy path
             </UButton>
             <UButton color="neutral" variant="outline" size="xs" :class="actBtn" @mousedown.prevent @click="actReveal">
-              Show in Explorer
+              Show in {{ fileManager }}
             </UButton>
             <UButton color="neutral" variant="outline" size="xs" :class="[actBtn, 'gap-2']" title="Adds @path to the prompt you're typing" @mousedown.prevent @click="actMention">
               Mention in prompt<UKbd :class="kbdCls">Ctrl I</UKbd>

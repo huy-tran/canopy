@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Editor, Project, Repo, RepoInfo } from '#shared/types'
+import { isWin } from '~/utils/platform'
 
 interface Draft {
   pid: string | null
@@ -401,7 +402,7 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
                   <UInput
                     :model-value="r.path"
                     variant="none"
-                    placeholder="C:\code\project"
+                    :placeholder="isWin ? 'C:\\code\\project' : '/home/you/code/project'"
                     class="w-full min-w-0"
                     :ui="{ base: [field, 'text-(--tx2)', ring(tried && !!errors.repos[i] && !r.path.trim())] }"
                     @update:model-value="setPath(r, String($event))"

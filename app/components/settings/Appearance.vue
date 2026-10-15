@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ThemePref, WaitStyle } from '#shared/types'
 import { SIM_GLASS_MAX, simGlassOf } from '~/stores/prefs'
+import { fileManager, isWin } from '~/utils/platform'
 
 const prefs = usePrefsStore()
 
@@ -33,7 +34,7 @@ const waitStyle = computed({
 <template>
   <div class="flex flex-col">
     <div class="mb-1 text-[15px] font-semibold">Appearance</div>
-    <SettingsRow label="Theme" sub="System follows your Windows setting." wrap>
+    <SettingsRow label="Theme" :sub="`System follows your ${isWin ? 'Windows' : 'desktop'} setting.`" wrap>
       <Seg v-model="theme" :items="THEMES" size="lg" />
     </SettingsRow>
     <SettingsRow label="Session window in the 3D World" sub="How solid a session you open in the 3D World is. The characters always show through a little." wrap>

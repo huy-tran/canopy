@@ -2,7 +2,8 @@
 import * as pty from 'node-pty'
 import net from 'node:net'
 import { execFile } from 'node:child_process'
-import { cleanEnv } from './pty'
+import { cleanEnv, CONPTY } from './pty'
+import { commandLine, IS_WIN } from './shellcmd'
 
 export type SvcStatus = 'starting' | 'running' | 'stopped'
 
@@ -35,12 +36,12 @@ function portOpen(port: number): Promise<boolean> {
 export function startService(o: { id: string; cwd: string; cmd: string; port?: string }, emit: Emit) {
   const cur = procs.get(o.id)
   if (cur && cur.status !== 'stopped') return
-  const shell = process.env.ComSpec || 'cmd.exe'
   // `o.cmd` is the command the user set for the service, run as typed; only the app's own window can send it (see trusted() in main.ts).
-  const p = pty.spawn(shell, `/d /s /c "${o.cmd}"`, {
+  const sh = commandLine(o.cmd)
+  const p = pty.spawn(sh.file, sh.args, {
     name: 'xterm-256color', cols: 160, rows: 40, cwd: o.cwd,
     env: { ...cleanEnv(), FORCE_COLOR: '1' },
-    useConpty: true,
+    ...CONPTY,
   })
   const pr: Proc = { p, status: 'starting' }
   procs.set(o.id, pr)
@@ -70,11 +71,37 @@ export function startService(o: { id: string; cwd: string; cmd: string; port?: s
   })
 }
 
-/** Kills the whole process tree, since cmd /c leaves php/node children behind otherwise. */
+/**
+ * The pty makes the shell a session leader, so its pid is the group's. The shell is interactive, which ignores SIGTERM but
+ * passes SIGHUP, what closing a terminal sends, on to its jobs; SIGKILL follows if anything lingers.
+ */
+function killGroup(pr: Proc): Promise<void> {
+  const pid = pr.p.pid
+  const signal = (sig: NodeJS.Signals) => {
+    try {
+      process.kill(-pid, sig)
+    } catch {
+      // Already gone.
+    }
+  }
+  return new Promise((resolve) => {
+    const force = setTimeout(() => signal('SIGKILL'), 2000)
+    const giveUp = setTimeout(resolve, 2500)
+    pr.p.onExit(() => {
+      clearTimeout(force)
+      clearTimeout(giveUp)
+      resolve()
+    })
+    signal('SIGHUP')
+  })
+}
+
+/** Kills the whole process tree, since the shell around the command leaves php/node children behind otherwise. */
 export function stopService(id: string): Promise<void> {
   const pr = procs.get(id)
   if (!pr || pr.status === 'stopped') return Promise.resolve()
   if (pr.probe) clearInterval(pr.probe)
+  if (!IS_WIN) return killGroup(pr)
   return new Promise((resolve) => {
     execFile('taskkill', ['/pid', String(pr.p.pid), '/T', '/F'], { windowsHide: true }, () => {
       try {

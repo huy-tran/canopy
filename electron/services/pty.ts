@@ -3,6 +3,7 @@ import * as pty from 'node-pty'
 import os from 'node:os'
 import type { ShellInfo, ShellKind } from '../../shared/types'
 import { writeSessionSettings, removeSessionSettings } from './hooks'
+import { commandLine, IS_WIN } from './shellcmd'
 
 export interface SpawnOpts {
   id: string
@@ -22,6 +23,9 @@ interface Term {
 }
 
 const terms = new Map<string, Term>()
+
+/** Windows ptys go through ConPTY; node-pty has no such option elsewhere. */
+export const CONPTY = IS_WIN ? { useConpty: true } : {}
 
 /** Characters of recent output kept per terminal for replay (about 2 MB). */
 const REPLAY_MAX = 1_000_000
@@ -54,16 +58,15 @@ export function spawnSession(o: SpawnOpts, onData: (id: string, d: string) => vo
   killSession(o.id)
   const settings = writeSessionSettings(o.id)
   const full = withHooks(o.cmd || 'claude', settings)
-  const shell = process.env.ComSpec || 'cmd.exe'
-  // `o.cmd` is the command the user set for the project (Settings > Projects) and runs as typed, in cmd.exe: only the app's own window can send it (see trusted() in main.ts).
-  // A raw command line: node-pty would otherwise re-escape the quotes inside `full` for cmd.
-  const p = pty.spawn(shell, `/d /s /c "${full}"`, {
+  // `o.cmd` is the command the user set for the project (Settings > Projects) and runs as typed, in cmd.exe or the user's shell: only the app's own window can send it (see trusted() in main.ts).
+  const sh = commandLine(full)
+  const p = pty.spawn(sh.file, sh.args, {
     name: 'xterm-256color',
     cols: Math.max(20, o.cols || 120),
     rows: Math.max(5, o.rows || 30),
     cwd: o.cwd,
     env: { ...cleanEnv(), CANOPY_SESSION: o.id, FORCE_COLOR: '1', COLORTERM: 'truecolor' },
-    useConpty: true,
+    ...CONPTY,
   })
   return track(o.id, p, onData, (id, code) => {
     removeSessionSettings(id)
@@ -102,13 +105,14 @@ function track(id: string, p: pty.IPty, onData: (id: string, d: string) => void,
 /** A one-off command line in a pty, such as an AWS CLI session; its window closes with it. */
 export function spawnCommand(o: { id: string; cmd: string; cols: number; rows: number }, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
   killSession(o.id)
-  const p = pty.spawn(process.env.ComSpec || 'cmd.exe', `/d /s /c "${o.cmd}"`, {
+  const sh = commandLine(o.cmd)
+  const p = pty.spawn(sh.file, sh.args, {
     name: 'xterm-256color',
     cols: Math.max(20, o.cols || 120),
     rows: Math.max(5, o.rows || 30),
     cwd: os.homedir(),
     env: { ...cleanEnv(), COLORTERM: 'truecolor' },
-    useConpty: true,
+    ...CONPTY,
   })
   return track(o.id, p, onData, onExit)
 }
@@ -130,7 +134,7 @@ export function spawnShell(o: { id: string; cwd: string; shell: ShellInfo; cols:
     cwd: o.cwd,
     // CHERE_INVOKING keeps Git Bash's login shell in the spawn folder instead of $HOME.
     env: { ...cleanEnv(), CHERE_INVOKING: '1', COLORTERM: 'truecolor' },
-    useConpty: true,
+    ...CONPTY,
   })
   return track(o.id, p, onData, onExit)
 }

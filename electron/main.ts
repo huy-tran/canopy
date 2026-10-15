@@ -10,6 +10,7 @@ import * as aws from './services/aws'
 import { stopAllServices } from './services/devservers'
 import { clearSessionSettings, startHookServer, stopHookServer } from './services/hooks'
 import { killAllSessions } from './services/pty'
+import { adoptLoginPath } from './services/shellcmd'
 import { clearImages } from './services/system'
 import { lastAssistantText, watchTranscript } from './services/transcript'
 import { applySummonKey, ensureTray } from './tray'
@@ -17,6 +18,12 @@ import { checkUpdates, registerUpdateIpc, wireUpdater } from './updates'
 import { createWindow } from './window'
 
 if (!app.requestSingleInstanceLock()) app.quit()
+
+if (process.platform === 'linux') {
+  // Wayland compositors such as Hyprland: draw natively, and register the summon shortcut through the desktop portal.
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+  app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal')
+}
 
 app.on('second-instance', () => showWindow())
 
@@ -44,6 +51,8 @@ function registerIpc() {
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.canopy.app')
+  // An app started from a launcher or a keybinding often has a bare PATH, without claude, git or gh.
+  await adoptLoginPath()
   Menu.setApplicationMenu(null)
   serveApp()
   clearSessionSettings()

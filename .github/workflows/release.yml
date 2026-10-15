@@ -1,5 +1,5 @@
-# Builds the Windows installer and publishes it as a GitHub release when a version tag (v1.2.3) is pushed.
-# The installed app checks these releases for updates (build.publish in package.json).
+# Builds the Windows installer and the Linux AppImage, and publishes them as one GitHub release when a version tag (v1.2.3) is pushed.
+# Installed copies check these releases for updates (build.publish in package.json).
 name: Release
 
 on:
@@ -14,18 +14,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  windows:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
+  draft:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
 
       - name: Check the tag matches package.json
         run: |
@@ -34,12 +30,6 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
             exit 1
           fi
-
-      - run: npm ci
-
-      - run: npm run typecheck
-
-      - run: npm test
 
       # A draft made up front stops electron-builder creating one release per uploaded file.
       - name: Create a draft release from the changelog entry
@@ -58,14 +48,58 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  windows:
+    needs: draft
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
       - name: Build and upload
         run: npm run build && npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  linux:
+    needs: draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      # node-pty has no Linux prebuilds, so npm ci compiles it here.
+      - run: npm ci
+
+      - name: Build and upload
+        run: npm run build && npx electron-builder --linux --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
       - name: Publish the release
         run: |
           id="$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id")"
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false -f make_latest=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

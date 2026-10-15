@@ -9,6 +9,7 @@ import { params } from './params'
 import { dryRunFrom, gateOpen, settings } from './core'
 import { isEnrolled, unlockedUntil } from './totp'
 import { errMessage } from '../../../shared/errors'
+import { IS_WIN } from '../shellcmd'
 
 export * from './core'
 export * from './compute'
@@ -66,9 +67,11 @@ export async function search(ctx: AwsCtx): Promise<{ items: AwsSearchItem[]; fai
 
 // ---------- AWS CLI sessions ----------
 
-/** Refuses anything cmd.exe would read as more than a plain word. */
+/** Refuses anything the command shell would read as more than a plain word: cmd.exe's syntax on Windows, sh's elsewhere. */
+const UNSAFE = IS_WIN ? /["&|<>^%!\r\n]/ : /["&|<>^%!\r\n$`\\;'()\s*?{}[\]~]/
+
 function safe(...vals: (string | number)[]) {
-  for (const v of vals) if (/["&|<>^%!\r\n]/.test(String(v))) throw new Error(`Not a safe value for a command line: ${v}`)
+  for (const v of vals) if (UNSAFE.test(String(v))) throw new Error(`Not a safe value for a command line: ${v}`)
 }
 
 const base = (ctx: AwsCtx) => `aws --profile ${ctx.profile} --region ${ctx.region}`
