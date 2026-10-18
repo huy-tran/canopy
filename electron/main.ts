@@ -1,6 +1,7 @@
 import { app, globalShortcut, Menu } from 'electron'
 import type { HookEvent } from '../shared/types'
 import { prefs, send, showWindow, state } from './context'
+import { registerDesktopEntry } from './desktop'
 import { registerAwsIpc } from './ipc/aws'
 import { registerGithubIpc } from './ipc/github'
 import { registerSystemIpc } from './ipc/system'
@@ -59,6 +60,7 @@ app.whenReady().then(async () => {
   await startHookServer(onHook)
   wireUpdater()
   registerIpc()
+  registerDesktopEntry()
   createWindow()
   ensureTray()
   applySummonKey(prefs()?.summonKey ?? 'Alt+Space')
