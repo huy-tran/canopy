@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-19
+
 - On Linux, Canopy now shows up in the app launcher (Super + Space on Omarchy) with its logo.
 
 ## [0.24.0] - 2026-10-15
@@ -248,6 +250,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.24.1]: https://github.com/huy-tran/canopy/releases/tag/v0.24.1
 [0.24.0]: https://github.com/huy-tran/canopy/releases/tag/v0.24.0
 [0.23.2]: https://github.com/huy-tran/canopy/releases/tag/v0.23.2
 [0.23.1]: https://github.com/huy-tran/canopy/releases/tag/v0.23.1
