@@ -13,6 +13,8 @@ export interface TermHooks {
   onImageHover(sid: string, n: number | null, x: number, y: number): void
   onImageClick(sid: string, n: number): void
   onFocus(sid: string): void
+  /** True when typed input was handled by the app and must not reach the terminal. */
+  onInput(sid: string, d: string): boolean
   openUrl(url: string): void
 }
 
@@ -211,7 +213,9 @@ export function ensureTerminal(sid: string): Entry {
   term.registerLinkProvider(linkProvider(sid, term))
   const el = document.createElement('div')
   el.style.cssText = 'width:100%;height:100%;'
-  term.onData(d => api.pty.write(sid, d))
+  term.onData((d) => {
+    if (!hooks?.onInput(sid, d)) api.pty.write(sid, d)
+  })
   // Claude redraws its whole screen on every resize, so dragging a pane edge only tells it the size it settles on.
   let resizeT: ReturnType<typeof setTimeout> | undefined
   term.onResize(({ cols, rows }) => {

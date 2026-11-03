@@ -133,6 +133,13 @@ export default defineNuxtPlugin({
         const s = S.byId(sid)
         if (s && S.focusedId(s.pid) !== sid) S.setFocus(s.pid, sid)
       },
+      // Enter in an ended Claude pane brings the conversation back.
+      onInput: (sid, d) => {
+        const s = S.byId(sid)
+        if (!s?.exited || s.kind !== 'claude') return false
+        if (d === '\r') S.resume(sid)
+        return true
+      },
       openUrl: url => api.sys.openExternal(url),
     })
 

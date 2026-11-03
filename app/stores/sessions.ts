@@ -189,6 +189,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     await api.pty.spawn({ id, cwd, cmd: s.cmd, cols, rows })
   }
 
+  /** Restarts an ended Claude session in place, resuming its conversation. */
+  async function resume(id: string) {
+    const s = byId(id)
+    if (!s || s.kind !== 'claude' || !s.exited) return
+    const cmd = resumeCmd(s.cmd, s.claudeId)
+    patch(id, { cmd, exited: false, status: 'idle', endedAt: null })
+    writeToTerminal(id, '\r\n')
+    const { cols, rows } = terminalSize(id)
+    try {
+      await api.pty.spawn({ id, cwd: s.cwd, cmd, cols, rows })
+    } catch (e) {
+      patch(id, { exited: true, endedAt: Date.now() })
+      writeToTerminal(id, `\r\n\x1b[31mCould not resume "${cmd}": ${errMessage(e)}\x1b[0m\r\n`)
+    }
+  }
+
   // ---------- Saved across restarts ----------
 
   /** What is saved so open sessions and shells can be reopened after a restart. */
@@ -236,7 +252,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
     setSubagents(id, [])
-    writeToTerminal(id, `\r\n\x1b[2m[Claude Code exited · code ${code}]\x1b[0m\r\n`)
+    writeToTerminal(id, `\r\n\x1b[2m[Claude Code exited · code ${code} · press Enter to resume]\x1b[0m\r\n`)
     patch(id, { exited: true, status: s.status === 'working' || s.status === 'waiting' ? 'done' : s.status, endedAt: s.endedAt || Date.now() })
   }
 
@@ -355,6 +371,6 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   return {
     sessions, focus, permAction, subagents, chatter, activity, shells, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
-    start, startShell, close, respawn, onUsage, onExit, onHook, addImage, removeImage, saved, reopen,
+    start, startShell, close, respawn, resume, onUsage, onExit, onHook, addImage, removeImage, saved, reopen,
   }
 })
