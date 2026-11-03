@@ -132,6 +132,13 @@ watch(() => props.focused, (f) => {
       <div ref="host" class="h-full w-full" />
     </div>
 
+    <div v-if="s.exited" class="flex flex-none items-center gap-2.5 border-t border-(--ln2) bg-(--head) px-3.5 py-1.5 text-[12px] text-(--mu)">
+      <span class="flex-1">{{ isShell ? 'Shell ended' : 'Claude Code ended' }}</span>
+      <UButton color="primary" variant="solid" size="xs" class="h-[22px] px-2.5 text-[11.5px]" @click.stop="S.resume(s.id)">
+        {{ isShell ? 'Restart' : 'Resume' }} (Enter)
+      </UButton>
+    </div>
+
     <div class="mono flex flex-none items-center gap-[5px] overflow-hidden whitespace-nowrap px-3.5 pb-1.5 pt-[5px] text-[12px]">
       <UTooltip text="Repo folder">
         <span class="flex h-[21px] flex-none items-center gap-[5px] rounded-sm px-1.5 text-(--tx2)" :style="{ background: `color-mix(in oklch, ${pcol(p.hue)} 16%, transparent)` }">

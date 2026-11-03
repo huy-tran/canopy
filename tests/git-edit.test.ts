@@ -42,6 +42,13 @@ describe('editing files', () => {
     expect(readForEdit(dir, '../escape.txt').ok).toBe(false)
   })
 
+  it('flags files that mix line endings', () => {
+    fs.writeFileSync(path.join(dir, 'm.txt'), 'a\r\nb\nc\r\n')
+    expect(readForEdit(dir, 'm.txt')).toMatchObject({ ok: true, mixed: true })
+    fs.writeFileSync(path.join(dir, 'n.txt'), 'a\r\nb\r\n')
+    expect(readForEdit(dir, 'n.txt').mixed).toBe(false)
+  })
+
   it('does not edit binary files', () => {
     fs.writeFileSync(path.join(dir, 'b.bin'), Buffer.from([1, 0, 2]))
     expect(readForEdit(dir, 'b.bin')).toMatchObject({ ok: false, error: 'Binary file.' })

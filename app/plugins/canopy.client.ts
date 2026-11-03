@@ -133,10 +133,10 @@ export default defineNuxtPlugin({
         const s = S.byId(sid)
         if (s && S.focusedId(s.pid) !== sid) S.setFocus(s.pid, sid)
       },
-      // Enter in an ended Claude pane brings the conversation back.
+      // Enter in an ended pane brings it back: the Claude conversation, or a fresh shell.
       onInput: (sid, d) => {
         const s = S.byId(sid)
-        if (!s?.exited || s.kind !== 'claude') return false
+        if (!s?.exited) return false
         if (d === '\r') S.resume(sid)
         return true
       },

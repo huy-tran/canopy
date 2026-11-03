@@ -208,7 +208,7 @@ export function readFile(cwd: string, file: string): string {
 const EDIT_MAX = 1024 * 1024
 
 /** A file's text for editing, with its modified time so a later save can tell if it changed meanwhile. */
-export function readForEdit(cwd: string, file: string): { ok: boolean; text?: string; mtime?: number; eol?: string; error?: string } {
+export function readForEdit(cwd: string, file: string): { ok: boolean; text?: string; mtime?: number; eol?: string; mixed?: boolean; error?: string } {
   const full = path.join(cwd, file)
   if (!isInside(cwd, full)) return { ok: false, error: 'Not a file of this project.' }
   try {
@@ -218,7 +218,7 @@ export function readForEdit(cwd: string, file: string): { ok: boolean; text?: st
     const buf = fs.readFileSync(full)
     if (buf.subarray(0, 8000).includes(0)) return { ok: false, error: 'Binary file.' }
     const text = buf.toString('utf8')
-    return { ok: true, text: text.replace(/\r\n/g, '\n'), mtime: st.mtimeMs, eol: text.includes('\r\n') ? '\r\n' : '\n' }
+    return { ok: true, text: text.replace(/\r\n/g, '\n'), mtime: st.mtimeMs, eol: text.includes('\r\n') ? '\r\n' : '\n', mixed: text.includes('\r\n') && /(^|[^\r])\n/.test(text) }
   } catch (e) {
     return { ok: false, error: errMessage(e) }
   }

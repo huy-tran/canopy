@@ -119,7 +119,7 @@ export interface CanopyApi {
     diff(cwd: string, file: string): Promise<string>
     read(cwd: string, file: string): Promise<string>
     /** A file's text for editing, with the modified time `writeEdit` checks. */
-    readEdit(cwd: string, file: string): Promise<{ ok: boolean; text?: string; mtime?: number; eol?: string; error?: string }>
+    readEdit(cwd: string, file: string): Promise<{ ok: boolean; text?: string; mtime?: number; eol?: string; mixed?: boolean; error?: string }>
     /** Saves an existing file; `changed` is set when it was modified on disk since `mtime`. */
     writeEdit(cwd: string, file: string, text: string, mtime: number, eol: string): Promise<{ ok: boolean; mtime?: number; changed?: boolean; error?: string }>
     worktreeAdd(repo: string, base: string, slug: string): Promise<{ path: string; branch: string }>

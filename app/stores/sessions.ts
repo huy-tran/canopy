@@ -189,15 +189,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     await api.pty.spawn({ id, cwd, cmd: s.cmd, cols, rows })
   }
 
-  /** Restarts an ended Claude session in place, resuming its conversation. */
+  /** Restarts an ended pane in place: Claude resumes its conversation, a shell starts fresh in the same folder. */
   async function resume(id: string) {
     const s = byId(id)
-    if (!s || s.kind !== 'claude' || !s.exited) return
-    const cmd = resumeCmd(s.cmd, s.claudeId)
+    if (!s || !s.exited) return
+    const shell = s.kind === 'shell'
+    const cmd = shell ? '' : resumeCmd(s.cmd, s.claudeId)
     patch(id, { cmd, exited: false, status: 'idle', endedAt: null })
     writeToTerminal(id, '\r\n')
     const { cols, rows } = terminalSize(id)
     try {
+      if (shell) {
+        if (!api.pty.shell) throw new Error('Restart Canopy to use shells.')
+        await api.pty.shell({ id, cwd: s.cwd, kind: s.shell || 'powershell', cols, rows })
+        return
+      }
       await api.pty.spawn({ id, cwd: s.cwd, cmd, cols, rows })
     } catch (e) {
       patch(id, { exited: true, endedAt: Date.now() })
@@ -247,7 +253,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     if (s.kind === 'shell') {
-      writeToTerminal(id, `\r\n\x1b[2m[${shellLabel(s.shell)} exited · code ${code}]\x1b[0m\r\n`)
+      writeToTerminal(id, `\r\n\x1b[2m[${shellLabel(s.shell)} exited · code ${code} · press Enter to restart]\x1b[0m\r\n`)
       patch(id, { exited: true, endedAt: Date.now() })
       return
     }

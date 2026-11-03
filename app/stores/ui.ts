@@ -271,7 +271,19 @@ export const useUiStore = defineStore('ui', () => {
     focusLater()
   }
 
+  /** The session a first close was asked for, so a second close within a few seconds goes through. */
+  let closeAsked: { sid: string; at: number } | null = null
+
+  /** Closing a pane that is still working asks twice, so one stray click or key doesn't end it. */
   function closeSession(sid: string) {
+    const s = S.byId(sid)
+    const live = !!s && !s.exited && (s.status === 'working' || s.status === 'waiting')
+    if (live && !(closeAsked?.sid === sid && Date.now() - closeAsked.at < 4000)) {
+      closeAsked = { sid, at: Date.now() }
+      toast({ title: 'This session is still working', body: 'Close it again to end it.', hue: P.byId(s.pid)?.hue })
+      return
+    }
+    closeAsked = null
     S.close(sid)
     focusLater()
   }

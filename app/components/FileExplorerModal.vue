@@ -18,13 +18,22 @@ const prefs = usePrefsStore()
 const SLB: Record<string, string> = { M: 'Modified', A: 'Added', D: 'Deleted' }
 const SCc: Record<string, string> = { M: 'var(--amb)', A: 'var(--grn)', D: 'var(--red)' }
 
+function closeNow() {
+  ui.explorer = null
+  ui.focusLater()
+}
+
 const open = computed({
   get: () => !!ui.explorer,
   set: (v: boolean) => {
     if (!v) {
-      if (!discardEdits()) return
-      ui.explorer = null
-      ui.focusLater()
+      if (editing.value && editDirty.value) {
+        leaveEdit().then((ok) => {
+          if (ok) closeNow()
+        })
+        return
+      }
+      closeNow()
     }
   },
 })
@@ -45,12 +54,37 @@ const cache = new Map<string, string>()
 const editing = ref(false)
 const editDirty = ref(false)
 const editor = ref<{ save(): Promise<boolean> } | null>(null)
-let editPath = ''
+const editPath = ref('')
+/** The view to go back to when editing ends. */
+let viewBefore: 'diff' | 'file' = 'diff'
 
-/** True when it is fine to leave the editor: nothing unsaved, or the user agreed to lose it. */
-function discardEdits() {
+// A question shown above the preview, answered with a button (instead of a system dialog).
+interface AskBtn { label: string; value: string; primary?: boolean }
+interface Asking { text: string; buttons: AskBtn[]; resolve: (v: string) => void }
+const asking = ref<Asking | null>(null)
+function ask(text: string, buttons: AskBtn[]) {
+  return new Promise<string>((resolve) => {
+    asking.value?.resolve('cancel')
+    asking.value = { text, buttons, resolve }
+  })
+}
+function answer(v: string) {
+  const a = asking.value
+  asking.value = null
+  a?.resolve(v)
+  refocus()
+}
+
+/** True when it is fine to leave the editor: nothing unsaved, or saved, or the user chose to lose it. */
+async function leaveEdit(): Promise<boolean> {
   if (!editing.value || !editDirty.value) return true
-  if (!confirm(`Discard unsaved changes to ${editPath}?`)) return false
+  const a = await ask(`Unsaved changes to ${editPath.value}.`, [
+    { label: 'Save', value: 'save', primary: true },
+    { label: 'Discard', value: 'discard' },
+    { label: 'Cancel', value: 'cancel' },
+  ])
+  if (a === 'cancel') return false
+  if (a === 'save') return !!(await editor.value?.save())
   editDirty.value = false
   return true
 }
@@ -58,14 +92,16 @@ function discardEdits() {
 function startEdit() {
   const s = cur.value
   if (s?.type !== 'file') return
-  editPath = s.path
+  editPath.value = s.path
+  viewBefore = view.value
   view.value = 'file'
   editing.value = true
 }
 
-function stopEdit() {
-  if (!discardEdits()) return
+async function stopEdit() {
+  if (!(await leaveEdit())) return
   editing.value = false
+  view.value = viewBefore
   refocus()
 }
 
@@ -249,6 +285,7 @@ const baseRows = computed(() => {
     const cut = row.path.lastIndexOf('/') + 1, bn = row.path.slice(cut), dn = row.path.slice(0, Math.max(0, cut - 1))
     const showDir = mode.value !== 'files' && !!dn
     const col = c ? SCc[c.st]! : 'var(--tx)'
+    const unsaved = editing.value && editDirty.value && row.path === editPath.value
     return {
       ...b,
       chev: '',
@@ -256,9 +293,9 @@ const baseRows = computed(() => {
       base: hiSegs(bn, cut, row.idx, col, 400),
       dir: showDir ? hiSegs(dn, 0, row.idx, 'var(--fa)', 400) : [],
       c,
-      stLetter: c ? c.st : '',
-      stColor: c ? SCc[c.st]! : 'transparent',
-      stSize: '11px',
+      stLetter: unsaved ? '●' : c ? c.st : '',
+      stColor: unsaved ? 'var(--amb)' : c ? SCc[c.st]! : 'transparent',
+      stSize: unsaved ? '8px' : '11px',
     }
   })
 })
@@ -309,8 +346,10 @@ const tabItems = computed(() => [
 const repoModel = computed({
   get: () => ex.value?.repoId || '',
   set: (id: string) => {
-    if (ex.value && id !== ex.value.repoId) ui.openExplorer(ex.value.tab, id)
-    refocus()
+    leaveEdit().then((ok) => {
+      if (ok && ex.value && id !== ex.value.repoId) ui.openExplorer(ex.value.tab, id)
+      refocus()
+    })
   },
 })
 const repoItems = computed(() => (proj.value?.repos || []).map(r => ({ label: r.label, value: r.id })))
@@ -367,6 +406,14 @@ const diffMode = computed(() => !!selChg.value && view.value !== 'file')
 const lockedBy = computed(() => {
   const s = cur.value
   return s?.type === 'file' ? sessHere.value.find(x => x.editing === s.path) || null : null
+})
+/** Why the selected file can't be edited, or '' when it can. */
+const noEdit = computed(() => {
+  if (lockedBy.value) return 'Claude is editing this file right now'
+  if (selChg.value?.st === 'D') return 'This file was deleted'
+  const l = preview.value
+  if (l.length === 1 && /^(Binary file|File is too large)/.test(l[0]!.t)) return l[0]!.t
+  return ''
 })
 const editingBy = computed(() => {
   const s = cur.value
@@ -425,7 +472,9 @@ watch(() => [cwd.value, cur.value?.type, cur.value?.path, diffMode.value, status
   // Fresh git status means files may have changed on disk.
   if (ov && nv[4] !== ov[4]) cache.clear()
   clearTimeout(prevTimer)
-  prevTimer = setTimeout(loadPreview, preview.value.length ? 50 : 0)
+  prevTimer = setTimeout(() => {
+    if (!editing.value) loadPreview()
+  }, preview.value.length ? 50 : 0)
 }, { immediate: true })
 
 onBeforeUnmount(() => clearTimeout(prevTimer))
@@ -439,13 +488,14 @@ const dirInfo = computed(() => {
 })
 
 // Selecting another file while editing asks first, and goes back to the edited one when declined.
-watch(() => cur.value?.path, (p) => {
-  if (!editing.value || p === editPath) return
-  if (discardEdits()) {
+watch(() => cur.value?.path, async (p) => {
+  if (!editing.value || p === editPath.value) return
+  if (await leaveEdit()) {
     editing.value = false
+    view.value = viewBefore
     return
   }
-  const i = rows.value.findIndex(r => r.path === editPath)
+  const i = rows.value.findIndex(r => r.path === editPath.value)
   if (i >= 0) sel.value = i
 })
 
@@ -460,6 +510,39 @@ async function openFile(path: string) {
   const res = await api.sys.openEditor(p.editor, cwd.value, full)
   if (res.ok) ui.toast({ title: `Opening ${path.split('/').pop()} in ${p.editor}`, body: full, hue: p.hue })
   else ui.toast({ title: `Could not open ${p.editor}`, body: res.error, error: true })
+}
+
+/** The whole file (not just the lines drawn so far) to the clipboard. */
+async function copyContent() {
+  const s = cur.value, c = cwd.value
+  if (!s || s.type !== 'file') return
+  try {
+    await navigator.clipboard.writeText((await fetchText('file', c, s.path)).replace(/\r\n/g, '\n'))
+    ui.toast({ title: 'File copied', body: s.path, hue: proj.value?.hue })
+    refocus()
+  } catch (e) {
+    ui.toast({ title: 'Could not copy', body: errMessage(e), error: true })
+  }
+}
+
+/** Ctrl A in the preview selects the file's text only, not the whole window. */
+const previewEl = ref<HTMLElement | null>(null)
+function selectPreview(e: KeyboardEvent) {
+  // Moving through files works from here too: hand those keys back to the search box.
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(e.key)) {
+    onKey(e)
+    refocus()
+    return
+  }
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.code !== 'KeyA') return
+  const el = previewEl.value
+  if (!el) return
+  e.preventDefault()
+  const r = document.createRange()
+  r.selectNodeContents(el)
+  const sel = window.getSelection()
+  sel?.removeAllRanges()
+  sel?.addRange(r)
 }
 
 function copyPath(path: string) {
@@ -501,6 +584,7 @@ function actShell() {
 
 function clickRow(i: number, row: Row) {
   sel.value = i
+  refocus()
   if (row.type === 'dir') toggleFolder(row.path)
 }
 
@@ -514,6 +598,11 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'Tab') {
     e.preventDefault()
     setTab(ex.value?.tab === 'changes' ? 'files' : 'changes')
+    return
+  }
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS' && editing.value) {
+    e.preventDefault()
+    editor.value?.save()
     return
   }
   if (e.ctrlKey && !e.altKey && e.code === 'KeyI') {
@@ -795,6 +884,21 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
             <div class="absolute inset-y-0 -left-[3px] -right-[3px] group-hover:bg-(--lnk)/40" />
           </div>
           <div v-if="showPreview" class="flex min-w-0 flex-1 flex-col">
+            <div v-if="asking" class="flex flex-wrap items-center gap-2 border-b border-(--ln2) bg-(--pbg) px-[14px] py-2 text-[12px] text-(--tx)">
+              <span class="min-w-0 flex-1">{{ asking.text }}</span>
+              <UButton
+                v-for="b in asking.buttons"
+                :key="b.value"
+                :color="b.primary ? 'primary' : 'neutral'"
+                :variant="b.primary ? 'solid' : 'outline'"
+                size="xs"
+                class="h-[24px] px-2.5 text-[11.5px]"
+                @mousedown.prevent
+                @click="answer(b.value)"
+              >
+                {{ b.label }}
+              </UButton>
+            </div>
             <template v-if="cur && cur.type === 'file'">
               <div class="flex min-h-[24px] items-center gap-2.5 border-b border-(--ln2) py-2 pr-3 pl-[14px]">
                 <span class="mono min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] text-(--tx2)">{{ cur.path }}</span>
@@ -811,7 +915,18 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                     <UIcon name="i-hugeicons-text-wrap" class="size-3.5" />
                   </UButton>
                 </UTooltip>
-                <UTooltip :text="lockedBy ? 'Claude is editing this file right now' : 'Edit this file here'">
+                <UTooltip v-if="!editing" text="Copy the whole file">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    class="size-6 flex-none justify-center p-0 text-(--fa)"
+                    @mousedown.prevent
+                    @click="copyContent"
+                  >
+                    <UIcon name="i-hugeicons-copy-01" class="size-3.5" />
+                  </UButton>
+                </UTooltip>
+                <UTooltip :text="noEdit || 'Edit this file here'">
                   <UButton
                     v-if="!editing"
                     color="neutral"
@@ -819,7 +934,7 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                     size="xs"
                     class="h-[22px] flex-none gap-1.5 px-2 text-[11px]"
                     icon="i-hugeicons-edit-02"
-                    :disabled="!!lockedBy"
+                    :disabled="!!noEdit"
                     @mousedown.prevent
                     @click="startEdit"
                   >
@@ -841,13 +956,15 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                 :cwd="cwd"
                 :path="editPath"
                 :wrap="lay.wrap"
+                :stamp="status?.at"
+                :ask="ask"
                 @saved="onSaved"
                 @close="stopEdit"
               />
               <div v-if="editingBy && !editing" class="overflow-hidden text-ellipsis whitespace-nowrap border-b border-(--ln2) px-[14px] py-1.5 text-[11.5px] text-(--lnk)">
                 {{ editingBy }}
               </div>
-              <div v-if="!editing" class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 text-[12px] leading-[1.6]">
+              <div v-if="!editing" ref="previewEl" tabindex="0" class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 outline-none text-[12px] leading-[1.6]" @keydown="selectPreview">
                 <div v-for="(ln, k) in previewShown" :key="k" class="flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
                   <span class="w-11 flex-none select-none pr-2.5 text-right text-(--fa)">{{ ln.n }}</span>
                   <span class="w-4 flex-none select-none" :style="{ color: ln.sc }">{{ ln.sign }}</span>

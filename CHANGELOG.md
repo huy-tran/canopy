@@ -4,6 +4,9 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Files window: Copy button and Ctrl+A now take just the file's text, and the editor warns if the file changed on disk, picks up the file's own indentation, and asks with a bar instead of a pop-up before discarding or overwriting.
+- Ended Claude and shell panes show a Resume / Restart button (or press Enter), and closing a session that is still working asks you to confirm.
+
 ## [0.26.0] - 2026-11-03
 
 - Files can now be edited in the Files window: click Edit on a file, change it and press Ctrl+S to save. Canopy asks before discarding unsaved changes, and before overwriting a file that changed on disk meanwhile.
