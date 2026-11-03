@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- An ended Claude session can now be resumed in place: press Enter in the pane to bring the conversation back.
+
 ## [0.24.1] - 2026-10-19
 
 - On Linux, Canopy now shows up in the app launcher (Super + Space on Omarchy) with its logo.
