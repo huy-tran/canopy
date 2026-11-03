@@ -43,6 +43,8 @@ export function registerWorkspaceIpc() {
   handle('git:files', (p: string, ignored?: boolean) => git.files(p, { ignored: !!ignored }))
   handle('git:diff', (p: string, f: string) => git.diff(p, f))
   handle('git:read', (p: string, f: string) => git.readFile(p, f))
+  handle('git:readEdit', (p: string, f: string) => git.readForEdit(p, f))
+  handle('git:writeEdit', (p: string, f: string, t: string, m: number, eol: string) => git.writeForEdit(p, f, String(t), Number(m), eol))
   handle('git:worktreeAdd', (repo: string, base: string, slug: string) => git.worktreeAdd(repo, base, slug))
   handle('git:merge', async (repo: string, wt: string, branch: string, base: string) => {
     try {

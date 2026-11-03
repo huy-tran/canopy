@@ -205,6 +205,42 @@ export function readFile(cwd: string, file: string): string {
   }
 }
 
+const EDIT_MAX = 1024 * 1024
+
+/** A file's text for editing, with its modified time so a later save can tell if it changed meanwhile. */
+export function readForEdit(cwd: string, file: string): { ok: boolean; text?: string; mtime?: number; eol?: string; error?: string } {
+  const full = path.join(cwd, file)
+  if (!isInside(cwd, full)) return { ok: false, error: 'Not a file of this project.' }
+  try {
+    const st = fs.statSync(full)
+    if (!st.isFile()) return { ok: false, error: 'Not a file.' }
+    if (st.size > EDIT_MAX) return { ok: false, error: `File is too large to edit (${Math.round(st.size / 1024)} KB).` }
+    const buf = fs.readFileSync(full)
+    if (buf.subarray(0, 8000).includes(0)) return { ok: false, error: 'Binary file.' }
+    const text = buf.toString('utf8')
+    return { ok: true, text: text.replace(/\r\n/g, '\n'), mtime: st.mtimeMs, eol: text.includes('\r\n') ? '\r\n' : '\n' }
+  } catch (e) {
+    return { ok: false, error: errMessage(e) }
+  }
+}
+
+/** Saves an existing file of the project. Refuses when it changed on disk since `mtime` (Claude may have written it). */
+export function writeForEdit(cwd: string, file: string, text: string, mtime: number, eol: string): { ok: boolean; mtime?: number; changed?: boolean; error?: string } {
+  const full = path.join(cwd, file)
+  if (!isInside(cwd, full)) return { ok: false, error: 'Not a file of this project.' }
+  // Never write into git's own folder.
+  if (path.relative(path.resolve(cwd), path.resolve(full)).split(path.sep).includes('.git')) return { ok: false, error: 'Files inside .git are not editable.' }
+  try {
+    const st = fs.statSync(full)
+    if (!st.isFile()) return { ok: false, error: 'Not a file.' }
+    if (Math.abs(st.mtimeMs - mtime) > 1) return { ok: false, changed: true, error: 'The file changed on disk since you opened it.' }
+    fs.writeFileSync(full, eol === '\r\n' ? text.replace(/\n/g, '\r\n') : text, 'utf8')
+    return { ok: true, mtime: fs.statSync(full).mtimeMs }
+  } catch (e) {
+    return { ok: false, error: errMessage(e) }
+  }
+}
+
 export async function worktreeAdd(repo: string, base: string, slug: string): Promise<{ path: string; branch: string }> {
   const wtPath = `${repo}.worktrees${path.sep}${safeSegment(slug)}`
   const branch = `wt/${slug}`

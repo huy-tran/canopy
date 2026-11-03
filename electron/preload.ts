@@ -31,6 +31,8 @@ const api: CanopyApi = {
     files: inv('git:files'),
     diff: inv('git:diff'),
     read: inv('git:read'),
+    readEdit: inv('git:readEdit'),
+    writeEdit: inv('git:writeEdit'),
     worktreeAdd: inv('git:worktreeAdd'),
     merge: inv('git:merge'),
     stage: inv('git:stage'),

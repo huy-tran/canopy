@@ -13,6 +13,7 @@ const browserFallback: CanopyApi = {
     info: async () => ({ exists: false, isRepo: false, branch: '', stack: '' }),
     status: async () => ({ isRepo: false, branch: '', changes: [] }),
     files: async () => [], diff: async () => '', read: async () => '',
+    readEdit: async () => ({ ok: false, error: 'Needs the desktop app.' }), writeEdit: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     worktreeAdd: async () => { throw new Error('Worktrees need the desktop app.') },
     merge: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     stage: async () => ({ ok: false, error: 'Needs the desktop app.' }),

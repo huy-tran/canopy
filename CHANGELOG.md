@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Files can now be edited in the Files window: click Edit on a file, change it and press Ctrl+S to save. Canopy asks before discarding unsaved changes, and before overwriting a file that changed on disk meanwhile.
+
 ## [0.25.0] - 2026-11-03
 
 - An ended Claude session can now be resumed in place: press Enter in the pane to bring the conversation back.

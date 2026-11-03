@@ -22,6 +22,7 @@ const open = computed({
   get: () => !!ui.explorer,
   set: (v: boolean) => {
     if (!v) {
+      if (!discardEdits()) return
       ui.explorer = null
       ui.focusLater()
     }
@@ -39,6 +40,39 @@ const input = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 /** Diff and file text for this explorer session, keyed by kind and path. */
 const cache = new Map<string, string>()
+
+/** The file being edited in place, and whether it holds changes not yet saved. */
+const editing = ref(false)
+const editDirty = ref(false)
+const editor = ref<{ save(): Promise<boolean> } | null>(null)
+let editPath = ''
+
+/** True when it is fine to leave the editor: nothing unsaved, or the user agreed to lose it. */
+function discardEdits() {
+  if (!editing.value || !editDirty.value) return true
+  if (!confirm(`Discard unsaved changes to ${editPath}?`)) return false
+  editDirty.value = false
+  return true
+}
+
+function startEdit() {
+  const s = cur.value
+  if (s?.type !== 'file') return
+  editPath = s.path
+  view.value = 'file'
+  editing.value = true
+}
+
+function stopEdit() {
+  if (!discardEdits()) return
+  editing.value = false
+  refocus()
+}
+
+async function onSaved() {
+  cache.clear()
+  await G.refresh(cwd.value)
+}
 
 const ex = computed(() => ui.explorer)
 const cwd = computed(() => ex.value?.cwd || '')
@@ -86,6 +120,8 @@ async function reset() {
   if (!e) return
   const key = `${e.repoId}|${e.cwd}`
   loadKey = key
+  editing.value = false
+  editDirty.value = false
   q.value = ''
   sel.value = 0
   view.value = 'diff'
@@ -328,6 +364,10 @@ let prevTimer: ReturnType<typeof setTimeout> | undefined
 
 const selChg = computed(() => (cur.value?.type === 'file' ? chg.value[cur.value.path] || null : null))
 const diffMode = computed(() => !!selChg.value && view.value !== 'file')
+const lockedBy = computed(() => {
+  const s = cur.value
+  return s?.type === 'file' ? sessHere.value.find(x => x.editing === s.path) || null : null
+})
 const editingBy = computed(() => {
   const s = cur.value
   if (!s || s.type !== 'file') return null
@@ -396,6 +436,17 @@ const dirInfo = computed(() => {
   const inside = allFiles.value.filter(f => f.startsWith(s.path + '/')).length
   const nch = changes.value.filter(c => c.p.startsWith(s.path + '/'))
   return { path: s.path + '/', text: `${inside} files · ${nch.length} changed`, list: nch.map(c => ({ p: c.p.slice(s.path.length + 1), st: c.st, color: SCc[c.st]! })) }
+})
+
+// Selecting another file while editing asks first, and goes back to the edited one when declined.
+watch(() => cur.value?.path, (p) => {
+  if (!editing.value || p === editPath) return
+  if (discardEdits()) {
+    editing.value = false
+    return
+  }
+  const i = rows.value.findIndex(r => r.path === editPath)
+  if (i >= 0) sel.value = i
 })
 
 // ---------- Actions ----------
@@ -760,18 +811,43 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                     <UIcon name="i-hugeicons-text-wrap" class="size-3.5" />
                   </UButton>
                 </UTooltip>
+                <UTooltip :text="lockedBy ? 'Claude is editing this file right now' : 'Edit this file here'">
+                  <UButton
+                    v-if="!editing"
+                    color="neutral"
+                    variant="outline"
+                    size="xs"
+                    class="h-[22px] flex-none gap-1.5 px-2 text-[11px]"
+                    icon="i-hugeicons-edit-02"
+                    :disabled="!!lockedBy"
+                    @mousedown.prevent
+                    @click="startEdit"
+                  >
+                    Edit
+                  </UButton>
+                </UTooltip>
                 <template v-if="selChg">
                   <span class="whitespace-nowrap text-[11px]" :style="{ color: SCc[selChg.st] }">{{ SLB[selChg.st] }}{{ selChg.staged ? ' · staged' : '' }}</span>
                   <span class="mono whitespace-nowrap text-[11px] text-(--mu)">+{{ selChg.a }} −{{ selChg.d }}</span>
-                  <span @mousedown.prevent>
+                  <span v-if="!editing" @mousedown.prevent>
                     <Seg v-model="viewModel" :items="viewItems" size="sm" />
                   </span>
                 </template>
               </div>
-              <div v-if="editingBy" class="overflow-hidden text-ellipsis whitespace-nowrap border-b border-(--ln2) px-[14px] py-1.5 text-[11.5px] text-(--lnk)">
+              <FileEditor
+                v-if="editing"
+                ref="editor"
+                v-model:dirty="editDirty"
+                :cwd="cwd"
+                :path="editPath"
+                :wrap="lay.wrap"
+                @saved="onSaved"
+                @close="stopEdit"
+              />
+              <div v-if="editingBy && !editing" class="overflow-hidden text-ellipsis whitespace-nowrap border-b border-(--ln2) px-[14px] py-1.5 text-[11.5px] text-(--lnk)">
                 {{ editingBy }}
               </div>
-              <div class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 text-[12px] leading-[1.6]">
+              <div v-if="!editing" class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 text-[12px] leading-[1.6]">
                 <div v-for="(ln, k) in previewShown" :key="k" class="flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
                   <span class="w-11 flex-none select-none pr-2.5 text-right text-(--fa)">{{ ln.n }}</span>
                   <span class="w-4 flex-none select-none" :style="{ color: ln.sc }">{{ ln.sign }}</span>
