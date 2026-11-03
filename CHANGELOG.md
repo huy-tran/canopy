@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-03
+
 - Files can now be edited in the Files window: click Edit on a file, change it and press Ctrl+S to save. Canopy asks before discarding unsaved changes, and before overwriting a file that changed on disk meanwhile.
 
 ## [0.25.0] - 2026-11-03
@@ -256,6 +258,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.26.0]: https://github.com/huy-tran/canopy/releases/tag/v0.26.0
 [0.25.0]: https://github.com/huy-tran/canopy/releases/tag/v0.25.0
 [0.24.1]: https://github.com/huy-tran/canopy/releases/tag/v0.24.1
 [0.24.0]: https://github.com/huy-tran/canopy/releases/tag/v0.24.0
