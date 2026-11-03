@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-11-03
+
 - Files window: Copy button and Ctrl+A now take just the file's text, and the editor warns if the file changed on disk, picks up the file's own indentation, and asks with a bar instead of a pop-up before discarding or overwriting.
 - Ended Claude and shell panes show a Resume / Restart button (or press Enter), and closing a session that is still working asks you to confirm.
 
@@ -261,6 +263,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.26.1]: https://github.com/huy-tran/canopy/releases/tag/v0.26.1
 [0.26.0]: https://github.com/huy-tran/canopy/releases/tag/v0.26.0
 [0.25.0]: https://github.com/huy-tran/canopy/releases/tag/v0.25.0
 [0.24.1]: https://github.com/huy-tran/canopy/releases/tag/v0.24.1
