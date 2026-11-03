@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-03
+
 - An ended Claude session can now be resumed in place: press Enter in the pane to bring the conversation back.
 
 ## [0.24.1] - 2026-10-19
@@ -252,6 +254,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.25.0]: https://github.com/huy-tran/canopy/releases/tag/v0.25.0
 [0.24.1]: https://github.com/huy-tran/canopy/releases/tag/v0.24.1
 [0.24.0]: https://github.com/huy-tran/canopy/releases/tag/v0.24.0
 [0.23.2]: https://github.com/huy-tran/canopy/releases/tag/v0.23.2
