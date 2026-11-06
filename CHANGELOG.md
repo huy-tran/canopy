@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-06
+
 - SSH connections: a new SSH window (Ctrl+Shift+S, or the button next to AWS) with saved profiles, colored groups, search and recent sessions. Open sessions are tabs you switch like Claude tabs, Ctrl+W ends one and Ctrl+Shift+W ends them all, and a finished session closes itself. Passwords are kept in the system keychain.
 - Import SSH profiles from Tabby (groups, keys and passwords), PuTTY and ~/.ssh/config.
 - Projects get their color automatically from their name, so the Color picker is gone, and the sidebar lists your recently opened projects.
@@ -267,6 +269,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.27.0]: https://github.com/huy-tran/canopy/releases/tag/v0.27.0
 [0.26.1]: https://github.com/huy-tran/canopy/releases/tag/v0.26.1
 [0.26.0]: https://github.com/huy-tran/canopy/releases/tag/v0.26.0
 [0.25.0]: https://github.com/huy-tran/canopy/releases/tag/v0.25.0
