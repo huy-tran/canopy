@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- SSH connections: a new SSH window (Ctrl+Shift+S, or the button next to AWS) with saved profiles, colored groups, search and recent sessions. Open sessions are tabs you switch like Claude tabs, Ctrl+W ends one and Ctrl+Shift+W ends them all, and a finished session closes itself. Passwords are kept in the system keychain.
+- Import SSH profiles from Tabby (groups, keys and passwords), PuTTY and ~/.ssh/config.
+- Projects get their color automatically from their name, so the Color picker is gone, and the sidebar lists your recently opened projects.
+
 ## [0.26.1] - 2026-11-03
 
 - Files window: Copy button and Ctrl+A now take just the file's text, and the editor warns if the file changed on disk, picks up the file's own indentation, and asks with a bar instead of a pop-up before discarding or overwriting.
