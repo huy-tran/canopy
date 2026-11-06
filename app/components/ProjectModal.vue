@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { Editor, Project, Repo, RepoInfo } from '#shared/types'
+import { hueOf } from '#shared/color'
 import { isWin } from '~/utils/platform'
 
 interface Draft {
   pid: string | null
   name: string
-  hue: number
   repos: Repo[]
   autoStart: boolean
   autoServices: boolean
@@ -56,15 +56,13 @@ watch(() => ui.projectModal, (m, prev) => {
       return
     }
     draft.value = {
-      pid: p.id, name: p.name, hue: p.hue,
+      pid: p.id, name: p.name,
       repos: p.repos.map(r => ({ ...r, services: (r.services || []).map(v => ({ ...v })) })),
       autoStart: p.autoStart, autoServices: !!p.autoServices, resume: p.resume, editor: p.editor,
     }
   } else {
-    const used = P.projects.map(p => p.hue)
-    const hue = HUES.find(h => !used.includes(h)) ?? 140
     draft.value = {
-      pid: null, name: '', hue, repos: [emptyRepo()],
+      pid: null, name: '', repos: [emptyRepo()],
       autoStart: true, autoServices: true, resume: true, editor: prefs.prefs.editor,
     }
   }
@@ -233,11 +231,13 @@ async function save() {
       services: (r.services || []).filter(v => (v.cmd || '').trim()).map(v => ({ id: v.id || uid('v'), cmd: v.cmd.trim(), port: String(v.port || '').replace(/[^0-9]/g, '') })),
     }
   })
-  const fields = { name: d.name.trim(), hue: d.hue, repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor }
+  const fields = { name: d.name.trim(), repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor }
 
   if (mode.value === 'add') {
     const p: Project = {
       id: uid('p'), ...fields,
+      // The colour comes from the name, kept clear of the other projects' colours.
+      hue: hueOf(fields.name, P.projects.map(x => x.hue)),
       layout: repos.length > 1 && ui.width >= 900 ? 'split' : 'tabs',
       view: 'terminals', expanded: true, createdAt: Date.now(),
     }
@@ -258,7 +258,9 @@ async function save() {
   const added = repos.filter(r => !old.repos.some(o => o.id === r.id))
   const svcKeep = new Set(repos.flatMap(r => r.services.map(v => v.id)))
   V.ofProject(old).filter(v => !svcKeep.has(v.id)).forEach(v => V.forget(v.id))
-  P.update(old.id, p => ({ ...p, ...fields }))
+  // A renamed project gets the colour of its new name; otherwise it keeps its own.
+  const hue = fields.name === old.name ? old.hue : hueOf(fields.name, P.projects.filter(x => x.id !== old.id).map(x => x.hue))
+  P.update(old.id, p => ({ ...p, ...fields, hue }))
   S.sessions.filter(s => s.pid === old.id).filter(s => !keep.has(s.repoId)).forEach(s => S.close(s.id))
   ui.projectModal = null
   P.sel = old.id
@@ -354,20 +356,6 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
                 @update:model-value="setName(String($event))"
               />
             </UFormField>
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <span class="text-[12px] text-(--tx3)">Color</span>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="h in HUES"
-                :key="h"
-                type="button"
-                class="size-[26px] cursor-pointer rounded-md"
-                :style="{ background: pcol(h), boxShadow: h === draft.hue ? '0 0 0 2px var(--modal), 0 0 0 4px var(--tx)' : 'none' }"
-                @click="draft.hue = h"
-              />
-            </div>
           </div>
 
           <div class="flex flex-col gap-2">

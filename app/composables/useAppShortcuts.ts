@@ -15,6 +15,9 @@ function toNuxt(combo: string): string | null {
   return [...mods, k].join('_')
 }
 
+/** The keys that switch and close sessions do the same for the SSH window's tabs. */
+const SSH_TAB_KEYS = new Set(['nextSession', 'prevSession', 'nextProject', 'prevProject', 'paneRight', 'paneLeft', 'closeTerminal', 'closeAll'])
+
 export function useAppShortcuts() {
   const prefs = usePrefsStore()
   const ui = useUiStore()
@@ -29,7 +32,7 @@ export function useAppShortcuts() {
     // Likewise the AWS window.
     if (ui.aws) return id === 'aws' || id === 'quit'
     // And the SSH window.
-    if (ui.ssh) return id === 'ssh' || id === 'quit'
+    if (ui.ssh) return id === 'ssh' || id === 'quit' || SSH_TAB_KEYS.has(id)
     if (ui.explorer) return id === 'files'
     if (ui.palette) return id === 'jump' || id === 'commands'
     return true

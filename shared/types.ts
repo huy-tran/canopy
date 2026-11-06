@@ -28,7 +28,21 @@ export interface SshHost {
   forwards?: SshForward[]
   /** Connect again, a few times, when the connection drops. */
   reconnect?: boolean
+  /** When it was last connected, for the Recent list. */
+  lastUsedAt?: number
 }
+
+/** The outcome of importing from Tabby. */
+export type SshTabbyResult =
+  | { status: 'ok'; hosts: SshHost[]; passwords: number; skipped: number; duplicates: number }
+  /** Tabby's config is locked with its vault passphrase; `wrong` when the one given did not open it. */
+  | { status: 'passphrase'; wrong?: boolean }
+  | { status: 'error'; error: string }
+
+/** The outcome of importing from PuTTY. */
+export type SshPuttyResult =
+  | { status: 'ok'; hosts: SshHost[]; duplicates: number; skipped: number; ppk: number }
+  | { status: 'error'; error: string }
 
 export type SshAuth = 'auto' | 'password' | 'key' | 'agent' | 'interactive'
 
@@ -258,6 +272,8 @@ export interface Project {
   createdAt: number
   /** Pinned to the Starred section at the top of the sidebar. */
   starred?: boolean
+  /** When it was last switched to, for the sidebar's Recent section. */
+  openedAt?: number
 }
 
 export interface Worktree {

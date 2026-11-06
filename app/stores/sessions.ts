@@ -302,6 +302,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     if (s.kind === 'shell') {
+      // An SSH tab whose connection ended cleanly (you typed exit) closes itself; a dropped one stays to show why.
+      if (s.win === 'ssh' && code === 0) return close(id)
       writeToTerminal(id, `\r\n\x1b[2m[${s.sshId ? s.title : shellLabel(s.shell)} exited · code ${code} · press Enter to restart]\x1b[0m\r\n`)
       patch(id, { exited: true, endedAt: Date.now() })
       if (s.sshId && code === 255) scheduleReconnect(id)

@@ -1,5 +1,6 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { SshHost } from '#shared/types'
+import { hueOf } from '#shared/color'
 
 /** "user@host:port" for a connection, as shown beside its name. */
 export function sshDetail(h: SshHost): string {
@@ -33,3 +34,12 @@ export function sshMenu(hosts: SshHost[], pick: (h: SshHost) => void): DropdownM
 export function sshTitle(h: SshHost): string {
   return h.group ? `${h.group} / ${h.name}` : h.name
 }
+
+/** A group's colour, from a checksum of its name like a project's: the same group is always the same hue. Null for no group. */
+export function groupHue(group?: string): number | null {
+  const g = (group || '').trim()
+  return g ? hueOf(g) : null
+}
+
+/** A profile's colour, which is its group's. */
+export const sshHue = (h: { group?: string }) => groupHue(h.group)

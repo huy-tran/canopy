@@ -186,6 +186,25 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
 
     <!-- Starred keeps at most 40% of the height so Projects stays reachable; each scrolls on its own. -->
     <template v-for="sec in sections" :key="sec.key">
+    <!-- Recent: the projects opened last, one click to jump back. It sits between Starred and Projects. -->
+    <div v-if="sec.key === 'projects' && P.recent.length" class="flex flex-none flex-col border-b border-(--ln2)">
+      <div class="flex items-center pb-1 pl-4 pr-3 pt-3.5">
+        <span class="label-caps">Recent</span>
+      </div>
+      <div class="flex flex-col gap-px px-2.5 pb-2.5">
+        <div
+          v-for="p in P.recent"
+          :key="p.id"
+          class="group flex h-[28px] cursor-pointer items-center gap-2 rounded-md pl-1.5 pr-1.5 hover:bg-(--hov)"
+          @click="ui.showProject(p.id)"
+        >
+          <span class="h-2 w-2 flex-none rounded-xs" :style="{ background: pcol(p.hue) }" />
+          <span class="ellipsis flex-1 text-[12.5px]" :style="{ color: ptx(p.hue) }">{{ p.name }}</span>
+          <span v-if="waitingOf(p.id) && pill" class="mono rounded-lg bg-(--ambf) px-1 text-[10px] font-bold text-[#131417]">{{ waitingOf(p.id) }}</span>
+          <span class="mono min-w-8 text-right text-[11px] text-(--fa)">{{ ago(now - (p.openedAt || now)) }}</span>
+        </div>
+      </div>
+    </div>
     <div
       v-if="!sec.starred || starredShown"
       class="flex min-h-0 flex-col"

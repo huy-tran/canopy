@@ -61,7 +61,7 @@ const browserFallback: CanopyApi = {
     s3PickUpload: async () => [],
     onTail: noop,
   } as unknown as AwsApi,
-  ssh: { importConfig: async () => [], pickKey: none, setPassword: none, hasPassword: async () => false },
+  ssh: { importConfig: async () => [], pickKey: none, setPassword: none, hasPassword: async () => false, importTabby: async () => ({ status: 'error', error: 'Needs the desktop app.' }), importPutty: async () => ({ status: 'error', error: 'Needs the desktop app.' }) },
   sys: {
     openExternal: async (u) => { window.open(u, '_blank') }, showInFolder: none, openEditor: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     pickFolder: none, fonts: async () => [], shells: async () => [], info: async () => ({ version: '0.0.0', electron: '-', chromium: '-', node: '-', claudeVersion: '-', claudePath: '-', os: '-' }),

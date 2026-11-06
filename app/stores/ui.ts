@@ -45,6 +45,10 @@ export const useUiStore = defineStore('ui', () => {
   /** The terminal showing in the SSH window, if any, and the profile selected there. */
   const sshTerm = ref<string | null>(null)
   const sshSel = ref<string | null>(null)
+  /** The SSH window is asking whether to end every connection (shown inside the window). */
+  const sshAskCloseAll = ref(false)
+  /** Counts each ask, so the window can bring the question to the front again when it is pressed twice. */
+  const sshAskTick = ref(0)
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -186,7 +190,17 @@ export const useUiStore = defineStore('ui', () => {
     simTarget.value = { kind: 'person', id: next.id, at: Date.now(), follow: true }
   }
 
+  /** Steps through the SSH window's open connections, wrapping at either end. */
+  function cycleSsh(dir: number) {
+    const ids = S.sessions.filter(s => s.win === 'ssh').map(s => s.id)
+    if (!ids.length) return
+    const i = ids.indexOf(sshTerm.value || '')
+    sshTerm.value = ids[i < 0 ? (dir > 0 ? 0 : ids.length - 1) : (i + dir + ids.length) % ids.length]!
+    sshSel.value = null
+  }
+
   function cycle(dir: number) {
+    if (ssh.value) return cycleSsh(dir)
     if (sim.value) return simCycle(dir, true)
     const ss = S.ofProject(P.sel || '')
     if (!ss.length) return
@@ -199,6 +213,7 @@ export const useUiStore = defineStore('ui', () => {
    * and wrapping at either end. Falls back to stepping through projects while no session is open anywhere.
    */
   function cycleProject(dir: number) {
+    if (ssh.value) return cycleSsh(dir)
     if (sim.value) return simCycle(dir, false)
     const ps = P.ordered
     if (!ps.length) return
@@ -297,6 +312,11 @@ export const useUiStore = defineStore('ui', () => {
 
   /** Closes the shell in view while the dock panel has focus, else the focused pane. */
   function closeTerminal() {
+    // In the SSH window: end the connection in view; its neighbour tab takes over.
+    if (ssh.value) {
+      if (sshTerm.value) S.close(sshTerm.value)
+      return
+    }
     if ((document.activeElement as HTMLElement | null)?.closest('[data-dock-panel]')) {
       const s = panelShell()
       if (s) closeDockShell(s.id)
@@ -307,15 +327,24 @@ export const useUiStore = defineStore('ui', () => {
 
   /** Closes every pane and docked shell in the selected project, after asking. */
   function closeAll() {
+    // In the SSH window: every connection open there, after asking.
+    if (ssh.value) {
+      if (S.sessions.some(s => s.win === 'ssh')) {
+        sshAskCloseAll.value = true
+        sshAskTick.value++
+      }
+      return
+    }
     const pid = P.sel
-    const n = pid ? S.sessions.filter(s => s.pid === pid).length : 0
+    // SSH connections belong to the SSH window, not to the project they were opened from.
+    const n = pid ? S.sessions.filter(s => s.pid === pid && !s.win).length : 0
     if (!pid || !n) return
     confirm.value = {
       title: `Close all ${n} terminal${n === 1 ? '' : 's'}?`,
       body: `Ends every Claude session and shell in ${P.byId(pid)?.name || 'this project'}.`,
       ok: 'Close all',
       run: () => {
-        S.sessions.filter(s => s.pid === pid).forEach(s => S.close(s.id))
+        S.sessions.filter(s => s.pid === pid && !s.win).forEach(s => S.close(s.id))
         if (P.sel === pid) {
           svcTab.value = V.ofProject(cur.value)[0]?.id || null
           if (!svcTab.value) logsOpen.value = false
@@ -610,6 +639,7 @@ export const useUiStore = defineStore('ui', () => {
     newMenu.value = false
     palette.value = null
     const s = S.startShell(t.p, t.r, { ssh: hostId, win: 'ssh', cwd: t.cwd, branch: t.branch })
+    prefsStore.set({ sshHosts: (prefsStore.prefs.sshHosts || []).map(h => (h.id === hostId ? { ...h, lastUsedAt: Date.now() } : h)) })
     sshTerm.value = s.id
     sshSel.value = null
     ssh.value = true
@@ -797,7 +827,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, sshAskCloseAll, sshAskTick, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,

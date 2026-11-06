@@ -1,5 +1,5 @@
 // The API the preload script exposes as window.canopy.
-import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost } from './types'
+import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshPuttyResult, SshTabbyResult } from './types'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
 /** The AWS calls, one IPC channel each (`aws:<name>`); main and preload are both built from this list. */
@@ -207,6 +207,10 @@ export interface CanopyApi {
     /** Keeps the password (or key passphrase) in the system keychain; null removes it. */
     setPassword(id: string, password: string | null): Promise<void>
     hasPassword(id: string): Promise<boolean>
+    /** Reads Tabby's config (asking for its vault passphrase when locked). Saved passwords go straight to the keychain. */
+    /** Reads PuTTY's saved sessions (the registry on Windows, ~/.putty/sessions elsewhere). */
+    importPutty(o: { existing: { name: string; host: string; user?: string }[] }): Promise<SshPuttyResult>
+    importTabby(o: { passphrase?: string; existing: { name: string; host: string; user?: string }[] }): Promise<SshTabbyResult>
   }
   win: {
     minimize(): Promise<void>

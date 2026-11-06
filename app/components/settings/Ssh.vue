@@ -128,11 +128,12 @@ const FIELD = { base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) r
 
       <div v-for="g in groups" :key="g.group" class="mb-4">
         <div class="mb-1 flex items-center gap-2 border-b border-(--ln2) pb-1">
-          <UIcon name="i-hugeicons-folder-01" class="size-3.5 flex-none text-(--mu)" />
+          <span v-if="g.group" class="h-2.5 w-2.5 flex-none rounded-xs" :style="{ background: pcol(groupHue(g.group)!) }" />
+          <UIcon v-else name="i-hugeicons-folder-01" class="size-3.5 flex-none text-(--mu)" />
           <template v-if="g.group && renaming === g.group">
             <UInput v-model="renameText" autofocus variant="none" :ui="{ root: 'w-[220px]', base: FIELD.base }" @keydown.enter="commitRename" @keydown.esc="renaming = null" @blur="commitRename" />
           </template>
-          <span v-else class="text-[12.5px] font-semibold text-(--tx2)">{{ g.group || 'No group' }}</span>
+          <span v-else class="text-[12.5px] font-semibold" :class="g.group ? '' : 'text-(--tx2)'" :style="g.group ? { color: ptx(groupHue(g.group)!) } : undefined">{{ g.group || 'No group' }}</span>
           <span class="mono text-[11px] text-(--fa)">{{ g.hosts.length }}</span>
           <div class="flex-1" />
           <UButton color="neutral" variant="ghost" size="xs" icon="i-hugeicons-add-01" aria-label="New profile in this group" class="text-(--mu)" @click="add(g.group)" />

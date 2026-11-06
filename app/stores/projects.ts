@@ -12,6 +12,18 @@ export const useProjectsStore = defineStore('projects', () => {
   /** Projects as the sidebar lists them: starred first. Alt 1-9 and the palette follow this order. */
   const ordered = computed(() => [...starred.value, ...unstarred.value])
 
+  /** Switching to a project stamps it, so the sidebar can list the ones opened lately. */
+  watch(sel, (id) => {
+    if (id && projects.value.some(p => p.id === id)) update(id, p => ({ ...p, openedAt: Date.now() }))
+  })
+
+  /** The projects opened most recently, newest first, leaving out the one in view. */
+  const RECENT_MAX = 5
+  const recent = computed(() => projects.value
+    .filter(p => p.openedAt && p.id !== sel.value)
+    .sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))
+    .slice(0, RECENT_MAX))
+
   function byId(id: string | null | undefined) {
     return projects.value.find(p => p.id === id) || null
   }
@@ -53,5 +65,5 @@ export const useProjectsStore = defineStore('projects', () => {
     projects.value = rest
   }
 
-  return { projects, sel, current, starred, unstarred, ordered, byId, repoOf, update, patch, add, remove, toggleStar, move }
+  return { projects, sel, current, starred, unstarred, recent, ordered, byId, repoOf, update, patch, add, remove, toggleStar, move }
 })

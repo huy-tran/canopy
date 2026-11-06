@@ -1,7 +1,5 @@
 // Formatting helpers, ported from the prototype.
 
-export const HUES = [20, 45, 65, 80, 100, 120, 140, 160, 185, 205, 230, 255, 275, 295, 320, 345]
-
 export function k(n: number): string {
   return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n))
 }
