@@ -65,7 +65,7 @@ app.whenReady().then(async () => {
   registerDesktopEntry()
   createWindow()
   ensureTray()
-  applySummonKey(prefs()?.summonKey ?? 'Alt+Space')
+  applySummonKey(prefs()?.summonKey ?? 'Ctrl+Space')
   if (app.isPackaged && prefs()?.autoUpdate !== false) setTimeout(() => checkUpdates().catch(() => undefined), 8000)
 })
 

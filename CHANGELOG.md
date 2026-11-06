@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The default key to summon Canopy is now Ctrl+Space (was Alt+Space). Change it in Settings if you prefer another.
+
 ## [0.28.0] - 2026-11-06
 
 - SSH window: import hosts from a file, either a CSV export (such as Termius) or an ssh config. Passwords are never read from files.

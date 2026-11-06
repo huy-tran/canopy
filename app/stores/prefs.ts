@@ -34,7 +34,7 @@ export const DEFAULT_PREFS: Prefs = {
   showIgnored: false,
   panelDock: 'bottom',
   panelSize: { bottom: 260, right: 460 },
-  summonKey: 'Alt+Space',
+  summonKey: 'Ctrl+Space',
   reviewNotify: true,
   reviewRemind: 60,
   showMetrics: true,
