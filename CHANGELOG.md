@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-06
+
 - SSH window: import hosts from a file, either a CSV export (such as Termius) or an ssh config. Passwords are never read from files.
 
 ## [0.27.0] - 2026-11-06
@@ -271,6 +273,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.28.0]: https://github.com/huy-tran/canopy/releases/tag/v0.28.0
 [0.27.0]: https://github.com/huy-tran/canopy/releases/tag/v0.27.0
 [0.26.1]: https://github.com/huy-tran/canopy/releases/tag/v0.26.1
 [0.26.0]: https://github.com/huy-tran/canopy/releases/tag/v0.26.0
