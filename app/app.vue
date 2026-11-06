@@ -1,21 +1,24 @@
 <script setup lang="ts">
 const ui = useUiStore()
 
-useAppShortcuts()
+// A tool window (GitHub, AWS, SSH) is this same app showing only that tool; see ToolWindow.
+if (toolKind) useToolShortcuts()
+else useAppShortcuts()
 
 // The heaviest windows load their code the first time they open, then stay mounted so they can animate shut.
-const opened = reactive({ gh: false, aws: false, ssh: false, explorer: false, summary: false })
+const opened = reactive({ explorer: false, summary: false })
 watchEffect(() => {
-  if (ui.gh) opened.gh = true
-  if (ui.aws) opened.aws = true
-  if (ui.ssh) opened.ssh = true
   if (ui.explorer) opened.explorer = true
   if (ui.summary) opened.summary = true
 })
 </script>
 
 <template>
-  <UApp :toaster="{ position: 'bottom-right', duration: 3500 }" :tooltip="{ delayDuration: 400 }">
+  <UApp v-if="toolKind" :toaster="{ position: 'bottom-right', duration: 3500 }" :tooltip="{ delayDuration: 400 }">
+    <ToolWindow />
+    <ConfirmModal />
+  </UApp>
+  <UApp v-else :toaster="{ position: 'bottom-right', duration: 3500 }" :tooltip="{ delayDuration: 400 }">
     <div class="relative flex h-screen min-h-[520px] select-none flex-col overflow-hidden bg-(--win) text-(--tx)" style="font-size: 12px">
       <AppTitleBar />
       <UDashboardGroup unit="px" :persistent="false" class="relative inset-auto min-h-0 flex-1">
@@ -43,9 +46,6 @@ watchEffect(() => {
     <CommandPalette />
     <ProjectModal />
     <SessionDetailsModal />
-    <LazyGitHubWindow v-if="opened.gh" />
-    <LazyAwsWindow v-if="opened.aws" />
-    <LazySshWindow v-if="opened.ssh" />
     <LazyFileExplorerModal v-if="opened.explorer" />
     <SettingsModal />
     <AboutModal />

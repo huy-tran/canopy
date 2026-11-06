@@ -7,7 +7,6 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import type { SshHost } from '#shared/types'
 import { comboOf, matchActions } from '#shared/actions'
 import { focusTerminal } from '~/utils/terminals'
-import { simGlassOf } from '~/stores/prefs'
 
 const ui = useUiStore()
 const prefs = usePrefsStore()
@@ -15,17 +14,9 @@ const S = useSessionsStore()
 
 const root = ref<HTMLElement | null>(null)
 const search = useTemplateRef<{ inputRef: HTMLInputElement | null }>('search')
-const glass = computed(() => simGlassOf(prefs.prefs))
 
-const open = computed({
-  get: () => ui.ssh,
-  set: (v: boolean) => {
-    if (!v) {
-      ui.ssh = false
-      ui.focusLater()
-    }
-  },
-})
+/** Showing: the main process says so as the window opens and hides. */
+const open = computed(() => ui.ssh)
 
 function focusSearch() {
   nextTick(() => (search.value?.inputRef || root.value)?.focus())
@@ -239,201 +230,187 @@ useEventListener(window, 'keydown', onKey)
 </script>
 
 <template>
-  <!-- Esc goes back a step instead of closing; the toggle, the X or a click outside closes it. -->
-  <UModal
-    v-model:open="open"
-    :content="{ onEscapeKeyDown: (e: KeyboardEvent) => e.preventDefault() }"
-    :close="false"
-    :ui="{
-      overlay: ui.sim ? 'bg-black/10' : 'bg-(--ovl)',
-      content: 'flex h-[min(88vh,920px)] w-[min(94vw,1320px)] max-w-none flex-col overflow-hidden bg-transparent border border-(--bb) rounded-xl shadow-(--shadow) ring-0 divide-y-0',
-    }"
+  <!-- Esc goes back a step instead of closing; the toggle or the window's X hides it. -->
+  <div
+    ref="root"
+    data-ssh-root
+    tabindex="-1"
+    class="relative flex min-h-0 flex-1 flex-col bg-(--modal) text-(--tx) outline-none"
   >
-    <template #content>
-      <div
-        ref="root"
-        data-ssh-root
-        tabindex="-1"
-        class="relative flex min-h-0 flex-1 flex-col text-(--tx) outline-none"
-        :class="ui.sim ? 'sim-glass' : 'bg-(--modal)'"
-        :style="ui.sim ? { '--glass': glass + '%' } : undefined"
-      >
-        <div class="flex h-10 flex-none items-center gap-2 border-b border-(--ln) pl-3.5 pr-2">
-          <UIcon name="i-hugeicons-computer-terminal-01" class="size-4 text-(--tx2)" />
-          <span class="text-[13px] font-semibold">SSH</span>
-          <span v-if="liveCount" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveCount }} connected</span>
-          <div class="flex-1" />
-          <span class="mono text-[10.5px] text-(--fa)">{{ prefs.kl('ssh') }} to close</span>
-          <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-cancel-01" title="Close" @click="open = false" />
+    <div class="drag flex h-10 flex-none items-center gap-2 border-b border-(--ln) pl-3.5">
+      <UIcon name="i-hugeicons-computer-terminal-01" class="size-4 text-(--tx2)" />
+      <span class="text-[13px] font-semibold">SSH</span>
+      <span v-if="liveCount" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveCount }} connected</span>
+      <div class="flex-1" />
+      <span class="mono text-[10.5px] text-(--fa)">{{ prefs.kl('ssh') }} to close</span>
+      <ToolControls />
+    </div>
+
+    <div class="flex min-h-0 flex-1">
+      <!-- Sidebar -->
+      <div class="flex w-[270px] flex-none flex-col border-r border-(--ln) bg-(--chrome)">
+        <div class="flex flex-col gap-2 p-2.5">
+          <UInput
+            ref="search"
+            v-model="query"
+            icon="i-hugeicons-search-01"
+            placeholder="Search, then Enter to connect"
+            variant="none"
+            :ui="{ root: 'w-full', base: 'h-[30px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)' }"
+            @keydown="onSearchKey"
+          />
+          <div class="flex gap-1.5">
+            <UButton color="primary" size="xs" icon="i-hugeicons-add-01" label="New" class="h-[26px] flex-1 justify-center font-normal" @click="add()" />
+            <UDropdownMenu :items="importItems" :content="{ align: 'end', sideOffset: 4 }" :ui="{ content: 'w-[200px]' }">
+              <UButton color="neutral" variant="outline" size="xs" icon="i-hugeicons-file-import" label="Import" trailing-icon="i-hugeicons-arrow-down-01" class="h-[26px] flex-1 justify-center font-normal" />
+            </UDropdownMenu>
+          </div>
+          <div v-if="note" class="text-[11px] leading-[1.4] text-(--mu)">{{ note }}</div>
         </div>
 
-        <div class="flex min-h-0 flex-1">
-          <!-- Sidebar -->
-          <div class="flex w-[270px] flex-none flex-col border-r border-(--ln) bg-(--chrome)">
-            <div class="flex flex-col gap-2 p-2.5">
-              <UInput
-                ref="search"
-                v-model="query"
-                icon="i-hugeicons-search-01"
-                placeholder="Search, then Enter to connect"
-                variant="none"
-                :ui="{ root: 'w-full', base: 'h-[30px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)' }"
-                @keydown="onSearchKey"
-              />
-              <div class="flex gap-1.5">
-                <UButton color="primary" size="xs" icon="i-hugeicons-add-01" label="New" class="h-[26px] flex-1 justify-center font-normal" @click="add()" />
-                <UDropdownMenu :items="importItems" :content="{ align: 'end', sideOffset: 4 }" :ui="{ content: 'w-[200px]' }">
-                  <UButton color="neutral" variant="outline" size="xs" icon="i-hugeicons-file-import" label="Import" trailing-icon="i-hugeicons-arrow-down-01" class="h-[26px] flex-1 justify-center font-normal" />
-                </UDropdownMenu>
-              </div>
-              <div v-if="note" class="text-[11px] leading-[1.4] text-(--mu)">{{ note }}</div>
+        <div class="min-h-0 flex-1 overflow-auto px-1.5 pb-2">
+          <div v-if="!hosts.length" class="px-2 py-6 text-center text-[12px] text-(--fa)">No profiles yet. Add one, or import from ~/.ssh/config.</div>
+          <div v-else-if="!shown.length" class="px-2 py-6 text-center text-[12px] text-(--fa)">No profile matches "{{ query }}".</div>
+          <div v-if="showRecent" class="mt-1 mb-1">
+            <div class="flex items-center gap-1.5 px-2 pt-1.5 pb-1 text-[10.5px] font-semibold tracking-wide text-(--fa) uppercase">
+              <UIcon name="i-hugeicons-clock-01" class="size-3" />
+              <span class="flex-1">Recent sessions</span>
             </div>
-
-            <div class="min-h-0 flex-1 overflow-auto px-1.5 pb-2">
-              <div v-if="!hosts.length" class="px-2 py-6 text-center text-[12px] text-(--fa)">No profiles yet. Add one, or import from ~/.ssh/config.</div>
-              <div v-else-if="!shown.length" class="px-2 py-6 text-center text-[12px] text-(--fa)">No profile matches "{{ query }}".</div>
-              <div v-if="showRecent" class="mt-1 mb-1">
-                <div class="flex items-center gap-1.5 px-2 pt-1.5 pb-1 text-[10.5px] font-semibold tracking-wide text-(--fa) uppercase">
-                  <UIcon name="i-hugeicons-clock-01" class="size-3" />
-                  <span class="flex-1">Recent sessions</span>
-                </div>
-                <div v-if="!recent.length" class="px-2 py-1.5 text-[11.5px] leading-[1.4] text-(--fa)">Profiles you connect to show up here.</div>
-                <div
-                  v-for="h in recent"
-                  :key="h.id"
-                  class="group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-[6px] hover:bg-(--hov)"
-                  :class="ui.sshSel === h.id ? 'bg-(--sel)' : ''"
-                  :style="{ background: hostBg(h) }"
-                  @click="select(h.id)"
-                  @dblclick="connect(h.id)"
-                >
-                  <span v-if="sshHue(h) != null" class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(sshHue(h)!) }" />
-                  <span class="h-1.5 w-1.5 flex-none rounded-full" :class="openCount(h.id) ? 'bg-(--grn)' : 'bg-transparent'" />
-                  <span class="ellipsis text-[12.5px]">{{ h.name }}</span>
-                  <span class="ellipsis mono min-w-0 flex-1 text-[10.5px] text-(--fa)">{{ sshDetail(h) }}</span>
-                  <UButton color="neutral" variant="ghost" size="xs" icon="i-hugeicons-play" aria-label="Connect" title="Connect" class="flex-none text-(--mu) opacity-0 group-hover:opacity-100" @click.stop="connect(h.id)" />
-                </div>
-              </div>
-              <div v-for="g in groups" :key="g.group" class="mt-1">
-                <div class="flex items-center gap-1.5 px-2 pt-1.5 pb-1 text-[10.5px] font-semibold tracking-wide text-(--fa) uppercase">
-                  <span v-if="g.group" class="h-2 w-2 flex-none rounded-xs" :style="{ background: pcol(groupHue(g.group)!) }" />
-                  <span class="flex-1" :style="g.group ? { color: ptx(groupHue(g.group)!) } : undefined">{{ g.group || 'Profiles' }}</span>
-                  <span class="mono font-normal">{{ g.hosts.length }}</span>
-                </div>
-                <div
-                  v-for="h in g.hosts"
-                  :key="h.id"
-                  :data-cursor="cursorId === h.id"
-                  class="group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-[6px] hover:bg-(--hov)"
-                  :class="ui.sshSel === h.id ? 'bg-(--sel)' : cursorId === h.id ? 'bg-(--hov)' : ''"
-                  :style="{ background: hostBg(h, cursorId === h.id) }"
-                  @click="select(h.id)"
-                  @dblclick="connect(h.id)"
-                >
-                  <span v-if="sshHue(h) != null" class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(sshHue(h)!) }" />
-                  <span class="h-1.5 w-1.5 flex-none rounded-full" :class="openCount(h.id) ? 'bg-(--grn)' : 'bg-transparent'" />
-                  <span class="ellipsis text-[12.5px]">{{ h.name }}</span>
-                  <span class="ellipsis mono min-w-0 flex-1 text-[10.5px] text-(--fa)">{{ sshDetail(h) }}</span>
-                  <UButton color="neutral" variant="ghost" size="xs" icon="i-hugeicons-play" aria-label="Connect" title="Connect" class="flex-none text-(--mu) opacity-0 group-hover:opacity-100" @click.stop="connect(h.id)" />
-                </div>
-              </div>
+            <div v-if="!recent.length" class="px-2 py-1.5 text-[11.5px] leading-[1.4] text-(--fa)">Profiles you connect to show up here.</div>
+            <div
+              v-for="h in recent"
+              :key="h.id"
+              class="group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-[6px] hover:bg-(--hov)"
+              :class="ui.sshSel === h.id ? 'bg-(--sel)' : ''"
+              :style="{ background: hostBg(h) }"
+              @click="select(h.id)"
+              @dblclick="connect(h.id)"
+            >
+              <span v-if="sshHue(h) != null" class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(sshHue(h)!) }" />
+              <span class="h-1.5 w-1.5 flex-none rounded-full" :class="openCount(h.id) ? 'bg-(--grn)' : 'bg-transparent'" />
+              <span class="ellipsis text-[12.5px]">{{ h.name }}</span>
+              <span class="ellipsis mono min-w-0 flex-1 text-[10.5px] text-(--fa)">{{ sshDetail(h) }}</span>
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-hugeicons-play" aria-label="Connect" title="Connect" class="flex-none text-(--mu) opacity-0 group-hover:opacity-100" @click.stop="connect(h.id)" />
             </div>
           </div>
-
-          <!-- Main -->
-          <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-            <!-- Open connections, as tabs. Alt ] and Alt [ (or Ctrl Tab) switch between them, as with Claude sessions. -->
-            <div v-if="terms.length" class="flex h-[34px] flex-none items-end gap-0.5 overflow-hidden border-b border-(--ln2) bg-(--head) px-1.5">
-              <div
-                v-for="t in terms"
-                :key="t.id"
-                class="box-border flex h-[30px] min-w-[90px] flex-[0_1_230px] cursor-pointer items-center gap-2 rounded-t-md border border-b-0 pl-2.5 pr-2"
-                :style="{
-                  background: ui.sshTerm === t.id ? 'var(--term)' : 'transparent',
-                  borderColor: ui.sshTerm === t.id ? 'var(--ln)' : 'transparent',
-                  boxShadow: tabEdge(t),
-                }"
-                @click="show(t.id)"
-                @auxclick.middle.prevent="end(t.id)"
-              >
-                <span class="h-[7px] w-[7px] flex-none rounded-full" :class="t.exited ? 'bg-(--idle)' : 'bg-(--grn)'" />
-                <span class="ellipsis flex-1 text-[12px]" :style="{ color: ui.sshTerm === t.id ? 'var(--tx)' : 'var(--tx3)' }">{{ t.title }}</span>
-                <UTooltip :text="t.exited ? 'Close' : 'End session'">
-                  <span
-                    class="grid h-4 w-4 flex-none place-items-center rounded-sm text-(--fa) hover:bg-(--hov) hover:text-(--tx)"
-                    @click.stop="end(t.id)"
-                  ><UIcon name="i-hugeicons-cancel-01" class="size-2.5" /></span>
-                </UTooltip>
-              </div>
+          <div v-for="g in groups" :key="g.group" class="mt-1">
+            <div class="flex items-center gap-1.5 px-2 pt-1.5 pb-1 text-[10.5px] font-semibold tracking-wide text-(--fa) uppercase">
+              <span v-if="g.group" class="h-2 w-2 flex-none rounded-xs" :style="{ background: pcol(groupHue(g.group)!) }" />
+              <span class="flex-1" :style="g.group ? { color: ptx(groupHue(g.group)!) } : undefined">{{ g.group || 'Profiles' }}</span>
+              <span class="mono font-normal">{{ g.hosts.length }}</span>
             </div>
-            <div v-if="tabby" class="grid flex-1 place-items-center px-6">
-              <div class="flex w-[420px] max-w-full flex-col gap-3">
-                <div class="text-[15px] font-semibold">Import from Tabby</div>
-                <div class="text-[12px] leading-[1.5] text-(--mu)">
-                  Your Tabby config is locked with its vault passphrase. Enter it to read your profiles, groups and saved passwords. It is used on this computer only, to open Tabby's config file, and is not kept.
-                </div>
-                <UInput
-                  v-model="tabby.pass"
-                  type="password"
-                  autofocus
-                  placeholder="Tabby vault passphrase"
-                  variant="none"
-                  :ui="{ root: 'w-full', base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)' }"
-                  @keydown.enter="importTabby(tabby.pass)"
-                />
-                <div v-if="tabby.wrong" class="text-[11.5px] text-(--red)">That passphrase did not open it. Try again.</div>
-                <div class="flex gap-2">
-                  <UButton color="primary" size="xs" label="Import" :loading="tabby.busy" :disabled="!tabby.pass || tabby.busy" class="h-[28px] font-normal" @click="importTabby(tabby.pass)" />
-                  <UButton color="neutral" variant="ghost" size="xs" label="Cancel" class="h-[28px] font-normal" @click="tabby = null" />
-                </div>
-              </div>
-            </div>
-            <SshTerminal v-else-if="termSession" :id="termSession.id" :key="termSession.id" @leave="leave" @end="end(termSession.id)" />
-            <div v-else-if="selHost" class="min-h-0 flex-1 overflow-auto px-6 pt-5 pb-6">
-              <SshEditor :id="selHost.id" @back="ui.sshSel = null" @connect="connect" />
-            </div>
-            <div v-else class="grid flex-1 place-items-center px-6 text-center">
-              <div class="flex max-w-[360px] flex-col items-center gap-2">
-                <UIcon name="i-hugeicons-computer-terminal-01" class="size-8 text-(--fa)" />
-                <div class="text-[13px] text-(--tx2)">Pick a profile to edit it, or search and press Enter to connect.</div>
-                <div class="text-[11.5px] leading-[1.5] text-(--fa)">Connections stay running when you go back or close this window. Double-click a profile to connect.</div>
-              </div>
+            <div
+              v-for="h in g.hosts"
+              :key="h.id"
+              :data-cursor="cursorId === h.id"
+              class="group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-[6px] hover:bg-(--hov)"
+              :class="ui.sshSel === h.id ? 'bg-(--sel)' : cursorId === h.id ? 'bg-(--hov)' : ''"
+              :style="{ background: hostBg(h, cursorId === h.id) }"
+              @click="select(h.id)"
+              @dblclick="connect(h.id)"
+            >
+              <span v-if="sshHue(h) != null" class="absolute inset-y-0 left-0 w-[3px]" :style="{ background: pcol(sshHue(h)!) }" />
+              <span class="h-1.5 w-1.5 flex-none rounded-full" :class="openCount(h.id) ? 'bg-(--grn)' : 'bg-transparent'" />
+              <span class="ellipsis text-[12.5px]">{{ h.name }}</span>
+              <span class="ellipsis mono min-w-0 flex-1 text-[10.5px] text-(--fa)">{{ sshDetail(h) }}</span>
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-hugeicons-play" aria-label="Connect" title="Connect" class="flex-none text-(--mu) opacity-0 group-hover:opacity-100" @click.stop="connect(h.id)" />
             </div>
           </div>
-        </div>
-
-        <div v-if="ui.sshAskCloseAll" class="absolute inset-0 z-10 grid place-items-center bg-black/40" @click.self="ui.sshAskCloseAll = false">
-          <div class="flex w-[380px] max-w-[90%] flex-col gap-3 rounded-xl border border-(--bb) bg-(--modal) px-5 pt-5 pb-4 shadow-(--shadow)">
-            <div class="flex flex-col gap-1">
-              <span class="text-[14px] font-semibold">Close all {{ terms.length }} SSH connection{{ terms.length === 1 ? '' : 's' }}?</span>
-              <span class="text-[12.5px] leading-[1.5] text-(--tx3)">Ends every connection open in this window.</span>
-            </div>
-            <div class="flex justify-end gap-2">
-              <UButton color="neutral" variant="outline" class="h-[28px] px-3 text-[12px]" label="Cancel" @click="ui.sshAskCloseAll = false" />
-              <UButton
-                data-close-all
-                color="error"
-                variant="solid"
-                class="h-[28px] rounded-md bg-(--red) px-3 text-[12px] font-semibold text-white hover:bg-(--red) hover:opacity-90"
-                label="Close all"
-                @click="closeAllNow"
-              />
-            </div>
-          </div>
-        </div>
-        <div class="mono flex h-7 flex-none items-center gap-3 overflow-hidden whitespace-nowrap border-t border-(--ln) px-3.5 text-[10.5px] text-(--fa)">
-          <span><span class="text-(--tx2)">↑ ↓</span> move</span>
-          <span><span class="text-(--tx2)">Enter</span> connect</span>
-          <span><span class="text-(--tx2)">Esc</span> back</span>
-          <span><span class="text-(--tx2)">{{ prefs.kl('nextSession') }}</span> next connection</span>
-          <span><span class="text-(--tx2)">{{ prefs.kl('closeTerminal') }}</span> end it</span>
-          <span><span class="text-(--tx2)">{{ prefs.kl('closeAll') }}</span> end all</span>
-          <span><span class="text-(--tx2)">{{ prefs.kl('sshDetach') }}</span> leave a connection running</span>
-          <span><span class="text-(--tx2)">{{ prefs.kl('ssh') }}</span> close</span>
-          <div class="flex-1" />
-          <span class="cursor-pointer hover:text-(--tx2)" @click="ui.openSettings('keys')">change keys</span>
         </div>
       </div>
-    </template>
-  </UModal>
+
+      <!-- Main -->
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <!-- Open connections, as tabs. Alt ] and Alt [ (or Ctrl Tab) switch between them, as with Claude sessions. -->
+        <div v-if="terms.length" class="flex h-[34px] flex-none items-end gap-0.5 overflow-hidden border-b border-(--ln2) bg-(--head) px-1.5">
+          <div
+            v-for="t in terms"
+            :key="t.id"
+            class="box-border flex h-[30px] min-w-[90px] flex-[0_1_230px] cursor-pointer items-center gap-2 rounded-t-md border border-b-0 pl-2.5 pr-2"
+            :style="{
+              background: ui.sshTerm === t.id ? 'var(--term)' : 'transparent',
+              borderColor: ui.sshTerm === t.id ? 'var(--ln)' : 'transparent',
+              boxShadow: tabEdge(t),
+            }"
+            @click="show(t.id)"
+            @auxclick.middle.prevent="end(t.id)"
+          >
+            <span class="h-[7px] w-[7px] flex-none rounded-full" :class="t.exited ? 'bg-(--idle)' : 'bg-(--grn)'" />
+            <span class="ellipsis flex-1 text-[12px]" :style="{ color: ui.sshTerm === t.id ? 'var(--tx)' : 'var(--tx3)' }">{{ t.title }}</span>
+            <UTooltip :text="t.exited ? 'Close' : 'End session'">
+              <span
+                class="grid h-4 w-4 flex-none place-items-center rounded-sm text-(--fa) hover:bg-(--hov) hover:text-(--tx)"
+                @click.stop="end(t.id)"
+              ><UIcon name="i-hugeicons-cancel-01" class="size-2.5" /></span>
+            </UTooltip>
+          </div>
+        </div>
+        <div v-if="tabby" class="grid flex-1 place-items-center px-6">
+          <div class="flex w-[420px] max-w-full flex-col gap-3">
+            <div class="text-[15px] font-semibold">Import from Tabby</div>
+            <div class="text-[12px] leading-[1.5] text-(--mu)">
+              Your Tabby config is locked with its vault passphrase. Enter it to read your profiles, groups and saved passwords. It is used on this computer only, to open Tabby's config file, and is not kept.
+            </div>
+            <UInput
+              v-model="tabby.pass"
+              type="password"
+              autofocus
+              placeholder="Tabby vault passphrase"
+              variant="none"
+              :ui="{ root: 'w-full', base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)' }"
+              @keydown.enter="importTabby(tabby.pass)"
+            />
+            <div v-if="tabby.wrong" class="text-[11.5px] text-(--red)">That passphrase did not open it. Try again.</div>
+            <div class="flex gap-2">
+              <UButton color="primary" size="xs" label="Import" :loading="tabby.busy" :disabled="!tabby.pass || tabby.busy" class="h-[28px] font-normal" @click="importTabby(tabby.pass)" />
+              <UButton color="neutral" variant="ghost" size="xs" label="Cancel" class="h-[28px] font-normal" @click="tabby = null" />
+            </div>
+          </div>
+        </div>
+        <SshTerminal v-else-if="termSession" :id="termSession.id" :key="termSession.id" @leave="leave" @end="end(termSession.id)" />
+        <div v-else-if="selHost" class="min-h-0 flex-1 overflow-auto px-6 pt-5 pb-6">
+          <SshEditor :id="selHost.id" @back="ui.sshSel = null" @connect="connect" />
+        </div>
+        <div v-else class="grid flex-1 place-items-center px-6 text-center">
+          <div class="flex max-w-[360px] flex-col items-center gap-2">
+            <UIcon name="i-hugeicons-computer-terminal-01" class="size-8 text-(--fa)" />
+            <div class="text-[13px] text-(--tx2)">Pick a profile to edit it, or search and press Enter to connect.</div>
+            <div class="text-[11.5px] leading-[1.5] text-(--fa)">Connections stay running when you go back or close this window. Double-click a profile to connect.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="ui.sshAskCloseAll" class="absolute inset-0 z-10 grid place-items-center bg-black/40" @click.self="ui.sshAskCloseAll = false">
+      <div class="flex w-[380px] max-w-[90%] flex-col gap-3 rounded-xl border border-(--bb) bg-(--modal) px-5 pt-5 pb-4 shadow-(--shadow)">
+        <div class="flex flex-col gap-1">
+          <span class="text-[14px] font-semibold">Close all {{ terms.length }} SSH connection{{ terms.length === 1 ? '' : 's' }}?</span>
+          <span class="text-[12.5px] leading-[1.5] text-(--tx3)">Ends every connection open in this window.</span>
+        </div>
+        <div class="flex justify-end gap-2">
+          <UButton color="neutral" variant="outline" class="h-[28px] px-3 text-[12px]" label="Cancel" @click="ui.sshAskCloseAll = false" />
+          <UButton
+            data-close-all
+            color="error"
+            variant="solid"
+            class="h-[28px] rounded-md bg-(--red) px-3 text-[12px] font-semibold text-white hover:bg-(--red) hover:opacity-90"
+            label="Close all"
+            @click="closeAllNow"
+          />
+        </div>
+      </div>
+    </div>
+    <div class="mono flex h-7 flex-none items-center gap-3 overflow-hidden whitespace-nowrap border-t border-(--ln) px-3.5 text-[10.5px] text-(--fa)">
+      <span><span class="text-(--tx2)">↑ ↓</span> move</span>
+      <span><span class="text-(--tx2)">Enter</span> connect</span>
+      <span><span class="text-(--tx2)">Esc</span> back</span>
+      <span><span class="text-(--tx2)">{{ prefs.kl('nextSession') }}</span> next connection</span>
+      <span><span class="text-(--tx2)">{{ prefs.kl('closeTerminal') }}</span> end it</span>
+      <span><span class="text-(--tx2)">{{ prefs.kl('closeAll') }}</span> end all</span>
+      <span><span class="text-(--tx2)">{{ prefs.kl('sshDetach') }}</span> leave a connection running</span>
+      <span><span class="text-(--tx2)">{{ prefs.kl('ssh') }}</span> close</span>
+      <div class="flex-1" />
+      <span class="cursor-pointer hover:text-(--tx2)" @click="ui.openSettings('keys')">change keys</span>
+    </div>
+  </div>
 </template>

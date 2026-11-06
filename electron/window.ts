@@ -3,6 +3,37 @@ import { BrowserWindow, shell } from 'electron'
 import path from 'node:path'
 import { DEMO, DEV_URL, isAppUrl, logoImage, prefs, send, state, store } from './context'
 import { webUrl } from './services/guard'
+import { destroyTools } from './tools'
+
+/** Links open in the browser, as http(s) only; a window never leaves the app. */
+export function lockDown(win: BrowserWindow) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const link = webUrl(url)
+    if (link) shell.openExternal(link)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!isAppUrl(url)) {
+      e.preventDefault()
+      const link = webUrl(url)
+      if (link) shell.openExternal(link)
+    }
+  })
+  win.webContents.on('will-attach-webview', e => e.preventDefault())
+}
+
+/** Web preferences every window loads with. */
+export function appWebPreferences(): Electron.WebPreferences {
+  return {
+    preload: path.join(__dirname, 'preload.cjs'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    // The preload only imports electron and ../shared, which a sandboxed preload can do too; keep this on.
+    sandbox: true,
+    webSecurity: true,
+    allowRunningInsecureContent: false,
+  }
+}
 
 export function createWindow() {
   const bounds = store.get('bounds')
@@ -18,15 +49,7 @@ export function createWindow() {
     icon: logoImage(256),
     title: 'Canopy',
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      // The preload only imports electron and ../shared, which a sandboxed preload can do too; keep this on.
-      sandbox: true,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-    },
+    webPreferences: appWebPreferences(),
   })
   state.win = win
   if (store.get('maximized')) win.maximize()
@@ -56,20 +79,9 @@ export function createWindow() {
       win?.hide()
     }
   })
-  // Links open in the browser, as http(s) only; the window itself never leaves the app.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    const link = webUrl(url)
-    if (link) shell.openExternal(link)
-    return { action: 'deny' }
-  })
-  win.webContents.on('will-navigate', (e, url) => {
-    if (!isAppUrl(url)) {
-      e.preventDefault()
-      const link = webUrl(url)
-      if (link) shell.openExternal(link)
-    }
-  })
-  win.webContents.on('will-attach-webview', e => e.preventDefault())
+  // The tool windows have nothing to show once the main window is really gone.
+  win.on('closed', destroyTools)
+  lockDown(win)
   if (DEV_URL) win.loadURL(DEMO ? `${DEV_URL}/?demo=1` : DEV_URL)
   else win.loadURL('app://canopy/index.html')
 }

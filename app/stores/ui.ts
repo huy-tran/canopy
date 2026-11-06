@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import type { DockPanelState, Layout, PlanUsage, RecapHours, Session, UpdateState, ShellKind } from '#shared/types'
+import type { ToolCmd } from '#shared/bridge'
+import type { DockPanelState, Layout, PlanUsage, RecapHours, SavedSession, Session, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
 export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'ssh' | 'notifications' | 'aws' | 'keys'
@@ -36,9 +37,9 @@ export const useUiStore = defineStore('ui', () => {
   const simTarget = ref<{ kind: 'person' | 'room'; id: string; at: number; talk?: boolean; follow?: boolean } | null>(null)
   /** Bumped by the shortcut that opens or closes the session window of the character in view. */
   const simTalk = ref(0)
-  /** The GitHub window is open, over the terminals or the 3D World. */
+  /** The GitHub window is showing (it is a window of its own, beside this one). */
   const gh = ref(false)
-  /** The AWS window is open, likewise. */
+  /** The AWS window is showing, likewise. */
   const aws = ref(false)
   /** The SSH window is open, likewise. */
   const ssh = ref(false)
@@ -49,6 +50,10 @@ export const useUiStore = defineStore('ui', () => {
   const sshAskCloseAll = ref(false)
   /** Counts each ask, so the window can bring the question to the front again when it is pressed twice. */
   const sshAskTick = ref(0)
+  /** What the AWS and SSH windows report for the title bar buttons: AWS CLI sessions running, an SSO sign-in that ran out, SSH connections open. */
+  const badge = ref<{ awsTerms: number; sso: string | null; ssh: number }>({ awsTerms: 0, sso: null, ssh: 0 })
+  /** The SSH window's open connections, kept here so they are saved with the rest and come back after a restart. */
+  const sshSaved = ref<SavedSession[]>([])
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
   const svcAdd = ref(false)
@@ -93,8 +98,6 @@ export const useUiStore = defineStore('ui', () => {
 
   function focusLater() {
     setTimeout(() => {
-      // The GitHub, AWS and SSH windows take the keyboard themselves while open.
-      if (gh.value || aws.value || ssh.value) return
       const id = fid.value
       if (id && !palette.value && !projectModal.value && !settings.value && !explorer.value) focusTerminal(id)
     }, 30)
@@ -110,9 +113,6 @@ export const useUiStore = defineStore('ui', () => {
   function selectProject(pid: string) {
     P.sel = pid
     sim.value = false
-    gh.value = false
-    aws.value = false
-    ssh.value = false
     inbox.value = null
     bc.value = null
     closeTransient()
@@ -127,9 +127,6 @@ export const useUiStore = defineStore('ui', () => {
     if (bc.value && s.pid !== P.sel) bc.value = null
     P.sel = s.pid
     sim.value = false
-    gh.value = false
-    aws.value = false
-    ssh.value = false
     palette.value = null
     newMenu.value = false
     if (inbox.value && inbox.value.sid !== sid) inbox.value = null
@@ -200,7 +197,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function cycle(dir: number) {
-    if (ssh.value) return cycleSsh(dir)
+    if (toolKind === 'ssh') return cycleSsh(dir)
     if (sim.value) return simCycle(dir, true)
     const ss = S.ofProject(P.sel || '')
     if (!ss.length) return
@@ -213,7 +210,7 @@ export const useUiStore = defineStore('ui', () => {
    * and wrapping at either end. Falls back to stepping through projects while no session is open anywhere.
    */
   function cycleProject(dir: number) {
-    if (ssh.value) return cycleSsh(dir)
+    if (toolKind === 'ssh') return cycleSsh(dir)
     if (sim.value) return simCycle(dir, false)
     const ps = P.ordered
     if (!ps.length) return
@@ -313,7 +310,7 @@ export const useUiStore = defineStore('ui', () => {
   /** Closes the shell in view while the dock panel has focus, else the focused pane. */
   function closeTerminal() {
     // In the SSH window: end the connection in view; its neighbour tab takes over.
-    if (ssh.value) {
+    if (toolKind === 'ssh') {
       if (sshTerm.value) S.close(sshTerm.value)
       return
     }
@@ -328,7 +325,7 @@ export const useUiStore = defineStore('ui', () => {
   /** Closes every pane and docked shell in the selected project, after asking. */
   function closeAll() {
     // In the SSH window: every connection open there, after asking.
-    if (ssh.value) {
+    if (toolKind === 'ssh') {
       if (S.sessions.some(s => s.win === 'ssh')) {
         sshAskCloseAll.value = true
         sshAskTick.value++
@@ -384,22 +381,18 @@ export const useUiStore = defineStore('ui', () => {
 
   // ---------- GitHub window ----------
 
-  function openGithub() {
-    gh.value = true
-    aws.value = false
-    ssh.value = false
+  /** Opens the GitHub window, on a section or a pull request if asked. */
+  function openGithub(cmd?: ToolCmd) {
     palette.value = null
-    focusLater()
+    api.tool.open('gh', cmd)
   }
 
   // ---------- AWS window ----------
 
-  function openAws() {
-    aws.value = true
-    gh.value = false
-    ssh.value = false
+  /** Opens the AWS window, on a profile or a service if asked. */
+  function openAws(cmd?: ToolCmd) {
     palette.value = null
-    focusLater()
+    api.tool.open('aws', cmd)
   }
 
   // ---------- Inbox ----------
@@ -410,9 +403,6 @@ export const useUiStore = defineStore('ui', () => {
     inbox.value = { sid }
     P.sel = s.pid
     sim.value = false
-    gh.value = false
-    aws.value = false
-    ssh.value = false
     palette.value = null
     bc.value = null
     newMenu.value = false
@@ -561,6 +551,11 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function openSettings(tab: SettingsTab = 'general') {
+    // Settings is the main window's: from a tool window, it comes forward and opens there.
+    if (toolKind) {
+      api.tool.toMain({ settings: tab })
+      return
+    }
     settings.value = tab
     palette.value = null
     about.value = false
@@ -631,6 +626,13 @@ export const useUiStore = defineStore('ui', () => {
 
   /** Connects to an SSH profile in a new terminal inside the SSH window, opening the window if needed. */
   function openSshTerminal(hostId: string) {
+    // The SSH window is a window of its own, and holds the connections: from the main window, ask it to connect.
+    if (toolKind !== 'ssh') {
+      newMenu.value = false
+      palette.value = null
+      api.tool.open('ssh', { ssh: hostId })
+      return
+    }
     const t = shellTarget(null)
     if (!t) {
       toast({ title: 'Open a project first', body: 'SSH terminals start in a project folder.', error: true })
@@ -642,8 +644,6 @@ export const useUiStore = defineStore('ui', () => {
     prefsStore.set({ sshHosts: (prefsStore.prefs.sshHosts || []).map(h => (h.id === hostId ? { ...h, lastUsedAt: Date.now() } : h)) })
     sshTerm.value = s.id
     sshSel.value = null
-    ssh.value = true
-    gh.value = aws.value = false
   }
 
   /** Open while the dock panel's "new shell" menu is showing, so a shortcut can pop it. */
@@ -784,21 +784,9 @@ export const useUiStore = defineStore('ui', () => {
       paneLeft: () => cycle(-1),
       toggleView,
       simulation: () => { sim.value = !sim.value },
-      github: () => {
-        gh.value = !gh.value
-        if (gh.value) aws.value = ssh.value = false
-        focusLater()
-      },
-      aws: () => {
-        aws.value = !aws.value
-        if (aws.value) gh.value = ssh.value = false
-        focusLater()
-      },
-      ssh: () => {
-        ssh.value = !ssh.value
-        if (ssh.value) gh.value = aws.value = false
-        focusLater()
-      },
+      github: () => { api.tool.toggle('gh') },
+      aws: () => { api.tool.toggle('aws') },
+      ssh: () => { api.tool.toggle('ssh') },
       simTalk: () => { simTalk.value++ },
       newSession: () => newSession(),
       promptAll: openBc,
@@ -827,7 +815,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, sshAskCloseAll, sshAskTick, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, sshAskCloseAll, sshAskTick, badge, sshSaved, inbox, bc, svcAdd,
     logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,

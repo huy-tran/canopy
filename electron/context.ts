@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, nativeImage, Tray } from 'electron'
 import path from 'node:path'
 import Store from 'electron-store'
 import type { AwsWorld } from '../shared/aws'
+import type { ToolKind } from '../shared/bridge'
 import type { GhWorld, Persisted } from '../shared/types'
 import { countIpc, countPty } from './services/metrics'
 
@@ -13,7 +14,7 @@ export const DEMO = !!DEV_URL && !!process.env.CANOPY_DEMO
 if (DEV_URL && process.env.CANOPY_USER_DATA) app.setPath('userData', process.env.CANOPY_USER_DATA)
 else if (DEMO) app.setPath('userData', path.join(app.getPath('appData'), 'canopy-demo'))
 
-export const store = new Store<{ state?: Persisted; bounds?: Electron.Rectangle; maximized?: boolean }>({ name: 'canopy' })
+export const store = new Store<{ state?: Persisted; bounds?: Electron.Rectangle; maximized?: boolean; toolBounds?: Partial<Record<ToolKind, Electron.Rectangle & { maximized?: boolean }>> }>({ name: 'canopy' })
 /** SSH passwords and key passphrases, each encrypted with the system keychain (Electron safeStorage). */
 export const sshSecrets = new Store<{ pw?: Record<string, string> }>({ name: 'ssh-secrets' })
 /** GitHub HQ's last good read, so the 3D World and the GitHub window fill in at once on the next launch. */
@@ -24,6 +25,8 @@ export const awsCache = new Store<{ world?: AwsWorld }>({ name: 'aws-cache' })
 /** What the window, tray and quit logic share. */
 export const state = {
   win: null as BrowserWindow | null,
+  /** The GitHub, AWS and SSH windows: created the first time each opens, hidden rather than closed after that. */
+  tools: new Map<ToolKind, BrowserWindow>(),
   tray: null as Tray | null,
   quitting: false,
 }
@@ -42,6 +45,16 @@ export function send(channel: string, ...args: unknown[]) {
   if (!state.win || state.win.isDestroyed()) return
   countIpc()
   state.win.webContents.send(channel, ...args)
+}
+
+/** The main window and every tool window still alive. */
+export function allWindows(): BrowserWindow[] {
+  return [state.win, ...state.tools.values()].filter((w): w is BrowserWindow => !!w && !w.isDestroyed())
+}
+
+/** Sends to every window except `skip` (the one the message came from). */
+export function broadcast(channel: string, payload?: unknown, skip?: Electron.WebContents) {
+  for (const w of allWindows()) if (w.webContents !== skip) w.webContents.send(channel, payload)
 }
 
 export function showWindow() {
@@ -63,7 +76,7 @@ export function prefs() {
 
 /** Commands are only taken from the app's own window, never from a page or frame that ended up somewhere else. */
 export function trusted(e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) {
-  return !!state.win && e.sender === state.win.webContents && isAppUrl(e.senderFrame?.url || '')
+  return allWindows().some(w => w.webContents === e.sender) && isAppUrl(e.senderFrame?.url || '')
 }
 
 export function handle(channel: string, fn: (...args: any[]) => any) {
@@ -73,7 +86,32 @@ export function handle(channel: string, fn: (...args: any[]) => any) {
   })
 }
 
+/** Like `handle`, for calls that act on the window they came from. */
+export function handleWin(channel: string, fn: (win: BrowserWindow | null, sender: Electron.WebContents, ...args: any[]) => any) {
+  ipcMain.handle(channel, (e, ...args) => {
+    if (!trusted(e)) throw new Error(`Blocked ${channel} from an unknown page.`)
+    return fn(BrowserWindow.fromWebContents(e.sender), e.sender, ...args)
+  })
+}
+
+/** The window that started each terminal, so its output and exit go back there (an SSH or AWS terminal lives in its tool window). */
+const ptyOwner = new Map<string, Electron.WebContents>()
+
+export function claimPty(id: string, wc: Electron.WebContents) {
+  ptyOwner.set(id, wc)
+}
+
+function ownerOf(id: string) {
+  const wc = ptyOwner.get(id)
+  return wc && !wc.isDestroyed() ? wc : state.win && !state.win.isDestroyed() ? state.win.webContents : null
+}
+
 export function ptyData(id: string, d: string) {
   countPty(d.length)
-  send('pty:data', id, d)
+  ownerOf(id)?.send('pty:data', id, d)
+}
+
+export function ptyExit(id: string, code: number) {
+  ownerOf(id)?.send('pty:exit', id, code)
+  ptyOwner.delete(id)
 }

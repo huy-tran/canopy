@@ -15,9 +15,6 @@ function toNuxt(combo: string): string | null {
   return [...mods, k].join('_')
 }
 
-/** The keys that switch and close sessions do the same for the SSH window's tabs. */
-const SSH_TAB_KEYS = new Set(['nextSession', 'prevSession', 'nextProject', 'prevProject', 'paneRight', 'paneLeft', 'closeTerminal', 'closeAll'])
-
 export function useAppShortcuts() {
   const prefs = usePrefsStore()
   const ui = useUiStore()
@@ -27,12 +24,6 @@ export function useAppShortcuts() {
   function allowed(id: string) {
     if (ui.lightbox) return false
     if (ui.projectModal || ui.settings || ui.about || ui.updOpen || ui.summary || ui.confirm) return false
-    // The GitHub window has its own keys; only its toggle and quitting get past it.
-    if (ui.gh) return id === 'github' || id === 'quit'
-    // Likewise the AWS window.
-    if (ui.aws) return id === 'aws' || id === 'quit'
-    // And the SSH window.
-    if (ui.ssh) return id === 'ssh' || id === 'quit' || SSH_TAB_KEYS.has(id)
     if (ui.explorer) return id === 'files'
     if (ui.palette) return id === 'jump' || id === 'commands'
     return true
@@ -70,7 +61,7 @@ export function useAppShortcuts() {
       c[`alt_${i}`] = {
         usingInput: true,
         handler: () => {
-          if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox || ui.confirm || ui.gh || ui.aws || ui.ssh) return
+          if (ui.palette || ui.projectModal || ui.settings || ui.explorer || ui.lightbox || ui.confirm) return
           const p = P.ordered[i - 1]
           if (p) ui.selectProject(p.id)
         },
@@ -102,7 +93,7 @@ export function useAppShortcuts() {
 
   // Workspace simulation shortcuts, only while it is open; they work from its session window's terminal too.
   useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-    if (!ui.sim || ui.gh || ui.aws || ui.ssh) return
+    if (!ui.sim) return
     const id = matchAction(prefs.keys, comboOf(e), 'sim')
     if (!id || ui.palette || ui.projectModal || ui.settings || ui.confirm || ui.lightbox) return
     e.preventDefault()

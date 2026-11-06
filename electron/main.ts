@@ -6,6 +6,7 @@ import { registerAwsIpc } from './ipc/aws'
 import { registerSshIpc } from './ipc/ssh'
 import { registerGithubIpc } from './ipc/github'
 import { registerSystemIpc } from './ipc/system'
+import { registerToolsIpc } from './ipc/tools'
 import { registerWorkspaceIpc } from './ipc/workspace'
 import { serveApp } from './protocol'
 import * as aws from './services/aws'
@@ -17,6 +18,7 @@ import { clearImages } from './services/system'
 import { lastAssistantText, watchTranscript } from './services/transcript'
 import { applySummonKey, ensureTray } from './tray'
 import { checkUpdates, registerUpdateIpc, wireUpdater } from './updates'
+import { startTools } from './tools'
 import { createWindow } from './window'
 
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -49,6 +51,7 @@ function registerIpc() {
   registerAwsIpc()
   registerSshIpc()
   registerSystemIpc()
+  registerToolsIpc()
   registerUpdateIpc()
 }
 
@@ -64,6 +67,7 @@ app.whenReady().then(async () => {
   registerIpc()
   registerDesktopEntry()
   createWindow()
+  startTools()
   ensureTray()
   applySummonKey(prefs()?.summonKey ?? 'Ctrl+Space')
   if (app.isPackaged && prefs()?.autoUpdate !== false) setTimeout(() => checkUpdates().catch(() => undefined), 8000)

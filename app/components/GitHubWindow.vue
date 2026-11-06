@@ -1,9 +1,8 @@
 <script setup lang="ts">
-// The GitHub window: review requests, PRs, repos, workflows and security over whatever is showing,
-// the terminals or the 3D World (see-through there), driven from the keyboard like gh-tui.
+// The GitHub window: review requests, PRs, repos, workflows and security, driven from the keyboard like gh-tui.
+// A window of its own (see tools.ts in the main process), so it can sit beside the Claude sessions.
 import { useEventListener } from '@vueuse/core'
 import { comboOf, matchAction } from '#shared/actions'
-import { simGlassOf } from '~/stores/prefs'
 
 const ui = useUiStore()
 const prefs = usePrefsStore()
@@ -11,17 +10,9 @@ const G = useGithubStore()
 const GW = useGhWorldStore()
 
 const root = ref<HTMLElement | null>(null)
-const glass = computed(() => simGlassOf(prefs.prefs))
 
-const open = computed({
-  get: () => ui.gh,
-  set: (v: boolean) => {
-    if (!v) {
-      ui.gh = false
-      ui.focusLater()
-    }
-  },
-})
+/** Showing: the main process says so as the window opens and hides. */
+const open = computed(() => ui.gh)
 
 function focusRoot() {
   nextTick(() => root.value?.focus())
@@ -132,44 +123,30 @@ const hints = computed(() => {
 </script>
 
 <template>
-  <!-- Esc goes back a step instead of closing; the toggle, the X or a click outside closes it. -->
-  <UModal
-    v-model:open="open"
-    :content="{ onEscapeKeyDown: (e: KeyboardEvent) => e.preventDefault() }"
-    :close="false"
-    :ui="{
-      overlay: ui.sim ? 'bg-black/10' : 'bg-(--ovl)',
-      content: 'flex h-[min(88vh,920px)] w-[min(94vw,1320px)] max-w-none flex-col overflow-hidden bg-transparent border border-(--bb) rounded-xl shadow-(--shadow) ring-0 divide-y-0',
-    }"
+  <!-- Esc goes back a step instead of closing; the toggle or the window's X hides it. -->
+  <div
+    ref="root"
+    data-gh-root
+    tabindex="-1"
+    class="flex min-h-0 flex-1 flex-col bg-(--modal) text-(--tx) outline-none"
   >
-    <template #content>
-      <div
-        ref="root"
-        data-gh-root
-        tabindex="-1"
-        class="flex min-h-0 flex-1 flex-col text-(--tx) outline-none"
-        :class="ui.sim ? 'sim-glass' : 'bg-(--modal)'"
-        :style="ui.sim ? { '--glass': glass + '%' } : undefined"
-      >
-        <div class="flex h-10 flex-none items-center gap-2 border-b border-(--ln) pl-3.5 pr-2">
-          <UIcon name="i-hugeicons-github" class="size-4 text-(--tx2)" />
-          <span class="text-[13px] font-semibold">GitHub</span>
-          <UTooltip v-if="GW.slow" :text="`Fewer than 500 GitHub API calls left this hour, so Canopy reads less until it resets`">
-            <span class="rounded-sm bg-(--ambf)/15 px-1.5 py-px text-[11px] text-(--amb)">Rate limit low · slowing down until {{ new Date(GW.resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }}</span>
-          </UTooltip>
-          <div class="flex-1" />
-          <span class="mono text-[10.5px] text-(--fa)">{{ prefs.kl('github') }} to close</span>
-          <UButton size="xs" color="neutral" variant="ghost" icon="i-hugeicons-cancel-01" title="Close" @click="open = false" />
-        </div>
-        <GitHubScreens />
-        <div class="mono flex h-7 flex-none items-center gap-3 overflow-hidden whitespace-nowrap border-t border-(--ln) px-3.5 text-[10.5px] text-(--fa)">
-          <span v-for="h in hints" :key="h.hint"><span class="text-(--tx2)">{{ h.keys }}</span> {{ h.hint }}</span>
-          <span v-if="G.pane === 'main'"><span class="text-(--tx2)">Esc</span> {{ G.pr || G.run || G.repo ? 'back' : 'sidebar' }}</span>
-          <span><span class="text-(--tx2)">{{ prefs.kl('github') }}</span> close</span>
-          <div class="flex-1" />
-          <span class="cursor-pointer hover:text-(--tx2)" @click="ui.openSettings('keys')">change keys</span>
-        </div>
-      </div>
-    </template>
-  </UModal>
+    <div class="drag flex h-10 flex-none items-center gap-2 border-b border-(--ln) pl-3.5">
+      <UIcon name="i-hugeicons-github" class="size-4 text-(--tx2)" />
+      <span class="text-[13px] font-semibold">GitHub</span>
+      <UTooltip v-if="GW.slow" :text="`Fewer than 500 GitHub API calls left this hour, so Canopy reads less until it resets`">
+        <span class="no-drag rounded-sm bg-(--ambf)/15 px-1.5 py-px text-[11px] text-(--amb)">Rate limit low · slowing down until {{ new Date(GW.resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }}</span>
+      </UTooltip>
+      <div class="flex-1" />
+      <span class="mono text-[10.5px] text-(--fa)">{{ prefs.kl('github') }} to close</span>
+      <ToolControls />
+    </div>
+    <GitHubScreens />
+    <div class="mono flex h-7 flex-none items-center gap-3 overflow-hidden whitespace-nowrap border-t border-(--ln) px-3.5 text-[10.5px] text-(--fa)">
+      <span v-for="h in hints" :key="h.hint"><span class="text-(--tx2)">{{ h.keys }}</span> {{ h.hint }}</span>
+      <span v-if="G.pane === 'main'"><span class="text-(--tx2)">Esc</span> {{ G.pr || G.run || G.repo ? 'back' : 'sidebar' }}</span>
+      <span><span class="text-(--tx2)">{{ prefs.kl('github') }}</span> close</span>
+      <div class="flex-1" />
+      <span class="cursor-pointer hover:text-(--tx2)" @click="ui.openSettings('keys')">change keys</span>
+    </div>
+  </div>
 </template>

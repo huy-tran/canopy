@@ -1,5 +1,9 @@
 // Boots the workspace: loads saved state, wires main-process events, and runs the timers.
+import type { SharedState, ToolCmd, ToolState } from '#shared/bridge'
 import type { Persisted } from '#shared/types'
+import type { AwsTab } from '#shared/aws'
+import type { GhTab } from '~/stores/github'
+import type { SettingsTab } from '~/stores/ui'
 import { comboOf, matchAction } from '#shared/actions'
 import { NERD_SYMBOLS } from '#shared/fonts'
 import { DEFAULT_PREFS } from '~/stores/prefs'
@@ -28,6 +32,18 @@ export default defineNuxtPlugin({
     const G = useGitStore()
     const prefs = usePrefsStore()
     const ui = useUiStore()
+    /** Set in the GitHub, AWS and SSH windows: they read the saved settings but never write them or run the workspace. */
+    const tool = toolKind
+
+    // ---------- Which tool windows are showing ----------
+    // First, so a window that opened before this page finished loading still learns it is showing.
+    const applyTools = (s: ToolState) => {
+      ui.gh = s.gh
+      ui.aws = s.aws
+      ui.ssh = s.ssh
+    }
+    api.tool.onState(applyTools)
+    api.tool.state().then((s) => { if (s) applyTools(s) })
 
     // ---------- Saved state ----------
     // Demo mode (npm run dev:demo) starts from made-up data and never saves.
@@ -42,6 +58,7 @@ export default defineNuxtPlugin({
       prefs.keys = saved.keys || {}
       prefs.theme = saved.theme || 'dark'
       ui.stripOn = saved.stripOn ?? true
+      ui.sshSaved = (saved.sessions || []).filter(x => x.win === 'ssh')
       ui.recaps = recent(saved.recaps)
       ui.recapHours = recent(saved.recapHours)
     }
@@ -51,14 +68,14 @@ export default defineNuxtPlugin({
     let reopened = false
     const snapshot = (): Persisted => plain({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, stripOn: ui.stripOn,
-      sessions: reopened ? S.saved : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
+      sessions: reopened ? [...S.saved, ...ui.sshSaved] : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
       recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels,
     })
     /** When the first unsaved change came; saves wait for a quiet moment, but never longer than SAVE_MAX after it. */
     let dirtySince = 0
     const SAVE_MAX = 2000
     // One string of everything saved: the watcher fires only when it really changes, not on every session update.
-    watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.recaps, ui.recapHours, ui.panels]), () => {
+    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels]), () => {
       if (demo) return
       const now = Date.now()
       dirtySince ||= now
@@ -124,7 +141,7 @@ export default defineNuxtPlugin({
         if (!cb) return false
         if (/^Alt\+[1-9]$/.test(cb)) return true
         // In an AWS terminal, the key that leaves it running stays with the window.
-        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim')) || (ui.aws && matchAction(prefs.keys, cb, 'aws') === 'awsDetach') || (ui.ssh && matchAction(prefs.keys, cb, 'ssh') === 'sshDetach')
+        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim')) || (tool === 'aws' && matchAction(prefs.keys, cb, 'aws') === 'awsDetach') || (tool === 'ssh' && matchAction(prefs.keys, cb, 'ssh') === 'sshDetach')
       },
       onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
       onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },
@@ -143,6 +160,93 @@ export default defineNuxtPlugin({
       openUrl: url => api.sys.openExternal(url),
     })
 
+    // ---------- Settings shared between windows ----------
+    // A change in one window reaches the others through the main process; the main window saves them.
+    // The AWS and SSH windows add what the main window needs from them: the profile the data centre follows,
+    // what the title bar buttons count, and the SSH connections to save.
+    const extra = (): Partial<SharedState> => {
+      if (tool === 'aws') {
+        const A = useAwsStore()
+        return {
+          aws: A.profile && A.region ? { profile: A.profile, region: A.region } : undefined,
+          badges: { aws: { terms: A.terms.filter(t => !t.exited).length, sso: A.ssoExpired } },
+        }
+      }
+      if (tool === 'ssh') return { sshSaved: S.saved, badges: { ssh: S.sessions.filter(x => x.sshId && !x.exited).length } }
+      return {}
+    }
+    if (!demo) {
+      const base = () => ({ prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, ...(tool ? {} : { projects: P.projects, sel: P.sel }), ...extra() })
+      const shared = () => JSON.stringify(base())
+      const payload = (): SharedState => plain(base())
+      let last = shared()
+      let pushT: ReturnType<typeof setTimeout> | undefined
+      watch(shared, (s) => {
+        // What just arrived from another window isn't sent back.
+        if (s === last) return
+        last = s
+        clearTimeout(pushT)
+        pushT = setTimeout(() => api.sync.push(payload()), 150)
+      })
+      api.sync.onPush((s) => {
+        prefs.prefs = { ...DEFAULT_PREFS, ...(s.prefs as object) }
+        prefs.keys = (s.keys as typeof prefs.keys) || {}
+        prefs.theme = (s.theme as typeof prefs.theme) || 'dark'
+        if (s.projects) P.projects = s.projects as typeof P.projects
+        if (tool && s.sel !== undefined) P.sel = s.sel
+        if (!tool) {
+          if (s.aws) {
+            const A = useAwsStore()
+            A.profile = s.aws.profile
+            A.region = s.aws.region
+          }
+          if (s.badges?.aws) ui.badge = { ...ui.badge, awsTerms: s.badges.aws.terms, sso: s.badges.aws.sso }
+          if (s.badges?.ssh !== undefined) ui.badge = { ...ui.badge, ssh: s.badges.ssh }
+          if (s.sshSaved) ui.sshSaved = s.sshSaved as typeof ui.sshSaved
+        }
+        last = shared()
+      })
+      if (tool) api.sync.request()
+      else api.sync.onRequest(() => api.sync.push(payload()))
+    }
+
+    // ---------- The GitHub, AWS and SSH windows ----------
+    if (tool) {
+      setInterval(() => { ui.now = Date.now() }, 1000)
+      window.addEventListener('resize', () => { ui.width = window.innerWidth })
+      if (tool === 'gh') {
+        // Sent by the main window: a review notification goes to that pull request.
+        const G = useGithubStore()
+        const run = (c: ToolCmd) => {
+          if (c.go) G.go(c.go as GhTab)
+          if (c.pull) G.openPull(c.pull)
+        }
+        api.tool.onCmd(run)
+        api.tool.ready('gh').then(list => list.forEach(run))
+      } else if (tool === 'aws') {
+        // Sent by the main window: the 3D World's data centre opens a profile or a service.
+        const A = useAwsStore()
+        api.pty.onExit((id, code) => A.onTermExit(id, code))
+        const run = async (c: ToolCmd) => {
+          if (!A.ready) await A.init()
+          if (c.awsProfile && c.awsProfile !== A.profile) A.useProfile(c.awsProfile)
+          if (c.awsJump) A.jumpTo(c.awsJump.tab as AwsTab, c.awsJump.query)
+          else if (c.awsGo) A.go(c.awsGo as AwsTab)
+        }
+        api.tool.onCmd(run)
+        api.tool.ready('aws').then(list => list.forEach(run))
+      } else {
+        // SSH: the connections that were open at quit come back here, and the main window can ask for a new one.
+        api.pty.onExit((id, code) => S.onExit(id, code))
+        if (prefs.prefs.resume && !demo) S.reopen((saved?.sessions || []).filter(x => x.win === 'ssh'))
+        const run = (c: ToolCmd) => { if (c.ssh) ui.openSshTerminal(c.ssh) }
+        api.tool.onCmd(run)
+        api.tool.ready('ssh').then(list => list.forEach(run))
+      }
+      return
+    }
+    api.tool.onMainCmd((c) => { if (c.settings) ui.openSettings(c.settings as SettingsTab) })
+
     // ---------- Main process events ----------
     api.session.onHook(e => S.onHook(e))
     api.session.onUsage(u => S.onUsage(u))
@@ -153,10 +257,7 @@ export default defineNuxtPlugin({
       // A review request: the GitHub window, on that PR when the notification was about one.
       const [kind, url] = sid.split('|')
       if (kind !== GH_NOTIFY) return ui.focusSession(sid)
-      const G = useGithubStore()
-      G.go('reviews')
-      if (url) G.openPull(url)
-      ui.openGithub()
+      ui.openGithub({ go: 'reviews', pull: url || undefined })
     })
     api.sys.onNotifyAction?.((sid, key) => ui.answer(sid, key))
     api.upd.onStatus((s) => { ui.upd = s })
@@ -206,7 +307,8 @@ export default defineNuxtPlugin({
 
     // ---------- Resume on launch ----------
     // Sessions open at quit come back as they were: each Claude session resumes its own conversation.
-    const restore = prefs.prefs.resume ? (saved?.sessions || []) : []
+    // The SSH window brings its own connections back.
+    const restore = prefs.prefs.resume ? (saved?.sessions || []).filter(x => !x.win) : []
     if (restore.length) {
       S.reopen(restore)
       S.focus = { ...(saved?.focus || {}) }

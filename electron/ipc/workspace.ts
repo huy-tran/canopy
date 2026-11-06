@@ -2,7 +2,7 @@
 import { ipcMain } from 'electron'
 import type { Persisted, SshHost } from '../../shared/types'
 import { errMessage } from '../../shared/errors'
-import { handle, ptyData, send, store, trusted } from '../context'
+import { claimPty, handle, handleWin, ptyData, ptyExit, send, store, trusted } from '../context'
 import { startService, stopService } from '../services/devservers'
 import { runClaude } from '../services/claude'
 import * as git from '../services/git'
@@ -23,21 +23,26 @@ export function registerWorkspaceIpc() {
     applySummonKey(s.prefs?.summonKey ?? '')
   })
 
-  handle('pty:spawn', o => spawnSession(o, ptyData, (id, code) => {
-    unwatchTranscript(id)
-    send('pty:exit', id, code)
-  }))
+  handleWin('pty:spawn', (_w, wc, o) => {
+    claimPty(o.id, wc)
+    return spawnSession(o, ptyData, (id, code) => {
+      unwatchTranscript(id)
+      ptyExit(id, code)
+    })
+  })
   ipcMain.on('pty:write', (e, id: string, d: string) => { if (trusted(e)) writeSession(id, d) })
   ipcMain.on('pty:resize', (e, id: string, c: number, r: number) => { if (trusted(e)) resizeSession(id, c, r) })
-  handle('pty:shell', async (o: { id: string; cwd: string; kind: string; cols: number; rows: number }) => {
+  handleWin('pty:shell', async (_w, wc, o: { id: string; cwd: string; kind: string; cols: number; rows: number }) => {
+    claimPty(o.id, wc)
     const shells = await listShells()
     const shell = shells.find(s => s.kind === o.kind) || shells[0]!
-    return spawnShell({ ...o, shell }, ptyData, (id, code) => send('pty:exit', id, code))
+    return spawnShell({ ...o, shell }, ptyData, ptyExit)
   })
-  handle('pty:ssh', async (o: { id: string; cwd: string; host: SshHost; cols: number; rows: number }) => {
+  handleWin('pty:ssh', async (_w, wc, o: { id: string; cwd: string; host: SshHost; cols: number; rows: number }) => {
+    claimPty(o.id, wc)
     const args = sshArgs(o.host)
     const password = o.host.auth === 'password' || o.host.auth === 'key' ? sshPassword(o.host.id) : ''
-    return spawnSsh({ id: o.id, cwd: o.cwd, exe: await sshPath(), args, password, passwordKind: o.host.auth === 'key' ? 'passphrase' : 'password', cols: o.cols, rows: o.rows }, ptyData, (id, code) => send('pty:exit', id, code))
+    return spawnSsh({ id: o.id, cwd: o.cwd, exe: await sshPath(), args, password, passwordKind: o.host.auth === 'key' ? 'passphrase' : 'password', cols: o.cols, rows: o.rows }, ptyData, ptyExit)
   })
   handle('pty:kill', (id: string) => {
     unwatchTranscript(id)

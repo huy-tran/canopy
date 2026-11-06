@@ -70,6 +70,8 @@ const browserFallback: CanopyApi = {
   },
   win: { minimize: none, toggleMaximize: none, close: none, isMaximized: async () => false, onMaximized: noop, summonKey: async () => true },
   app: { quit: none },
+  tool: { toggle: none, open: none, hide: none, reset: none, state: none, onState: noop, ready: async () => [], onCmd: noop, toMain: none, onMainCmd: noop },
+  sync: { push: () => {}, request: () => {}, onPush: noop, onRequest: noop },
   upd: { check: none, download: none, install: none, state: none, onStatus: noop },
 }
 

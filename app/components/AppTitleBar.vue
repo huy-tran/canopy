@@ -12,17 +12,15 @@ onMounted(async () => {
 })
 
 const R = useReviewsStore()
-const AW = useAwsStore()
-/** AWS CLI sessions still going (port forwards, shells, tails), counted on the AWS button. */
-const liveTerms = computed(() => AW.terms.filter(t => !t.exited).length)
+/** AWS CLI sessions still going (port forwards, shells, tails), counted on the AWS button; the AWS window reports them. */
+const liveTerms = computed(() => ui.badge.awsTerms)
 const awsTitle = computed(() => {
   const base = `AWS (${prefs.kl('aws')})`
-  if (AW.ssoExpired) return `${base}: the SSO sign-in for ${AW.ssoExpired} has run out`
+  if (ui.badge.sso) return `${base}: the SSO sign-in for ${ui.badge.sso} has run out`
   return liveTerms.value ? `${base}: ${liveTerms.value} session${liveTerms.value > 1 ? 's' : ''} running` : base
 })
-const S = useSessionsStore()
-/** SSH terminals still connected, counted on the SSH button. */
-const liveSsh = computed(() => S.sessions.filter(s => s.sshId && !s.exited).length)
+/** SSH terminals still connected, counted on the SSH button; the SSH window reports them. */
+const liveSsh = computed(() => ui.badge.ssh)
 const sshTitle = computed(() => `SSH connections (${prefs.kl('ssh')})${liveSsh.value ? `: ${liveSsh.value} open` : ''}`)
 const ghTitle = computed(() => {
   const n = R.prs.length
@@ -139,7 +137,7 @@ const items = computed<DropdownMenuItem[][]>(() => [
       :title="ghTitle"
       class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
       :class="ui.gh ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
-      @click.stop="ui.runAction('github')"
+      @click.stop="api.tool.toggle('gh', true)"
     >
       <UIcon name="i-hugeicons-github" class="size-3.5" />GitHub
       <span v-if="R.problem" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
@@ -150,10 +148,10 @@ const items = computed<DropdownMenuItem[][]>(() => [
       :title="awsTitle"
       class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
       :class="ui.aws ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
-      @click.stop="ui.runAction('aws')"
+      @click.stop="api.tool.toggle('aws', true)"
     >
       <UIcon name="i-hugeicons-cloud-server" class="size-3.5" />AWS
-      <span v-if="AW.ssoExpired" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
+      <span v-if="ui.badge.sso" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
       <span v-else-if="liveTerms" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveTerms }}</span>
     </div>
 
@@ -161,7 +159,7 @@ const items = computed<DropdownMenuItem[][]>(() => [
       :title="sshTitle"
       class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
       :class="ui.ssh ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
-      @click.stop="ui.runAction('ssh')"
+      @click.stop="api.tool.toggle('ssh', true)"
     >
       <UIcon name="i-hugeicons-computer-terminal-01" class="size-3.5" />SSH
       <span v-if="liveSsh" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveSsh }}</span>

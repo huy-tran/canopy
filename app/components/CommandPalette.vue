@@ -76,6 +76,7 @@ const cmdItems = computed<PalItem[]>(() => {
   C('Shell: show or hide the shell panel', kl('shell'), () => ui.toggleShellPanel())
   ;(P.current?.repos || []).forEach(r => C(`Open shell in ${r.label}`, '', () => ui.openShell(r.id)))
   C('SSH: open or close the window', kl('ssh'), () => ui.runAction('ssh'))
+  C('Windows: put GitHub, AWS and SSH back where they started', '', () => api.tool.reset())
   ;(prefs.prefs.sshHosts || []).forEach(h => C(`SSH: ${sshTitle(h)} (${sshDetail(h)})`, '', () => ui.openShell(null, { ssh: h.id })))
   C('Dev servers: start all', '', () => V.startProject(P.current))
   C('Dev servers: stop all', '', () => V.stopProject(P.current))

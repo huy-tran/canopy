@@ -2,7 +2,7 @@
 import { app, dialog, Notification, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { handle, logoImage, send, showWindow, state } from '../context'
+import { handle, handleWin, logoImage, send, showWindow, state } from '../context'
 import { webUrl } from '../services/guard'
 import { sampleMetrics } from '../services/metrics'
 import { appInfo, copyImage, listFonts, listShells, openInEditor, saveImage, savedImage, showInFolder } from '../services/system'
@@ -59,10 +59,11 @@ export function registerSystemIpc() {
     n.show()
   })
 
-  handle('win:minimize', () => state.win?.minimize())
-  handle('win:toggleMaximize', () => (state.win?.isMaximized() ? state.win.unmaximize() : state.win?.maximize()))
-  handle('win:close', () => state.win?.close())
-  handle('win:isMaximized', () => !!state.win?.isMaximized())
+  // The window controls act on whichever window asked: the main one or a tool window.
+  handleWin('win:minimize', win => win?.minimize())
+  handleWin('win:toggleMaximize', win => (win?.isMaximized() ? win.unmaximize() : win?.maximize()))
+  handleWin('win:close', win => win?.close())
+  handleWin('win:isMaximized', win => !!win?.isMaximized())
   handle('win:summonKey', (combo: string) => applySummonKey(combo))
   handle('app:quit', () => {
     state.quitting = true

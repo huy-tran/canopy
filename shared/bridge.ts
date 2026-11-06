@@ -2,6 +2,40 @@
 import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshFileResult, SshPuttyResult, SshTabbyResult } from './types'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
+/** The windows that open on their own beside the main one. */
+export type ToolKind = 'gh' | 'aws' | 'ssh'
+export const TOOL_KINDS: ToolKind[] = ['gh', 'aws', 'ssh']
+/** Which of them are showing. */
+export type ToolState = Record<ToolKind, boolean>
+/** What the main window asks a tool window to do as it opens: GitHub goes to a section, or onto a pull request. */
+export interface ToolCmd {
+  go?: string
+  pull?: string
+  /** AWS: switch to a profile, show a service, or show a service filtered to something. */
+  awsProfile?: string
+  awsGo?: string
+  awsJump?: { tab: string; query: string }
+  /** SSH: connect to a profile. */
+  ssh?: string
+}
+/** What a tool window asks the main window to do. */
+export interface MainCmd { settings?: string }
+/** The settings every window shares: kept in step through the main process, and saved by the main window. */
+export interface SharedState {
+  prefs: unknown
+  keys: unknown
+  theme: unknown
+  /** From the main window only. */
+  projects?: unknown
+  sel?: string | null
+  /** From the AWS window: the profile and region it is on, which the 3D World's data centre follows. */
+  aws?: { profile: string; region: string }
+  /** From the AWS and SSH windows: what the title bar buttons count. */
+  badges?: { aws?: { terms: number; sso: string | null }; ssh?: number }
+  /** From the SSH window: its open connections, which the main window saves with the rest. */
+  sshSaved?: unknown[]
+}
+
 /** The AWS calls, one IPC channel each (`aws:<name>`); main and preload are both built from this list. */
 export const AWS_CALLS = [
   'lockState', 'unlock', 'lock', 'enrolStart', 'enrolFinish', 'profiles', 'state', 'remember', 'saveBookmarks', 'forget',
@@ -224,6 +258,29 @@ export interface CanopyApi {
   }
   app: {
     quit(): Promise<void>
+  }
+  /** The GitHub, AWS and SSH windows. */
+  tool: {
+    /** Opens it, brings it to the front, or hides it; `strict` never just focuses (for the title bar buttons). */
+    toggle(kind: ToolKind, strict?: boolean): Promise<void>
+    open(kind: ToolKind, cmd?: ToolCmd): Promise<void>
+    hide(kind: ToolKind): Promise<void>
+    /** Back to the original place, over the main window; every window when no kind is given. */
+    reset(kind?: ToolKind): Promise<void>
+    state(): Promise<ToolState>
+    onState(fn: (s: ToolState) => void): Off
+    /** A tool window says it is listening, and gets what was sent while it loaded. */
+    ready(kind: ToolKind): Promise<ToolCmd[]>
+    onCmd(fn: (c: ToolCmd) => void): Off
+    toMain(cmd: MainCmd): Promise<void>
+    onMainCmd(fn: (c: MainCmd) => void): Off
+  }
+  sync: {
+    push(s: SharedState): void
+    /** Asks the main window for its settings, for a tool window that just opened. */
+    request(): void
+    onPush(fn: (s: SharedState) => void): Off
+    onRequest(fn: () => void): Off
   }
   upd: {
     check(): Promise<void>

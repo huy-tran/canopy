@@ -21,7 +21,8 @@ export const useReviewsStore = defineStore('reviews', () => {
 
   function notify(title: string, body: string, url?: string) {
     const pr = prefsStore.prefs
-    if (pr.dnd) return
+    // The GitHub window checks too, after approving or merging; only the main window notifies.
+    if (pr.dnd || toolKind) return
     // Clicking opens the GitHub view.
     api.sys.notify({ title, body, sid: url ? `${GH_NOTIFY}|${url}` : GH_NOTIFY, silent: !pr.sound })
   }

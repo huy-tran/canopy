@@ -1,9 +1,9 @@
 // The AWS window's calls: one `aws:<name>` channel each.
-import { app, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import path from 'node:path'
 import type { AwsCtx } from '../../shared/aws'
 import { AWS_CALLS, type AwsApi } from '../../shared/bridge'
-import { awsCache, handle, prefs, ptyData, send, state } from '../context'
+import { awsCache, claimPty, handleWin, prefs, ptyData, ptyExit, state } from '../context'
 import * as aws from '../services/aws'
 import { spawnCommand } from '../services/pty'
 
@@ -14,6 +14,10 @@ aws.configureAws(() => {
   const p = prefs()
   return { totp: p?.awsTotp !== false, ttlHours: p?.awsUnlockHours || 4, dryRun: !!p?.awsDryRun }
 })
+
+/** The window making the call in progress; the calls below are synchronous up to the point they use it. */
+let caller: Electron.WebContents | null = null
+const callerWin = () => (caller ? BrowserWindow.fromWebContents(caller) : null) || state.win!
 
 /** One `aws:<name>` channel per call in AWS_CALLS. */
 export function registerAwsIpc() {
@@ -40,7 +44,8 @@ export function registerAwsIpc() {
       if (!aws.gateOpen()) return { ok: false, error: 'AWS is locked.' }
       const c = aws.cliCommand(ctx, o)
       if ('error' in c) return { ok: false, error: c.error }
-      spawnCommand({ id, cmd: c.cmd, cols, rows }, ptyData, (i, code) => send('pty:exit', i, code))
+      if (caller) claimPty(id, caller)
+      spawnCommand({ id, cmd: c.cmd, cols, rows }, ptyData, ptyExit)
       return { ok: true, cmd: c.cmd }
     },
     ec2Instances: (ctx, force) => aws.ec2Instances(ctx, force),
@@ -59,7 +64,10 @@ export function registerAwsIpc() {
     logStreams: (ctx, group, force) => aws.logStreams(ctx, group, force),
     logEvents: (ctx, group, stream) => aws.logEvents(ctx, group, stream),
     logSearch: (ctx, group, pattern, start, end) => aws.logSearch(ctx, group, pattern, start, end),
-    tailStart: (ctx, id, arn) => aws.tailStart(ctx, id, arn, m => send('aws:tail', m)),
+    tailStart: (ctx, id, arn) => {
+      const wc = caller
+      return aws.tailStart(ctx, id, arn, (m) => { if (wc && !wc.isDestroyed()) wc.send('aws:tail', m) })
+    },
     tailStop: (id: string) => aws.tailStop(id),
     cfDistributions: (ctx, force) => aws.cfDistributions(ctx, force),
     cfInvalidations: (ctx, dist, force) => aws.cfInvalidations(ctx, dist, force),
@@ -67,13 +75,13 @@ export function registerAwsIpc() {
     s3Buckets: (ctx, force) => aws.s3Buckets(ctx, force),
     s3List: (ctx, bucket, region, prefix, force) => aws.s3List(ctx, bucket, region, prefix, force),
     s3Download: async (ctx: AwsCtx, bucket: string, region: string, key: string) => {
-      const r = await dialog.showSaveDialog(state.win!, { defaultPath: path.join(app.getPath('downloads'), path.basename(key)) })
+      const r = await dialog.showSaveDialog(callerWin(), { defaultPath: path.join(app.getPath('downloads'), path.basename(key)) })
       if (r.canceled || !r.filePath) return { ok: true as const, data: null }
       return aws.s3Download(ctx, bucket, region, key, r.filePath)
     },
     s3Delete: (ctx, bucket, region, keys) => aws.s3Delete(ctx, bucket, region, keys),
     s3PickUpload: async () => {
-      const r = await dialog.showOpenDialog(state.win!, { properties: ['openFile', 'multiSelections'] })
+      const r = await dialog.showOpenDialog(callerWin(), { properties: ['openFile', 'multiSelections'] })
       if (r.canceled) return []
       for (const p of r.filePaths) pickedUploads.add(p)
       const sizes = aws.fileSizes(r.filePaths)
@@ -97,5 +105,10 @@ export function registerAwsIpc() {
     cdGroups: (ctx, appName, force) => aws.cdGroups(ctx, appName, force),
     cdDeployments: (ctx, appName, group, force) => aws.cdDeployments(ctx, appName, group, force),
   }
-  for (const name of AWS_CALLS) handle(`aws:${name}`, calls[name])
+  for (const name of AWS_CALLS) {
+    handleWin(`aws:${name}`, (_w, wc, ...a) => {
+      caller = wc
+      return calls[name](...a)
+    })
+  }
 }

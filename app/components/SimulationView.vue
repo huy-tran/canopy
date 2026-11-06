@@ -145,7 +145,7 @@ watch(() => ui.simTarget, (t) => {
 
 /** Tab and Shift Tab fly between the sessions waiting on you, while nothing else has the keyboard. */
 useEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || ui.gh || ui.aws || menu.value) return
+  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || talkOpen.value || menu.value) return
   const t = e.target as HTMLElement | null
   if (t?.closest('input, textarea, [contenteditable], .xterm, [role="dialog"]')) return
   e.preventDefault()
@@ -365,16 +365,15 @@ function openFromDc(id: string) {
   if (id.startsWith('profile:')) {
     const name = id.slice(8)
     if (name === A.profile) return
-    A.useProfile(name)
-    if (A.picker) ui.openAws()
-    else ui.toast({ title: `Showing ${name}`, body: `${A.region} · here and in the AWS window` })
+    // The AWS window switches (and asks for a region if the profile has none); the data centre follows it.
+    ui.openAws({ awsProfile: name })
     return
   }
-  if (id.startsWith('ec2:')) A.jumpTo('EC2', id.slice(4))
-  else if (id.startsWith('eb:')) A.jumpTo('Beanstalk', id.slice(3))
-  else if (id === 'wing:racks') A.go('EC2')
-  else if (id === 'wing:envs') A.go('Beanstalk')
-  ui.openAws()
+  if (id.startsWith('ec2:')) ui.openAws({ awsJump: { tab: 'EC2', query: id.slice(4) } })
+  else if (id.startsWith('eb:')) ui.openAws({ awsJump: { tab: 'Beanstalk', query: id.slice(3) } })
+  else if (id === 'wing:racks') ui.openAws({ awsGo: 'EC2' })
+  else if (id === 'wing:envs') ui.openAws({ awsGo: 'Beanstalk' })
+  else ui.openAws()
 }
 
 const hoverPerson = computed(() => (hover.value?.pick.kind === 'person' ? people.value.find(p => p.id === hover.value!.pick.id) || null : null))
