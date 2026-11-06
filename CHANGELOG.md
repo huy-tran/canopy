@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-11-06
+
 - The default key to summon Canopy is now Ctrl+Space (was Alt+Space). Change it in Settings if you prefer another.
 
 ## [0.28.0] - 2026-11-06
@@ -275,6 +277,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.28.1]: https://github.com/huy-tran/canopy/releases/tag/v0.28.1
 [0.28.0]: https://github.com/huy-tran/canopy/releases/tag/v0.28.0
 [0.27.0]: https://github.com/huy-tran/canopy/releases/tag/v0.27.0
 [0.26.1]: https://github.com/huy-tran/canopy/releases/tag/v0.26.1
