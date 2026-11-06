@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Activity, Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, Subagent, UsageUpdate } from '#shared/types'
+import type { Activity, Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, SshHost, Subagent, UsageUpdate } from '#shared/types'
 import { costOf, modelLabel } from '#shared/pricing'
 import { errMessage } from '#shared/errors'
 
@@ -54,11 +54,11 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   const byId = (id: string | null | undefined) => sessions.value.find(s => s.id === id) || null
   /** Panes of a project: Claude sessions and pane shells (docked shells live in the dock panel). */
-  const ofProject = (pid: string) => sessions.value.filter(s => s.pid === pid && !s.docked)
+  const ofProject = (pid: string) => sessions.value.filter(s => s.pid === pid && !s.docked && !s.win)
   /** Claude sessions only: what prompting, sharing, the inbox and costs work with. */
   const claudeOf = (pid: string) => sessions.value.filter(s => s.pid === pid && s.kind === 'claude')
   /** Shells in the dock panel. */
-  const dockedOf = (pid: string) => sessions.value.filter(s => s.pid === pid && s.docked)
+  const dockedOf = (pid: string) => sessions.value.filter(s => s.pid === pid && s.docked && !s.win)
   /** Shells found on this machine, loaded once. */
   const shells = ref<{ kind: ShellKind; label: string; exe: string }[]>([])
   // Optional: a main process from before shells existed has no such call until the app restarts.
@@ -130,12 +130,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     return s
   }
 
-  /** Opens a plain shell in a folder, as a pane or docked in the dock panel. */
-  function startShell(p: Project, r: Repo, o: { id?: string; cwd?: string; kind?: ShellKind; docked?: boolean; branch?: string } = {}): Session {
+  /** The saved SSH connection with this id. */
+  const sshHost = (id?: string) => (id ? usePrefsStore().prefs.sshHosts?.find(h => h.id === id) : undefined)
+
+  /** Opens a plain shell in a folder (or an SSH connection), as a pane or docked in the dock panel. */
+  function startShell(p: Project, r: Repo, o: { id?: string; cwd?: string; kind?: ShellKind; ssh?: string; win?: 'ssh'; docked?: boolean; branch?: string } = {}): Session {
+    const host = sshHost(o.ssh)
     const kind = o.kind || usePrefsStore().prefs.shell || shells.value[0]?.kind || 'powershell'
     const id = o.id || uid('s'), now = Date.now(), cwd = o.cwd || r.path
     const s: Session = {
-      id, kind: 'shell', shell: kind, docked: !!o.docked, pid: p.id, repoId: r.id, cwd, cmd: '', title: shellLabel(kind), status: 'idle',
+      id, kind: 'shell', shell: host ? undefined : kind, sshId: host?.id, win: o.win, docked: !!o.docked && !o.win, pid: p.id, repoId: r.id, cwd, cmd: '', title: host ? host.name : shellLabel(kind), status: 'idle',
       branch: o.branch || r.branch || '', wt: null, model: '', ctx: 0, tokIn: 0, tokOut: 0, cacheR: 0, cacheW: 0, images: [],
       started: now, lastAt: now, endedAt: null, waitingSince: null, waitWhat: '', perm: false,
       promptCount: 0, prompts: [], claudeId: '', changed: [], editing: '', exited: false,
@@ -143,6 +147,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     sessions.value = [...sessions.value, s]
     ensureTerminal(id)
     const { cols, rows } = terminalSize(id)
+    if (o.ssh) {
+      if (!host) writeToTerminal(id, '\r\n\x1b[31mThat SSH connection no longer exists.\x1b[0m\r\n')
+      else launchSsh(id, cwd, host, cols, rows)
+      return s
+    }
     if (!api.pty.shell) {
       writeToTerminal(id, '\x1b[33mRestart Canopy to use shells (the app was updated while running).\x1b[0m\r\n')
       return s
@@ -151,6 +160,18 @@ export const useSessionsStore = defineStore('sessions', () => {
       writeToTerminal(id, `\r\n\x1b[31mCould not start ${shellLabel(kind)}: ${errMessage(e)}\x1b[0m\r\n`)
     })
     return s
+  }
+
+  /** Starts ssh for a connection; a failure is written in the terminal. */
+  function launchSsh(id: string, cwd: string, host: SshHost, cols: number, rows: number) {
+    if (!api.pty.ssh) {
+      writeToTerminal(id, '\x1b[33mRestart Canopy to use SSH (the app was updated while running).\x1b[0m\r\n')
+      return Promise.resolve()
+    }
+    return api.pty.ssh({ id, cwd, host: JSON.parse(JSON.stringify(host)) as SshHost, cols, rows }).then(() => {}).catch((e) => {
+      writeToTerminal(id, `\r\n\x1b[31mCould not start ssh to ${host.name}: ${errMessage(e)}\x1b[0m\r\n`)
+      patch(id, { exited: true, endedAt: Date.now() })
+    })
   }
 
   /** Closes a session: kills its terminal and removes the pane. */
@@ -199,6 +220,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     writeToTerminal(id, '\r\n')
     const { cols, rows } = terminalSize(id)
     try {
+      if (s.sshId) {
+        const host = sshHost(s.sshId)
+        if (!host) throw new Error('That SSH connection no longer exists.')
+        await launchSsh(id, s.cwd, host, cols, rows)
+        return
+      }
       if (shell) {
         if (!api.pty.shell) throw new Error('Restart Canopy to use shells.')
         await api.pty.shell({ id, cwd: s.cwd, kind: s.shell || 'powershell', cols, rows })
@@ -215,7 +242,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   /** What is saved so open sessions and shells can be reopened after a restart. */
   const saved = computed<SavedSession[]>(() => sessions.value.map(s => ({
-    id: s.id, kind: s.kind, shell: s.shell, docked: s.docked, pid: s.pid, repoId: s.repoId, cwd: s.cwd, cmd: s.cmd,
+    id: s.id, kind: s.kind, shell: s.shell, sshId: s.sshId, win: s.win, docked: s.docked, pid: s.pid, repoId: s.repoId, cwd: s.cwd, cmd: s.cmd,
     title: s.title, branch: s.branch, wt: s.wt, claudeId: s.claudeId, resumable: s.tokOut > 0 || s.prompts.length > 0, started: s.started, prompts: s.prompts.slice(-5),
   })))
 
@@ -231,7 +258,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     for (const x of list) {
       const p = P.byId(x.pid), r = p?.repos.find(rr => rr.id === x.repoId)
       if (!p || !r || byId(x.id)) continue
-      if (x.kind === 'shell') startShell(p, r, { id: x.id, cwd: x.cwd, kind: x.shell, docked: x.docked, branch: x.branch })
+      if (x.kind === 'shell') startShell(p, r, { id: x.id, cwd: x.cwd, kind: x.shell, ssh: x.sshId, win: x.win, docked: x.docked, branch: x.branch })
       else start(p, r, { reopen: x })
     }
   }
@@ -249,12 +276,35 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (u.act !== undefined && (was?.act !== u.act || was?.result?.at !== u.result?.at)) activity.value = { ...activity.value, [u.sid]: { act: u.act, result: u.result || null } }
   }
 
+  /** Reconnect attempts per SSH terminal, with when the last one started. */
+  const reconnects: Record<string, { n: number; at: number }> = {}
+  const RECONNECT_MAX = 5
+  const RECONNECT_WAIT = 3000
+
+  /** ssh exits with 255 when the connection fails or drops: connect again a few times, if the connection asks for it. */
+  function scheduleReconnect(id: string) {
+    const s = byId(id)
+    if (!s || !sshHost(s.sshId)?.reconnect) return
+    const last = reconnects[id]
+    // A connection that held for a minute starts the count again.
+    const n = last && Date.now() - last.at < 60_000 ? last.n : 0
+    if (n >= RECONNECT_MAX) {
+      writeToTerminal(id, `\r\n\x1b[33mGave up reconnecting after ${RECONNECT_MAX} tries. Press Enter to try again.\x1b[0m\r\n`)
+      delete reconnects[id]
+      return
+    }
+    writeToTerminal(id, `\r\n\x1b[2mReconnecting in ${RECONNECT_WAIT / 1000}s (try ${n + 1} of ${RECONNECT_MAX})...\x1b[0m\r\n`)
+    reconnects[id] = { n: n + 1, at: Date.now() }
+    setTimeout(() => { if (byId(id)?.exited) resume(id) }, RECONNECT_WAIT)
+  }
+
   function onExit(id: string, code: number) {
     const s = byId(id)
     if (!s) return
     if (s.kind === 'shell') {
-      writeToTerminal(id, `\r\n\x1b[2m[${shellLabel(s.shell)} exited · code ${code} · press Enter to restart]\x1b[0m\r\n`)
+      writeToTerminal(id, `\r\n\x1b[2m[${s.sshId ? s.title : shellLabel(s.shell)} exited · code ${code} · press Enter to restart]\x1b[0m\r\n`)
       patch(id, { exited: true, endedAt: Date.now() })
+      if (s.sshId && code === 255) scheduleReconnect(id)
       return
     }
     setSubagents(id, [])

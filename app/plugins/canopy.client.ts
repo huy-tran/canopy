@@ -124,7 +124,7 @@ export default defineNuxtPlugin({
         if (!cb) return false
         if (/^Alt\+[1-9]$/.test(cb)) return true
         // In an AWS terminal, the key that leaves it running stays with the window.
-        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim')) || (ui.aws && matchAction(prefs.keys, cb, 'aws') === 'awsDetach')
+        return !!matchAction(prefs.keys, cb) || (ui.sim && !!matchAction(prefs.keys, cb, 'sim')) || (ui.aws && matchAction(prefs.keys, cb, 'aws') === 'awsDetach') || (ui.ssh && matchAction(prefs.keys, cb, 'ssh') === 'sshDetach')
       },
       onImagePaste: (sid, f) => { if (S.byId(sid)?.kind !== 'shell') S.addImage(sid, f) },
       onImageHover: (sid, n, x, y) => { ui.hoverImg = n == null ? null : { sid, n, x, y } },

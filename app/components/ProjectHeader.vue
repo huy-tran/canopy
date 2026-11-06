@@ -47,10 +47,11 @@ function start(repoId: string, wt: boolean) {
 
 /** A plain shell as a pane in this repo: the default shell, or one picked from the arrow menu. */
 function shellItems(repoId: string): DropdownMenuItem[][] {
+  const hosts = prefs.prefs.sshHosts || []
   return [S.shells.map(sh => ({
     label: sh.label + (sh.kind === prefs.prefs.shell ? ' (default)' : ''),
     onSelect: () => ui.openShell(repoId, { kind: sh.kind, docked: false }),
-  }))]
+  })), ...(hosts.length ? [sshMenu(hosts, h => ui.openShell(repoId, { ssh: h.id, docked: false }))] : [])]
 }
 
 const defaultShell = computed(() => S.shellLabel(prefs.prefs.shell))

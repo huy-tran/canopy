@@ -30,6 +30,15 @@ async function which(name: string): Promise<string> {
   return r.ok ? r.out.split(/\r?\n/)[0]!.trim() : ''
 }
 
+/** The ssh client: on the path, else the OpenSSH that ships with Windows. */
+export async function sshPath(): Promise<string> {
+  const found = await which('ssh')
+  if (found) return found
+  const win = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'OpenSSH', 'ssh.exe')
+  if (IS_WIN && fs.existsSync(win)) return win
+  throw new Error('ssh was not found. Install OpenSSH (on Windows: Settings > Optional features > OpenSSH Client).')
+}
+
 /** Opens a folder (and optionally a file in it) with the editor's CLI. */
 export async function openInEditor(editor: string, folder: string, file?: string): Promise<{ ok: boolean; error?: string }> {
   const cmds = EDITOR_CLI[editor] || []

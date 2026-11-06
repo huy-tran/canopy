@@ -1,5 +1,5 @@
 // The API the preload script exposes as window.canopy.
-import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind } from './types'
+import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost } from './types'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
 /** The AWS calls, one IPC channel each (`aws:<name>`); main and preload are both built from this list. */
@@ -101,6 +101,7 @@ export interface CanopyApi {
   pty: {
     spawn(o: { id: string; cwd: string; cmd: string; cols: number; rows: number }): Promise<{ pid: number }>
     shell(o: { id: string; cwd: string; kind: ShellKind; cols: number; rows: number }): Promise<{ pid: number }>
+    ssh(o: { id: string; cwd: string; host: SshHost; cols: number; rows: number }): Promise<{ pid: number }>
     write(id: string, data: string): void
     resize(id: string, cols: number, rows: number): void
     kill(id: string): Promise<void>
@@ -197,6 +198,15 @@ export interface CanopyApi {
     onNotifyClick(fn: (sid: string) => void): Off
     /** A notification button was pressed; `key` is what that button sends. */
     onNotifyAction(fn: (sid: string, key: string) => void): Off
+  }
+  ssh: {
+    /** Hosts from ~/.ssh/config (wildcard entries left out). */
+    importConfig(): Promise<Omit<SshHost, 'id'>[]>
+    /** Choose a private key file, starting in ~/.ssh. */
+    pickKey(): Promise<string | null>
+    /** Keeps the password (or key passphrase) in the system keychain; null removes it. */
+    setPassword(id: string, password: string | null): Promise<void>
+    hasPassword(id: string): Promise<boolean>
   }
   win: {
     minimize(): Promise<void>

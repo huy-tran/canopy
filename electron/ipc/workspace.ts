@@ -1,14 +1,16 @@
 // Saved state, terminals, git, dev servers, history and one-shot Claude runs.
 import { ipcMain } from 'electron'
-import type { Persisted } from '../../shared/types'
+import type { Persisted, SshHost } from '../../shared/types'
 import { errMessage } from '../../shared/errors'
 import { handle, ptyData, send, store, trusted } from '../context'
 import { startService, stopService } from '../services/devservers'
 import { runClaude } from '../services/claude'
 import * as git from '../services/git'
-import { bufferOf, killSession, resizeSession, spawnSession, spawnShell, writeSession } from '../services/pty'
+import { bufferOf, killSession, resizeSession, spawnSession, spawnShell, spawnSsh, writeSession } from '../services/pty'
+import { sshArgs } from '../services/ssh'
+import { sshPassword } from '../services/sshsecrets'
 import { dayActivity, projectHistory, unwatchTranscript } from '../services/transcript'
-import { listShells } from '../services/system'
+import { listShells, sshPath } from '../services/system'
 import { planUsage } from '../services/usage'
 import { applyLoginItem, applySummonKey, ensureTray } from '../tray'
 
@@ -31,6 +33,11 @@ export function registerWorkspaceIpc() {
     const shells = await listShells()
     const shell = shells.find(s => s.kind === o.kind) || shells[0]!
     return spawnShell({ ...o, shell }, ptyData, (id, code) => send('pty:exit', id, code))
+  })
+  handle('pty:ssh', async (o: { id: string; cwd: string; host: SshHost; cols: number; rows: number }) => {
+    const args = sshArgs(o.host)
+    const password = o.host.auth === 'password' || o.host.auth === 'key' ? sshPassword(o.host.id) : ''
+    return spawnSsh({ id: o.id, cwd: o.cwd, exe: await sshPath(), args, password, passwordKind: o.host.auth === 'key' ? 'passphrase' : 'password', cols: o.cols, rows: o.rows }, ptyData, (id, code) => send('pty:exit', id, code))
   })
   handle('pty:kill', (id: string) => {
     unwatchTranscript(id)

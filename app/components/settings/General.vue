@@ -26,7 +26,7 @@ const editor = computed({
         variant="none"
         :ui="{
           root: 'w-[220px]',
-          base: 'mono h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12px] text-(--tx)',
+          base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)',
         }"
         @update:model-value="v => prefs.set({ startCmd: String(v) })"
       />
@@ -38,7 +38,7 @@ const editor = computed({
         variant="none"
         :ui="{
           root: 'w-[220px]',
-          base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12px] text-(--tx)',
+          base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)',
         }"
         @change="(e: Event) => prefs.set({ weatherCity: (e.target as HTMLInputElement).value.trim() })"
       />

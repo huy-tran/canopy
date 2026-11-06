@@ -133,7 +133,7 @@ function setScrollback(v: string | number) {
         inputmode="numeric"
         :ui="{
           root: 'w-[120px]',
-          base: 'mono h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12px] text-(--tx)',
+          base: 'h-[30px] px-[10px] py-0 bg-(--inp) border border-(--ln) rounded-md text-[12.5px] text-(--tx)',
         }"
         @update:model-value="setScrollback"
       />

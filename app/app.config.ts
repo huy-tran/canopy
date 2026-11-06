@@ -17,6 +17,14 @@ const menu = {
   },
 }
 
+/** Nuxt UI sets md:text-sm (14px) on every field, which beats the sizes set on each one: this puts them at the sidebar's 12.5px. */
+const fieldText = {
+  compoundVariants: [
+    { fixed: false, size: 'md', class: 'md:text-[12.5px]' },
+    { fixed: false, size: 'lg', class: 'md:text-[12.5px]' },
+  ],
+}
+
 export default defineAppConfig({
   canopy: {
     releaseNotesUrl: 'https://github.com/huy-tran/canopy/releases',
@@ -92,6 +100,11 @@ export default defineAppConfig({
         { color: 'neutral', variant: 'ghost', class: 'text-(--mu) hover:bg-(--hov) hover:text-(--tx)' },
       ],
     },
+    input: fieldText,
+    textarea: fieldText,
+    select: fieldText,
+    selectMenu: fieldText,
+    inputMenu: fieldText,
     dropdownMenu: menu,
     contextMenu: menu,
     popover: {

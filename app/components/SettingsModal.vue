@@ -22,6 +22,7 @@ const TABS: [SettingsTab, string][] = [
   ['general', 'General'],
   ['appearance', 'Appearance'],
   ['terminal', 'Terminal'],
+  ['ssh', 'SSH'],
   ['notifications', 'Notifications'],
   ['aws', 'AWS'],
   ['keys', 'Keyboard shortcuts'],
@@ -73,6 +74,7 @@ const nav = computed<NavigationMenuItem[]>(() => TABS.map(([id, label]) => ({
           <SettingsGeneral v-if="tab === 'general'" />
           <SettingsAppearance v-else-if="tab === 'appearance'" />
           <SettingsTerminal v-else-if="tab === 'terminal'" />
+          <SettingsSsh v-else-if="tab === 'ssh'" />
           <SettingsNotifications v-else-if="tab === 'notifications'" />
           <SettingsAws v-else-if="tab === 'aws'" />
           <SettingsKeys v-else />

@@ -62,12 +62,13 @@ function startResize(e: MouseEvent) {
   window.addEventListener('mouseup', up)
 }
 
-const newShellItems = computed<DropdownMenuItem[][]>(() => [[
-  ...S.shells.map(sh => ({
+const newShellItems = computed<DropdownMenuItem[][]>(() => [
+  S.shells.map(sh => ({
     label: sh.label + (sh.kind === prefs.prefs.shell ? ' (default)' : ''),
     onSelect: () => ui.newPanelShell(sh.kind),
   })),
-]])
+  ...((prefs.prefs.sshHosts || []).length ? [sshMenu(prefs.prefs.sshHosts || [], h => ui.newPanelShell(undefined, h.id))] : []),
+])
 
 /** When the menu closes, focus goes to the shell in view (the new one when one was picked), not back to the + button. */
 const pickerContent = {

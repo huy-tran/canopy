@@ -7,6 +7,43 @@ export type Editor = 'VS Code' | 'Cursor' | 'PhpStorm' | 'Zed'
 export type ThemePref = 'dark' | 'light' | 'system'
 export type WaitStyle = 'both' | 'highlight' | 'badge'
 export type PanelDock = 'bottom' | 'right'
+/** A saved SSH connection, opened as a terminal that runs the system ssh. */
+export interface SshHost {
+  id: string
+  name: string
+  host: string
+  port?: number
+  user?: string
+  /** How to log in: ssh's own choice when unset. */
+  auth?: SshAuth
+  /** Private key file; empty uses ssh's own defaults and agent. */
+  identity?: string
+  /** ProxyJump host(s), e.g. user@bastion. */
+  jump?: string
+  /** Run on the server instead of a login shell. */
+  command?: string
+  /** Folder in the connection lists. */
+  group?: string
+  /** Port forwards that run for as long as the terminal does. */
+  forwards?: SshForward[]
+  /** Connect again, a few times, when the connection drops. */
+  reconnect?: boolean
+}
+
+export type SshAuth = 'auto' | 'password' | 'key' | 'agent' | 'interactive'
+
+/** A port forward on an SSH connection: -L, -R or -D. */
+export interface SshForward {
+  id: string
+  type: 'local' | 'remote' | 'dynamic'
+  /** Address to listen on; empty is localhost (the server's loopback for remote). */
+  bindHost?: string
+  bindPort: number
+  /** Where traffic goes (not used by dynamic). */
+  destHost?: string
+  destPort?: number
+}
+
 export type ShellKind = 'pwsh' | 'powershell' | 'gitbash' | 'wsl' | 'cmd' | 'bash' | 'zsh' | 'fish' | 'sh'
 
 /** A plain shell found on this machine. */
@@ -243,6 +280,10 @@ export interface Session {
   kind: 'claude' | 'shell'
   /** Which shell, for kind 'shell'. */
   shell?: ShellKind
+  /** The saved SSH connection this shell runs, when it is one. */
+  sshId?: string
+  /** Lives in the SSH window instead of a pane or the shell panel. */
+  win?: 'ssh'
   /** Shells opened in the dock panel instead of as a pane. */
   docked?: boolean
   pid: string
@@ -309,6 +350,8 @@ export interface Prefs {
   dnd: boolean
   /** Terminal colours: always dark (Claude Code's default theme), or follow the app theme. */
   termTheme: 'dark' | 'app'
+  /** Saved SSH connections. */
+  sshHosts?: SshHost[]
   /** Default plain shell for new shell terminals. */
   shell: ShellKind
   /** The Files window also lists files .gitignore leaves out, such as .env. */
@@ -388,6 +431,8 @@ export interface SavedSession {
   id: string
   kind: 'claude' | 'shell'
   shell?: ShellKind
+  sshId?: string
+  win?: 'ssh'
   docked?: boolean
   pid: string
   repoId: string

@@ -17,6 +17,7 @@ const api: CanopyApi = {
   pty: {
     spawn: inv('pty:spawn'),
     shell: inv('pty:shell'),
+    ssh: inv('pty:ssh'),
     write: (id, d) => ipcRenderer.send('pty:write', id, d),
     resize: (id, c, r) => ipcRenderer.send('pty:resize', id, c, r),
     kill: inv('pty:kill'),
@@ -70,6 +71,7 @@ const api: CanopyApi = {
     runWorkflow: inv('gh:runWorkflow'),
   },
   aws: { ...Object.fromEntries(AWS_CALLS.map(c => [c, inv(`aws:${c}`)])), onTail: on('aws:tail') } as unknown as AwsApi,
+  ssh: { importConfig: inv('ssh:importConfig'), pickKey: inv('ssh:pickKey'), setPassword: inv('ssh:setPassword'), hasPassword: inv('ssh:hasPassword') },
   sys: {
     openExternal: inv('sys:openExternal'),
     showInFolder: inv('sys:showInFolder'),

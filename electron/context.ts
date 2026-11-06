@@ -14,6 +14,8 @@ if (DEV_URL && process.env.CANOPY_USER_DATA) app.setPath('userData', process.env
 else if (DEMO) app.setPath('userData', path.join(app.getPath('appData'), 'canopy-demo'))
 
 export const store = new Store<{ state?: Persisted; bounds?: Electron.Rectangle; maximized?: boolean }>({ name: 'canopy' })
+/** SSH passwords and key passphrases, each encrypted with the system keychain (Electron safeStorage). */
+export const sshSecrets = new Store<{ pw?: Record<string, string> }>({ name: 'ssh-secrets' })
 /** GitHub HQ's last good read, so the 3D World and the GitHub window fill in at once on the next launch. */
 export const ghCache = new Store<{ world?: GhWorld }>({ name: 'github-cache' })
 /** The data centre's last good read, likewise for the 3D World and the AWS window. */

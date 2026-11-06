@@ -20,6 +20,10 @@ const awsTitle = computed(() => {
   if (AW.ssoExpired) return `${base}: the SSO sign-in for ${AW.ssoExpired} has run out`
   return liveTerms.value ? `${base}: ${liveTerms.value} session${liveTerms.value > 1 ? 's' : ''} running` : base
 })
+const S = useSessionsStore()
+/** SSH terminals still connected, counted on the SSH button. */
+const liveSsh = computed(() => S.sessions.filter(s => s.sshId && !s.exited).length)
+const sshTitle = computed(() => `SSH connections (${prefs.kl('ssh')})${liveSsh.value ? `: ${liveSsh.value} open` : ''}`)
 const ghTitle = computed(() => {
   const n = R.prs.length
   const waiting = R.problem === 'missing'
@@ -151,6 +155,16 @@ const items = computed<DropdownMenuItem[][]>(() => [
       <UIcon name="i-hugeicons-cloud-server" class="size-3.5" />AWS
       <span v-if="AW.ssoExpired" class="h-1.5 w-1.5 rounded-full bg-(--red)" />
       <span v-else-if="liveTerms" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveTerms }}</span>
+    </div>
+
+    <div
+      :title="sshTitle"
+      class="no-drag box-border flex h-[22px] flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11.5px] hover:border-(--bb) hover:text-(--tx2)"
+      :class="ui.ssh ? 'border-(--bb) bg-(--hov) text-(--tx2)' : 'border-(--ln) text-(--fa)'"
+      @click.stop="ui.runAction('ssh')"
+    >
+      <UIcon name="i-hugeicons-computer-terminal-01" class="size-3.5" />SSH
+      <span v-if="liveSsh" class="mono rounded-lg bg-(--chip) px-1.5 text-[10.5px] font-bold text-(--tx2)">{{ liveSsh }}</span>
     </div>
 
     <div

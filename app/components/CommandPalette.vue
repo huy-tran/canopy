@@ -36,6 +36,8 @@ const navItems = computed<PalItem[]>(() => {
   const items: PalItem[] = []
   const rank = (st: string) => (st === 'waiting' ? 0 : 1)
   ;[...S.sessions].sort((a, b) => rank(a.status) - rank(b.status)).forEach((s) => {
+    // SSH terminals are reached from the SSH window.
+    if (s.win) return
     const p = P.byId(s.pid)
     if (!p) return
     const r = P.repoOf(s.pid, s.repoId)
@@ -73,6 +75,8 @@ const cmdItems = computed<PalItem[]>(() => {
   C('Dev servers: show or hide logs', kl('logs'), () => ui.toggleLogs())
   C('Shell: show or hide the shell panel', kl('shell'), () => ui.toggleShellPanel())
   ;(P.current?.repos || []).forEach(r => C(`Open shell in ${r.label}`, '', () => ui.openShell(r.id)))
+  C('SSH: open or close the window', kl('ssh'), () => ui.runAction('ssh'))
+  ;(prefs.prefs.sshHosts || []).forEach(h => C(`SSH: ${sshTitle(h)} (${sshDetail(h)})`, '', () => ui.openShell(null, { ssh: h.id })))
   C('Dev servers: start all', '', () => V.startProject(P.current))
   C('Dev servers: stop all', '', () => V.stopProject(P.current))
   C('New session in a new worktree', '', () => ui.newSession(null, true))

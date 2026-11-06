@@ -7,7 +7,7 @@ const none = async () => null as any
 /** Stand-in used when the renderer is opened in a plain browser (no Electron preload). */
 const browserFallback: CanopyApi = {
   state: { load: none, save: none },
-  pty: { spawn: async () => ({ pid: 0 }), shell: async () => ({ pid: 0 }), write: () => {}, resize: () => {}, kill: none, buffer: async () => '', onData: noop, onExit: noop },
+  pty: { spawn: async () => ({ pid: 0 }), shell: async () => ({ pid: 0 }), ssh: async () => ({ pid: 0 }), write: () => {}, resize: () => {}, kill: none, buffer: async () => '', onData: noop, onExit: noop },
   session: { onHook: noop, onUsage: noop },
   git: {
     info: async () => ({ exists: false, isRepo: false, branch: '', stack: '' }),
@@ -61,6 +61,7 @@ const browserFallback: CanopyApi = {
     s3PickUpload: async () => [],
     onTail: noop,
   } as unknown as AwsApi,
+  ssh: { importConfig: async () => [], pickKey: none, setPassword: none, hasPassword: async () => false },
   sys: {
     openExternal: async (u) => { window.open(u, '_blank') }, showInFolder: none, openEditor: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     pickFolder: none, fonts: async () => [], shells: async () => [], info: async () => ({ version: '0.0.0', electron: '-', chromium: '-', node: '-', claudeVersion: '-', claudePath: '-', os: '-' }),

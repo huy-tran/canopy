@@ -10,7 +10,7 @@ export interface ActionDef {
    * workspace simulation, 'github' ones only in the GitHub window; all may reuse keys bound
    * elsewhere, and GitHub window keys may be single letters, like gh-tui's.
    */
-  scope?: 'shell' | 'sim' | 'github' | 'aws'
+  scope?: 'shell' | 'sim' | 'github' | 'aws' | 'ssh'
 }
 
 const GH = 'GitHub window'
@@ -34,6 +34,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'simulation', g: 'Navigate', label: 'Open or close the 3D World', def: ['Ctrl+Shift+Home'] },
   { id: 'github', g: 'Navigate', label: 'Open or close GitHub', def: ['Ctrl+Shift+G'] },
   { id: 'aws', g: 'Navigate', label: 'Open or close AWS', def: ['Ctrl+Shift+A'] },
+  { id: 'ssh', g: 'Navigate', label: 'Open or close the SSH connections menu', def: ['Ctrl+Shift+S'] },
   { id: 'newSession', g: 'Sessions', label: 'New session in the focused repo', def: ['Ctrl+Shift+T'] },
   { id: 'promptAll', g: 'Sessions', label: 'Prompt several sessions at once', def: ['Ctrl+Shift+Enter'] },
   { id: 'share', g: 'Sessions', label: 'Share changes with the other repo', def: ['Ctrl+Shift+H'] },
@@ -44,12 +45,13 @@ export const ACTIONS: ActionDef[] = [
   { id: 'cycleLayout', g: 'Layout', label: 'Cycle layout: tabs, split, grid', def: ['Ctrl+Shift+L'] },
   { id: 'files', g: 'Files and dev servers', label: 'Files and git changes', def: ['Ctrl+Shift+F'] },
   { id: 'editor', g: 'Files and dev servers', label: 'Open the focused repo in your editor', def: ['Ctrl+Shift+E'] },
-  { id: 'logs', g: 'Files and dev servers', label: 'Dev server logs', def: ['Ctrl+Shift+S'] },
+  { id: 'logs', g: 'Files and dev servers', label: 'Dev server logs', def: ['Ctrl+Shift+B'] },
   { id: 'shell', g: 'Files and dev servers', label: 'Open or close the shell panel', def: ['Ctrl+`'] },
   { id: 'shellNew', g: 'Shell panel, while it has focus', label: 'New shell (default shell)', def: ['Ctrl+T'], scope: 'shell' },
   { id: 'shellNewPick', g: 'Shell panel, while it has focus', label: 'New shell, choosing which', def: ['Ctrl+Shift+T'], scope: 'shell' },
   { id: 'shellNext', g: 'Shell panel, while it has focus', label: 'Next shell tab', def: ['Ctrl+Alt+→'], scope: 'shell' },
   { id: 'shellPrev', g: 'Shell panel, while it has focus', label: 'Previous shell tab', def: ['Ctrl+Alt+←'], scope: 'shell' },
+  { id: 'sshDetach', g: 'SSH window', label: 'Leave a terminal connected and go back to the profiles', def: ['Ctrl+]'], scope: 'ssh' },
   { id: 'simTalk', g: '3D World', label: 'Open or close the session of the character in view', def: ['Ctrl+Enter'], scope: 'sim' },
   { id: 'ghDown', g: GH, label: 'Next item', def: ['J', '↓'], scope: 'github' },
   { id: 'ghUp', g: GH, label: 'Previous item', def: ['K', '↑'], scope: 'github' },

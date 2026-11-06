@@ -1,5 +1,6 @@
 // Claude Code terminals and plain shells. One node-pty per session, streamed to the renderer.
 import * as pty from 'node-pty'
+import fs from 'node:fs'
 import os from 'node:os'
 import type { ShellInfo, ShellKind } from '../../shared/types'
 import { writeSessionSettings, removeSessionSettings } from './hooks'
@@ -139,6 +140,49 @@ export function spawnShell(o: { id: string; cwd: string; shell: ShellInfo; cols:
   return track(o.id, p, onData, onExit)
 }
 
+
+/** The system ssh client in a pty. */
+export function spawnSsh(o: { id: string; cwd: string; exe: string; args: string[]; password?: string; passwordKind?: 'password' | 'passphrase'; cols: number; rows: number }, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
+  killSession(o.id)
+  const p = pty.spawn(o.exe, o.args, {
+    name: 'xterm-256color',
+    cols: Math.max(20, o.cols || 120),
+    rows: Math.max(5, o.rows || 30),
+    // ssh does not need a project folder, so one that is missing (moved, deleted) falls back to home instead of failing to start.
+    cwd: fs.existsSync(o.cwd) ? o.cwd : os.homedir(),
+    env: { ...cleanEnv(), COLORTERM: 'truecolor' },
+    ...CONPTY,
+  })
+  return track(o.id, p, o.password ? autoPassword(p, o.password, o.passwordKind || 'password', onData) : onData, onExit)
+}
+
+/** ssh's own prompts, as the whole last line: a password for the account, or a key's passphrase. */
+const PASSWORD_PROMPT = /^(?:[^\s@]+@[^\s']+'s password|(?:\([^)\n]*\) )?Password): $/
+const PASSPHRASE_PROMPT = /^Enter passphrase for key '[^'\n]+': $/
+/** The saved secret is only typed during sign-in, never into whatever runs on the server afterwards. */
+const AUTOFILL_MS = 30_000
+
+/**
+ * Answers ssh's own sign-in prompt with the saved secret: only the prompt that fits the method (a password, or a key's passphrase),
+ * only in the first seconds, and at most twice so a wrong one never locks the account.
+ */
+function autoPassword(p: pty.IPty, secret: string, kind: 'password' | 'passphrase', onData: (id: string, d: string) => void) {
+  const prompt = kind === 'passphrase' ? PASSPHRASE_PROMPT : PASSWORD_PROMPT
+  const until = Date.now() + AUTOFILL_MS
+  let tail = '', sent = 0
+  return (id: string, d: string) => {
+    onData(id, d)
+    if (sent >= 2 || Date.now() > until) return
+    // eslint-disable-next-line no-control-regex
+    tail = (tail + d).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').slice(-300)
+    const last = tail.slice(Math.max(tail.lastIndexOf('\n'), tail.lastIndexOf('\r')) + 1)
+    if (prompt.test(last)) {
+      sent++
+      tail = ''
+      p.write(secret + '\r')
+    }
+  }
+}
 
 export function writeSession(id: string, data: string) {
   terms.get(id)?.p.write(data)

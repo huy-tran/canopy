@@ -220,7 +220,7 @@ function copyRecap() {
                 variant="none"
                 inputmode="decimal"
                 class="w-20"
-                :ui="{ base: 'mono w-full rounded-md border border-(--ln) bg-(--inp) px-2 py-1 text-[12.5px] text-(--tx)' }"
+                :ui="{ base: 'w-full rounded-md border border-(--ln) bg-(--inp) px-2 py-1 text-[12.5px] text-(--tx)' }"
               />
               <span class="flex-1" />
               <UTooltip text="Time you were active in Claude Code, ignoring breaks over 15 minutes">

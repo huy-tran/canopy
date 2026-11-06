@@ -3,6 +3,7 @@ import type { HookEvent } from '../shared/types'
 import { prefs, send, showWindow, state } from './context'
 import { registerDesktopEntry } from './desktop'
 import { registerAwsIpc } from './ipc/aws'
+import { registerSshIpc } from './ipc/ssh'
 import { registerGithubIpc } from './ipc/github'
 import { registerSystemIpc } from './ipc/system'
 import { registerWorkspaceIpc } from './ipc/workspace'
@@ -46,6 +47,7 @@ function registerIpc() {
   registerWorkspaceIpc()
   registerGithubIpc()
   registerAwsIpc()
+  registerSshIpc()
   registerSystemIpc()
   registerUpdateIpc()
 }
