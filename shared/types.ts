@@ -44,6 +44,12 @@ export type SshPuttyResult =
   | { status: 'ok'; hosts: SshHost[]; duplicates: number; skipped: number; ppk: number }
   | { status: 'error'; error: string }
 
+/** The outcome of importing from a file the user picked. */
+export type SshFileResult =
+  | { status: 'ok'; hosts: SshHost[]; duplicates: number; skipped: number; file: string }
+  | { status: 'canceled' }
+  | { status: 'error'; error: string }
+
 export type SshAuth = 'auto' | 'password' | 'key' | 'agent' | 'interactive'
 
 /** A port forward on an SSH connection: -L, -R or -D. */

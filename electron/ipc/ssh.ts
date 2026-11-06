@@ -7,9 +7,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { handle, state } from '../context'
-import type { SshHost, SshPuttyResult, SshTabbyResult } from '../../shared/types'
+import type { SshFileResult, SshHost, SshPuttyResult, SshTabbyResult } from '../../shared/types'
 import { errMessage } from '../../shared/errors'
 import { parseSshConfig } from '../services/ssh'
+import { parseHostsFile } from '../services/hostsfile'
 import { mapPutty, parseRegQuery, parseSessionFile, type PuttySession } from '../services/putty'
 import { configOfVault, decryptTabbyVault, mapTabby } from '../services/tabby'
 import { hasSshPassword, setSshPassword } from '../services/sshsecrets'
@@ -98,6 +99,33 @@ async function importPutty(o: { existing?: { name: string; host: string; user?: 
   return { status: 'ok', hosts, duplicates, skipped: mapped.skipped, ppk: mapped.ppk }
 }
 
+/** Hosts from a CSV export (Termius and others) or an ssh config file the user picks. */
+async function importFile(o: { existing?: { name: string; host: string; user?: string }[] }): Promise<SshFileResult> {
+  const r = await dialog.showOpenDialog(state.win!, { title: 'Import SSH hosts', properties: ['openFile'], filters: [{ name: 'CSV or ssh config', extensions: ['csv', 'txt', '*'] }] })
+  const file = r.filePaths[0]
+  if (r.canceled || !file) return { status: 'canceled' }
+  let text: string
+  try {
+    if (fs.statSync(file).size > 5 * 1024 * 1024) return { status: 'error', error: 'That file is too large to be a host list.' }
+    text = fs.readFileSync(file, 'utf8')
+  } catch (e: any) {
+    return { status: 'error', error: `Could not read the file: ${errMessage(e)}` }
+  }
+  const parsed = parseHostsFile(path.basename(file), text)
+  if (!parsed.hosts.length) return { status: 'error', error: 'No hosts found. Use a CSV with a Hostname column, or an ssh config file.' }
+  const have = new Set((o.existing || []).map(h => `${h.name}|${h.host}|${h.user || ''}`.toLowerCase()))
+  const hosts: SshHost[] = []
+  let duplicates = 0
+  for (const h of parsed.hosts) {
+    if (have.has(`${h.name}|${h.host}|${h.user || ''}`.toLowerCase())) {
+      duplicates++
+      continue
+    }
+    hosts.push({ ...h, id: 'h' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex') })
+  }
+  return { status: 'ok', hosts, duplicates, skipped: parsed.skipped, file: path.basename(file) }
+}
+
 export function registerSshIpc() {
   handle('ssh:importConfig', () => {
     try {
@@ -106,6 +134,7 @@ export function registerSshIpc() {
       return []
     }
   })
+  handle('ssh:importFile', (o: { existing?: { name: string; host: string; user?: string }[] }) => importFile(o))
   handle('ssh:importPutty', (o: { existing?: { name: string; host: string; user?: string }[] }) => importPutty(o))
   handle('ssh:importTabby', (o: { passphrase?: string; existing?: { name: string; host: string; user?: string }[] }) => importTabby(o))
   handle('ssh:pickKey', async () => {

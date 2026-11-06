@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- SSH window: import hosts from a file, either a CSV export (such as Termius) or an ssh config. Passwords are never read from files.
+
 ## [0.27.0] - 2026-11-06
 
 - SSH connections: a new SSH window (Ctrl+Shift+S, or the button next to AWS) with saved profiles, colored groups, search and recent sessions. Open sessions are tabs you switch like Claude tabs, Ctrl+W ends one and Ctrl+Shift+W ends them all, and a finished session closes itself. Passwords are kept in the system keychain.

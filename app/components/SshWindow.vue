@@ -133,7 +133,24 @@ const importItems: DropdownMenuItem[][] = [[
   { label: 'From ~/.ssh/config', icon: 'i-hugeicons-file-import', onSelect: () => importConfig() },
   { label: 'From Tabby…', icon: 'i-hugeicons-download-01', onSelect: () => importTabby() },
   { label: 'From PuTTY', icon: 'i-hugeicons-download-01', onSelect: () => importPutty() },
+  { label: 'From a file (Termius CSV, ssh config)…', icon: 'i-hugeicons-file-import', onSelect: () => importFile() },
 ]]
+
+async function importFile() {
+  note.value = ''
+  const res = await api.ssh.importFile({ existing: hosts.value.map(h => ({ name: h.name, host: h.host, user: h.user })) })
+  if (res.status === 'canceled') return
+  if (res.status === 'error') {
+    note.value = res.error
+    return
+  }
+  prefs.set({ sshHosts: [...hosts.value, ...res.hosts] })
+  const parts = [`Imported ${res.hosts.length} profile${res.hosts.length === 1 ? '' : 's'} from ${res.file}`]
+  if (res.duplicates) parts.push(`${res.duplicates} already here`)
+  if (res.skipped) parts.push(`${res.skipped} skipped (not SSH, or no valid host)`)
+  parts.push('passwords are never read from files, so ssh asks for them')
+  note.value = parts.join(', ') + '.'
+}
 
 async function importPutty() {
   note.value = ''
