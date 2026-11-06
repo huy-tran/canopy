@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-06
+
 - GitHub, AWS and SSH now open as windows of their own, so you can drag them next to your Claude sessions or onto another monitor, and have more than one open at once. The same keys still toggle them, each remembers its size and position, and a button in its header (or the "Windows" command) puts it back over the main window. SSH connections still come back after a restart.
 
 ## [0.28.1] - 2026-11-06
@@ -279,6 +281,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.29.0]: https://github.com/huy-tran/canopy/releases/tag/v0.29.0
 [0.28.1]: https://github.com/huy-tran/canopy/releases/tag/v0.28.1
 [0.28.0]: https://github.com/huy-tran/canopy/releases/tag/v0.28.0
 [0.27.0]: https://github.com/huy-tran/canopy/releases/tag/v0.27.0
