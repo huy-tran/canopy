@@ -53,6 +53,7 @@ export default defineNuxtPlugin({
       P.projects = (saved.projects || []).map(p => ({ ...p, repos: p.repos.map(r => ({ ...r, services: r.services || [] })) }))
       // Before P.sel, so selecting the project restores its panel.
       ui.panels = Object.fromEntries(Object.entries(saved.panels || {}).filter(([pid]) => P.byId(pid)))
+      ui.previews = Object.fromEntries(Object.entries(saved.previews || {}).filter(([pid]) => P.byId(pid)))
       P.sel = saved.sel && P.byId(saved.sel) ? saved.sel : (P.projects[0]?.id ?? null)
       prefs.prefs = { ...prefs.prefs, ...(saved.prefs || {}) }
       prefs.keys = saved.keys || {}
@@ -69,13 +70,13 @@ export default defineNuxtPlugin({
     const snapshot = (): Persisted => plain({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, stripOn: ui.stripOn,
       sessions: reopened ? [...S.saved, ...ui.sshSaved] : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
-      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels,
+      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels, previews: ui.previews,
     })
     /** When the first unsaved change came; saves wait for a quiet moment, but never longer than SAVE_MAX after it. */
     let dirtySince = 0
     const SAVE_MAX = 2000
     // One string of everything saved: the watcher fires only when it really changes, not on every session update.
-    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels]), () => {
+    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels, ui.previews]), () => {
       if (demo) return
       const now = Date.now()
       dirtySince ||= now
@@ -253,6 +254,7 @@ export default defineNuxtPlugin({
     api.pty.onExit((id, code) => (id.startsWith('aws-') ? useAwsStore().onTermExit(id, code) : S.onExit(id, code)))
     api.svc.onData((id, d) => V.onData(id, d))
     api.svc.onStatus((id, s, code) => V.onStatus(id, s, code))
+    api.svc.onPort((id, port) => V.onPort(id, String(port)))
     api.sys.onNotifyClick((sid) => {
       // A review request: the GitHub window, on that PR when the notification was about one.
       const [kind, url] = sid.split('|')

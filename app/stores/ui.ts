@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { ToolCmd } from '#shared/bridge'
-import type { DockPanelState, Layout, PlanUsage, RecapHours, SavedSession, Session, UpdateState, ShellKind } from '#shared/types'
+import type { DockPanelState, Layout, PreviewState, PlanUsage, RecapHours, SavedSession, Session, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
 export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'ssh' | 'notifications' | 'aws' | 'keys'
@@ -70,6 +70,67 @@ export const useUiStore = defineStore('ui', () => {
   watch([logsOpen, svcTab], ([open, tab]) => {
     if (P.sel) panels.value = { ...panels.value, [P.sel]: { open, tab } }
   }, { flush: 'sync' })
+  /** App preview beside the chat, per project, saved with the app state. */
+  const previews = ref<Record<string, PreviewState>>({})
+  const preview = computed(() => (P.sel ? previews.value[P.sel] : undefined))
+  /** The preview is showing for the selected project. */
+  const previewShown = computed(() => {
+    const p = cur.value
+    return !!p && p.view !== 'overview' && !sim.value && !!preview.value?.open
+  })
+  /** Share of the project area the preview takes: two thirds unless dragged. */
+  const previewRatio = computed(() => Math.min(0.8, Math.max(0.25, preview.value?.ratio ?? 2 / 3)))
+  /** Projects whose Lookout page has been opened this session: each keeps its page (scroll, logins, forms) while another project shows. */
+  const previewAlive = ref<string[]>([])
+  /** Lookout at its widest with the project list folded away; what it was before comes back when it is switched off. */
+  const lookoutWide = ref<{ sidebarOff: boolean; ratio: number } | null>(null)
+  function toggleLookoutWide() {
+    if (lookoutWide.value) {
+      const was = lookoutWide.value
+      lookoutWide.value = null
+      prefsStore.set({ sidebarOff: was.sidebarOff })
+      setPreview({ ratio: was.ratio })
+      return
+    }
+    if (!previewShown.value) return
+    lookoutWide.value = { sidebarOff: !!prefsStore.prefs.sidebarOff, ratio: previewRatio.value }
+    prefsStore.set({ sidebarOff: true })
+    setPreview({ ratio: 0.8 })
+  }
+  function setPreview(patch: Partial<PreviewState>, pid = P.sel) {
+    if (!pid) return
+    const prev = previews.value[pid] || { open: false, url: '', ratio: 2 / 3 }
+    previews.value = { ...previews.value, [pid]: { ...prev, ...patch } }
+  }
+  function togglePreview() {
+    if (!cur.value || cur.value.view === 'overview') return
+    setPreview({ open: !preview.value?.open })
+    if (!preview.value?.open) focusLater()
+  }
+  /** Inserts text and the images that go with it at the focused Claude session's prompt, without sending. */
+  async function sendToClaude(text: string, images: File[] = [], opts: { after?: string; submit?: boolean } = {}) {
+    const sid = fid.value
+    const s = S.byId(sid)
+    if (!sid || !s || s.kind !== 'claude' || s.exited) {
+      toast({ title: 'No Claude session to send to', body: 'Start or focus a Claude session in this project first.', error: true })
+      return false
+    }
+    if (text) pasteInto(sid, text)
+    for (const f of images) await S.addImage(sid, f)
+    if (opts.after?.trim()) pasteInto(sid, opts.after.trim() + (opts.submit ? '' : ' '))
+    // Claude Code needs a moment to take a paste in before the Enter that sends it.
+    if (opts.submit) {
+      await new Promise(r => setTimeout(r, 200))
+      api.pty.write(sid, '\r')
+    }
+    focusTerminal(sid)
+    return true
+  }
+  /** Width of the project list on the left: 0 when folded away. */
+  const sidebarW = computed(() => (prefsStore.prefs.sidebarOff ? 0 : 264))
+  function toggleSidebar() {
+    prefsStore.set({ sidebarOff: !prefsStore.prefs.sidebarOff })
+  }
   const stripOn = ref(true)
   const stripMode = ref<'prompt' | 'session'>('prompt')
   const lightbox = ref<{ sid: string; idx: number } | null>(null)
@@ -83,6 +144,11 @@ export const useUiStore = defineStore('ui', () => {
 
   const wide = computed(() => width.value >= 900)
   const cur = computed(() => P.current)
+  // After `cur`, which previewShown reads: a watch evaluates its source at once.
+  watch(previewShown, (v) => {
+    const pid = P.sel
+    if (v && pid && !previewAlive.value.includes(pid)) previewAlive.value = [...previewAlive.value, pid]
+  }, { immediate: true })
   const fid = computed(() => S.focusedId(P.sel))
   const focused = computed(() => S.byId(fid.value))
   /** The dock panel is open and has a server or shell to show. */
@@ -799,6 +865,9 @@ export const useUiStore = defineStore('ui', () => {
       files: () => openExplorer(),
       editor: openEditor,
       logs: () => toggleLogs(),
+      preview: togglePreview,
+      lookoutWide: toggleLookoutWide,
+      sidebar: toggleSidebar,
       shell: toggleShellPanel,
       shellNew: () => newPanelShell(),
       shellNewPick: () => { shellPicker.value = true },
@@ -816,7 +885,7 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, sshAskCloseAll, sshAskTick, badge, sshSaved, inbox, bc, svcAdd,
-    logsOpen, svcTab, panels, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
+    logsOpen, svcTab, panels, previews, previewAlive, lookoutWide, toggleLookoutWide, preview, sidebarW, toggleSidebar, previewShown, previewRatio, setPreview, togglePreview, sendToClaude, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,

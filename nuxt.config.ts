@@ -33,6 +33,7 @@ export default defineNuxtConfig({
   alias: {
     '#shared': new URL('./shared', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'),
   },
+  vue: { compilerOptions: { isCustomElement: (tag: string) => tag === 'webview' } },
   vite: {
     optimizeDeps: { include: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'] },
   },

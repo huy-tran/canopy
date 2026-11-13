@@ -45,6 +45,7 @@ npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, comm
 | Git changes, diffs, files | `git status`, `git diff`, `git ls-files` (respects `.gitignore`). |
 | Worktrees | `git worktree add` into `<repo>.worktrees\<slug>`; Merge runs `git merge` then `git worktree remove`. |
 | Dev servers | node-pty, with the whole process tree killed on Stop. |
+| Lookout (app preview) | An Electron `<webview>` on its own session, locked to http(s); Select element and annotations run inside the page and reach Claude's prompt as pasted text and image paths. |
 | Screenshots | A pasted image is saved to disk and its path pasted at Claude's prompt, which attaches it as `[Image #n]`. |
 | Notifications, updates, fonts | Electron `Notification`, `electron-updater`, `font-list`. |
 

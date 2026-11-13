@@ -12,6 +12,7 @@ import { sshPassword } from '../services/sshsecrets'
 import { dayActivity, projectHistory, unwatchTranscript } from '../services/transcript'
 import { listShells, sshPath } from '../services/system'
 import { planUsage } from '../services/usage'
+import { detectServers } from '../services/detect'
 import { applyLoginItem, applySummonKey, ensureTray } from '../tray'
 
 export function registerWorkspaceIpc() {
@@ -70,8 +71,10 @@ export function registerWorkspaceIpc() {
   handle('svc:start', o => startService(o, {
     data: (id, d) => send('svc:data', id, d),
     status: (id, s, code) => send('svc:status', id, s, code),
+    port: (id, port) => send('svc:port', id, port),
   }))
   handle('svc:stop', (id: string) => stopService(id))
+  handle('svc:detect', (dir: string) => detectServers(dir))
 
   handle('git:stage', (cwd: string, paths: string[]) => git.stage(cwd, paths))
   handle('git:unstage', (cwd: string, paths: string[]) => git.unstage(cwd, paths))

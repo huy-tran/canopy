@@ -83,6 +83,18 @@ const defaultShell = computed(() => S.shellLabel(prefs.prefs.shell))
         </UTooltip>
       </div>
 
+      <UTooltip :text="`Lookout: your app beside the chat (${prefs.kl('preview')})`">
+        <UButton
+          color="neutral"
+          :variant="ui.preview?.open ? 'soft' : 'outline'"
+          size="xs"
+          icon="i-hugeicons-browser"
+          :label="ui.wide ? 'Lookout' : undefined"
+          class="flex-none"
+          @click="ui.togglePreview()"
+        />
+      </UTooltip>
+
       <UTooltip v-if="canBc" :text="`Send one prompt to several sessions (${prefs.kl('promptAll')})`">
         <UButton color="neutral" variant="outline" size="xs" label="Prompt all" class="flex-none" @click="ui.openBc()" />
       </UTooltip>

@@ -4,6 +4,7 @@ import net from 'node:net'
 import { execFile } from 'node:child_process'
 import { cleanEnv, CONPTY } from './pty'
 import { commandLine, IS_WIN } from './shellcmd'
+import { listeningPort } from '../../shared/devdetect'
 
 export type SvcStatus = 'starting' | 'running' | 'stopped'
 
@@ -11,6 +12,8 @@ interface Proc {
   p: pty.IPty
   status: SvcStatus
   probe?: NodeJS.Timeout
+  /** The port the server printed it is listening on, when that is not the one set (the default was taken, so it moved). */
+  port?: number
 }
 
 const procs = new Map<string, Proc>()
@@ -18,6 +21,7 @@ const procs = new Map<string, Proc>()
 type Emit = {
   data: (id: string, d: string) => void
   status: (id: string, s: SvcStatus, code?: number) => void
+  port: (id: string, port: number) => void
 }
 
 function portOpen(port: number): Promise<boolean> {
@@ -55,11 +59,16 @@ export function startService(o: { id: string; cwd: string; cmd: string; port?: s
   }
   if (port) {
     pr.probe = setInterval(async () => {
-      if (await portOpen(port)) ready()
+      if (await portOpen(pr.port ?? port)) ready()
     }, 600)
   }
   p.onData((d) => {
     emit.data(o.id, d)
+    const said = listeningPort(d)
+    if (said && !pr.port) {
+      pr.port = said
+      emit.port(o.id, said)
+    }
     if (!port) ready()
   })
   p.onExit(({ exitCode }) => {

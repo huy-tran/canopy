@@ -11,6 +11,8 @@ const inboxSession = computed(() => (ui.inbox?.sid ? S.byId(ui.inbox.sid) : null
 const inboxHere = computed(() => !!(inboxSession.value && cur.value && inboxSession.value.pid === cur.value.id))
 const showTabs = computed(() => isT.value && cur.value!.layout === 'tabs' && ss.value.length > 0 && !inboxHere.value)
 const showPanel = computed(() => ui.panelShown)
+/** Projects whose Lookout page is kept: the one in view shows, the rest wait unseen with their page intact. */
+const alive = computed(() => ui.previewAlive.filter(id => P.byId(id)))
 </script>
 
 <template>
@@ -26,7 +28,7 @@ const showPanel = computed(() => ui.panelShown)
     <template v-else>
       <ProjectHeader :project="cur" />
       <div v-if="isT" class="relative flex min-h-0 flex-1">
-        <div class="flex min-w-0 flex-1 flex-col">
+        <div class="flex min-w-[280px] flex-1 flex-col">
           <InboxBar v-if="ui.inbox" />
           <DevServersBar v-if="cur.repos.length" />
           <div class="flex min-h-0 flex-1" :class="prefs.prefs.panelDock === 'right' ? 'flex-row' : 'flex-col'">
@@ -38,6 +40,7 @@ const showPanel = computed(() => ui.panelShown)
             <DockPanel v-if="showPanel" />
           </div>
         </div>
+        <PreviewPane v-for="pid in alive" :key="pid" :pid="pid" :shown="ui.previewShown && pid === cur.id" />
       </div>
       <div v-else class="min-h-0 flex-1 overflow-auto">
         <OverviewView />

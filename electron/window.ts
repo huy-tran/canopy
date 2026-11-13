@@ -19,7 +19,39 @@ export function lockDown(win: BrowserWindow) {
       if (link) shell.openExternal(link)
     }
   })
-  win.webContents.on('will-attach-webview', e => e.preventDefault())
+  // Only the main window may host the preview, and only with the fixed preview session and a web address.
+  win.webContents.on('will-attach-webview', (e, webPreferences, params) => {
+    if (win !== state.win || params.partition !== PREVIEW_PARTITION || !webUrl(params.src)) return e.preventDefault()
+    delete webPreferences.preload
+    delete (webPreferences as { preloadURL?: string }).preloadURL
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    webPreferences.webSecurity = true
+    webPreferences.allowRunningInsecureContent = false
+    delete params.allowpopups
+  })
+}
+
+/** Name of the session the preview pane's page runs in: apart from the app's own, and kept between launches (logins in the dev site). */
+export const PREVIEW_PARTITION = 'persist:canopy-preview'
+
+/** A dev site's own pages: localhost and the .test and .localhost names Herd and Valet serve, whose certificates are their own. */
+export function isDevHost(host: string) {
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.test') || host.endsWith('.localhost')
+}
+
+/** The page inside a preview pane stays a web page: links go to the browser, nothing but http(s) loads. */
+export function lockDownPreview(contents: Electron.WebContents) {
+  if (contents.getType() !== 'webview') return
+  contents.setWindowOpenHandler(({ url }) => {
+    const link = webUrl(url)
+    if (link) shell.openExternal(link)
+    return { action: 'deny' }
+  })
+  contents.on('will-navigate', (e, url) => {
+    if (!webUrl(url)) e.preventDefault()
+  })
 }
 
 /** Web preferences every window loads with. */
@@ -49,7 +81,7 @@ export function createWindow() {
     icon: logoImage(256),
     title: 'Canopy',
     show: false,
-    webPreferences: appWebPreferences(),
+    webPreferences: { ...appWebPreferences(), webviewTag: true },
   })
   state.win = win
   if (store.get('maximized')) win.maximize()

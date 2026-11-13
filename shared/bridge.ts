@@ -1,4 +1,5 @@
 // The API the preload script exposes as window.canopy.
+import type { DetectedServer } from './devdetect'
 import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshFileResult, SshPuttyResult, SshTabbyResult } from './types'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
@@ -179,6 +180,10 @@ export interface CanopyApi {
   svc: {
     start(o: { id: string; cwd: string; cmd: string; port?: string }): Promise<void>
     stop(id: string): Promise<void>
+    /** The dev servers a folder runs (Laravel, Nuxt, Vite...), read from its package.json and composer.json. */
+    detect(dir: string): Promise<DetectedServer[]>
+    /** A server said it listens on another port than the one set (its default was taken). */
+    onPort(fn: (id: string, port: number) => void): Off
     onData(fn: (id: string, data: string) => void): Off
     onStatus(fn: (id: string, status: 'starting' | 'running' | 'stopped', code?: number) => void): Off
   }
@@ -228,6 +233,10 @@ export interface CanopyApi {
     saveImage(sid: string, name: string, bytes: Uint8Array): Promise<string>
     copyImage(file: string): Promise<void>
     saveImageAs(file: string): Promise<string | null>
+    /** A PNG of a preview pane's page, or of `rect` in it (the webview's web contents id). */
+    /** A request the Lookout page made came back failed (status 0 with `error` when it never got an answer). */
+    onPreviewRequest(fn: (r: { wc?: number; url: string; method: string; type: string; status: number; error?: string }) => void): Off
+    capturePreview(id: number, rect?: { x: number; y: number; width: number; height: number }): Promise<Uint8Array>
     notify(o: { title: string; body: string; sid?: string; silent?: boolean; actions?: { label: string; key: string }[] }): Promise<void>
     onNotifyClick(fn: (sid: string) => void): Off
     /** A notification button was pressed; `key` is what that button sends. */

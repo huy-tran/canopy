@@ -1,5 +1,5 @@
 // Editors, folders, images, notifications, window controls and quitting.
-import { app, dialog, Notification, shell } from 'electron'
+import { app, dialog, Notification, shell, webContents } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { handle, handleWin, logoImage, send, showWindow, state } from '../context'
@@ -28,6 +28,13 @@ export function registerSystemIpc() {
   handle('sys:info', () => appInfo())
   handle('sys:metrics', () => sampleMetrics())
   handle('sys:saveImage', (sid: string, name: string, bytes: Uint8Array) => saveImage(sid, name, bytes))
+  // A picture of the preview pane's page (or of a part of it), for annotating or for Claude.
+  handle('preview:capture', async (id: number, rect?: { x: number; y: number; width: number; height: number }) => {
+    const wc = typeof id === 'number' ? webContents.fromId(id) : undefined
+    if (!wc || wc.getType() !== 'webview' || wc.hostWebContents !== state.win?.webContents) throw new Error('Not a preview page.')
+    const img = await (rect ? wc.capturePage(rect) : wc.capturePage())
+    return new Uint8Array(img.toPNG())
+  })
   handle('sys:copyImage', (file: string) => copyImage(file))
   handle('sys:saveImageAs', async (file: string) => {
     savedImage(file)

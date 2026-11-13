@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const ui = useUiStore()
+const prefs = usePrefsStore()
 
 // A tool window (GitHub, AWS, SSH) is this same app showing only that tool; see ToolWindow.
 if (toolKind) useToolShortcuts()
@@ -23,6 +24,7 @@ watchEffect(() => {
       <AppTitleBar />
       <UDashboardGroup unit="px" :persistent="false" class="relative inset-auto min-h-0 flex-1">
         <UDashboardSidebar
+          v-if="!prefs.prefs.sidebarOff"
           :default-size="264"
           :min-size="264"
           :max-size="264"

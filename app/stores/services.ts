@@ -28,6 +28,8 @@ function tint(t: string): string {
 
 export const useServicesStore = defineStore('services', () => {
   // Shallow: entries are only ever replaced, and logs hold up to a thousand lines each.
+  /** The port each running server printed it listens on, which differs from the one set when the default was taken. */
+  const livePorts = ref<Record<string, string>>({})
   const runtime = shallowRef<Record<string, { status: SvcStatus; log: LogLine[]; partial: string }>>({})
   /** Output received but not yet added, per service: chatty servers send many small chunks. A timer, not a frame, so it still drains while the window is hidden. */
   const pending = new Map<string, string>()
@@ -70,6 +72,15 @@ export const useServicesStore = defineStore('services', () => {
     runtime.value = next
   }
 
+  function onPort(id: string, port: string) {
+    livePorts.value = { ...livePorts.value, [id]: port }
+  }
+
+  /** The port a server answers on: what it printed, else the one set. */
+  function portOf(v: { id: string; port: string }) {
+    return livePorts.value[v.id] || v.port
+  }
+
   function onStatus(id: string, s: SvcStatus, code?: number) {
     // Output that came before the status goes first.
     flush()
@@ -88,6 +99,10 @@ export const useServicesStore = defineStore('services', () => {
     if (st === 'running' || st === 'starting') return
     push(v.id, [ln('> ' + v.cmd, 'fa')])
     runtime.value = { ...runtime.value, [v.id]: { ...rt(v.id), status: 'starting' } }
+    if (livePorts.value[v.id]) {
+      const { [v.id]: _gone, ...rest } = livePorts.value
+      livePorts.value = rest
+    }
     api.svc.start({ id: v.id, cwd: r.path, cmd: v.cmd, port: v.port })
   }
 
@@ -124,5 +139,5 @@ export const useServicesStore = defineStore('services', () => {
     ofProject(p).forEach(v => stop(v.id))
   }
 
-  return { runtime, status, onData, onStatus, ofProject, start, stop, restart, clear, forget, startProject, stopProject }
+  return { runtime, livePorts, portOf, onPort, status, onData, onStatus, ofProject, start, stop, restart, clear, forget, startProject, stopProject }
 })

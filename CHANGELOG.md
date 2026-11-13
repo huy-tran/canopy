@@ -4,6 +4,16 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Lookout: a button in the project header (Ctrl+Shift+U) shows your running app beside the chat, two thirds wide with a draggable edge. Opening it starts the project's dev server and loads it. Canopy works out the server from the project's files (Laravel, Nuxt, Next.js, Vite, Astro, React, Angular and more) when none is set up, or type an address such as magpie.test.
+- The project list can be folded away (button at the left of the title bar, or Ctrl+\) to give the chat and Lookout more room.
+- Select element hands Claude the part of the page you click: its selector, text, styles, Vue or React component and a picture. Draw annotations freezes the page so you can box (numbered), draw and write on it, then sends the marked-up screenshot to the chat. Console errors and Vue warnings show a Diagnose button.
+- Lookout follows its server: when a dev server moves to another port because its own was taken (Vite does this), Lookout reads the new port from its output and loads that.
+- Each project keeps its Lookout page (scroll, logins, forms) while you work in another project.
+- Pick several elements with Shift-click, then type a note beside them: Enter sends it to Claude as a prompt, "Add to prompt" only pastes it. Draw annotations has the same note box, plus arrows, blur for private details, and a copy button.
+- Phone, tablet and laptop sizes (and rotate) in Lookout, and a button to reload the page when Claude finishes a turn, on by default for pages without hot reload.
+- A failed request (a server error page, a call that errors) gets the same Diagnose bar as console errors; for a server error page Claude also gets what it shows. Select element names Livewire components and Inertia pages.
+- Lookout can go widest with the project list folded away (button in its header, or Ctrl+Shift+K).
+
 ## [0.29.0] - 2026-11-06
 
 - GitHub, AWS and SSH now open as windows of their own, so you can drag them next to your Claude sessions or onto another monitor, and have more than one open at once. The same keys still toggle them, each remembers its size and position, and a button in its header (or the "Windows" command) puts it back over the main window. SSH connections still come back after a restart.

@@ -338,6 +338,8 @@ export interface Session {
 }
 
 export interface Prefs {
+  /** The project list on the left is folded away, to give the chat and Lookout the room. */
+  sidebarOff?: boolean
   editor: Editor
   startCmd: string
   launchLogin: boolean
@@ -433,6 +435,21 @@ export interface Persisted {
   recapHours?: Record<string, RecapHours>
   /** Dock panel (shells and server logs) per project: open or hidden, and the tab in view. */
   panels?: Record<string, DockPanelState>
+  /** App preview per project. */
+  previews?: Record<string, PreviewState>
+}
+
+/** The app preview beside a project's chat. */
+export interface PreviewState {
+  open: boolean
+  url: string
+  /** Share of the project area the preview takes. */
+  ratio: number
+  /** Reload when Claude finishes a turn. Unset: only for pages without hot reload. */
+  refresh?: boolean
+  /** Screen size shown: 'fit' (the pane), 'phone', 'tablet' or 'laptop'. */
+  device?: string
+  landscape?: boolean
 }
 
 export interface DockPanelState {

@@ -26,7 +26,7 @@ const browserFallback: CanopyApi = {
   },
   summary: { activity: async () => ({ sessions: [], commits: [] }) },
   claude: { run: async () => ({ ok: false, text: '', error: 'Needs the desktop app.' }) },
-  svc: { start: none, stop: none, onData: noop, onStatus: noop },
+  svc: { start: none, stop: none, detect: async () => [], onPort: noop, onData: noop, onStatus: noop },
   history: async () => [],
   usage: none,
   gh: {
@@ -66,7 +66,7 @@ const browserFallback: CanopyApi = {
     openExternal: async (u) => { window.open(u, '_blank') }, showInFolder: none, openEditor: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     pickFolder: none, fonts: async () => [], shells: async () => [], info: async () => ({ version: '0.0.0', electron: '-', chromium: '-', node: '-', claudeVersion: '-', claudePath: '-', os: '-' }),
     metrics: none,
-    saveImage: async (_s, n) => n, copyImage: none, saveImageAs: none, notify: none, onNotifyClick: noop, onNotifyAction: noop,
+    saveImage: async (_s, n) => n, copyImage: none, saveImageAs: none, capturePreview: async () => new Uint8Array(), onPreviewRequest: noop, notify: none, onNotifyClick: noop, onNotifyAction: noop,
   },
   win: { minimize: none, toggleMaximize: none, close: none, isMaximized: async () => false, onMaximized: noop, summonKey: async () => true },
   app: { quit: none },

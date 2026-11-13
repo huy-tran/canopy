@@ -81,6 +81,11 @@ const items = computed<DropdownMenuItem[][]>(() => [
 <template>
   <div class="drag flex h-[34px] flex-none items-center gap-3 border-b border-(--ln) bg-(--chrome) pl-3">
     <div class="no-drag flex flex-none items-center">
+      <UTooltip :text="`${prefs.prefs.sidebarOff ? 'Show' : 'Fold away'} the project list (${prefs.kl('sidebar')})`">
+        <button class="-ml-[7px] mr-1 grid size-6 cursor-pointer place-items-center rounded-md text-[14px] text-(--mu) hover:bg-(--hov) hover:text-(--tx)" @click="ui.toggleSidebar()">
+          <UIcon name="i-hugeicons-sidebar-left" />
+        </button>
+      </UTooltip>
       <UDropdownMenu :items="items" :content="{ align: 'start', sideOffset: 4 }" :ui="{ content: 'w-[280px] p-[5px] rounded-lg', itemTrailingKbds: 'font-[family-name:var(--mono)] text-[10.5px] text-(--fa)' }">
         <button
           title="Menu"

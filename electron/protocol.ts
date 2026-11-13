@@ -1,9 +1,10 @@
 // The app:// scheme the packaged app loads from, its Content-Security-Policy and the permissions it grants.
-import { net, protocol, session } from 'electron'
+import { app, net, protocol, session } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isAppUrl } from './context'
+import { isAppUrl, send } from './context'
+import { isDevHost, lockDownPreview, PREVIEW_PARTITION } from './window'
 import { isInside } from './services/guard'
 
 /** What the app's page may load. Nothing from outside except the weather lookup; no plugins, frames or form posts. */
@@ -29,6 +30,22 @@ export function serveApp() {
   const allowed = (permission: string, origin: string) => (permission === 'clipboard-sanitized-write' || permission === 'clipboard-read') && isAppUrl(origin)
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => cb(allowed(permission, details.requestingUrl)))
   session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => allowed(permission, origin))
+  // The preview pane's page is the user's own dev site: no permission prompts (camera, location...), and its local https certificates are trusted.
+  const preview = session.fromPartition(PREVIEW_PARTITION)
+  preview.setPermissionRequestHandler((_wc, _permission, cb) => cb(false))
+  preview.setPermissionCheckHandler(() => false)
+  preview.setCertificateVerifyProc((req, cb) => cb(isDevHost(req.hostname) ? 0 : -3))
+  // Failed requests of the page (a 500 from the server, a call that errored) go to the pane's Diagnose bar.
+  const report = (d: { webContentsId?: number; url: string; method: string; resourceType: string }, status: number, error?: string) =>
+    send('preview:request', { wc: d.webContentsId, url: d.url, method: d.method, type: d.resourceType, status, error })
+  preview.webRequest.onCompleted((d) => {
+    const call = d.resourceType === 'xhr' || d.resourceType === 'mainFrame'
+    if (d.statusCode >= 500 || (d.statusCode >= 400 && call && d.statusCode !== 404)) report(d, d.statusCode)
+  })
+  preview.webRequest.onErrorOccurred((d) => {
+    if ((d.resourceType === 'xhr' || d.resourceType === 'mainFrame') && d.error !== 'net::ERR_ABORTED') report(d, 0, d.error)
+  })
+  app.on('web-contents-created', (_e, contents) => lockDownPreview(contents))
   const root = path.join(__dirname, '..', '.output', 'public')
   protocol.handle('app', async (req) => {
     const u = new URL(req.url)
