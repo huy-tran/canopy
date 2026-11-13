@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-13
+
 - Lookout: a button in the project header (Ctrl+Shift+U) shows your running app beside the chat, two thirds wide with a draggable edge. Opening it starts the project's dev server and loads it. Canopy works out the server from the project's files (Laravel, Nuxt, Next.js, Vite, Astro, React, Angular and more) when none is set up, or type an address such as magpie.test.
 - The project list can be folded away (button at the left of the title bar, or Ctrl+\) to give the chat and Lookout more room.
 - Select element hands Claude the part of the page you click: its selector, text, styles, Vue or React component and a picture. Draw annotations freezes the page so you can box (numbered), draw and write on it, then sends the marked-up screenshot to the chat. Console errors and Vue warnings show a Diagnose button.
@@ -291,6 +293,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.30.0]: https://github.com/huy-tran/canopy/releases/tag/v0.30.0
 [0.29.0]: https://github.com/huy-tran/canopy/releases/tag/v0.29.0
 [0.28.1]: https://github.com/huy-tran/canopy/releases/tag/v0.28.1
 [0.28.0]: https://github.com/huy-tran/canopy/releases/tag/v0.28.0
