@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-17
+
 - Lookout now also recognises Django, Rails and Hugo projects, and installs what a server needs first (npm, pnpm, yarn or bun install, composer install, bundle install) when a fresh clone has no dependencies yet.
 - The AWS window puts the keyboard into the EC2 or ECS shell session in view when it opens or comes forward, instead of leaving it on the window.
 
@@ -296,6 +298,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.31.0]: https://github.com/huy-tran/canopy/releases/tag/v0.31.0
 [0.30.0]: https://github.com/huy-tran/canopy/releases/tag/v0.30.0
 [0.29.0]: https://github.com/huy-tran/canopy/releases/tag/v0.29.0
 [0.28.1]: https://github.com/huy-tran/canopy/releases/tag/v0.28.1
