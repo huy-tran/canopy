@@ -18,6 +18,12 @@ export interface ProjectFiles {
   locks?: string[]
   /** Herd is installed, so PHP runs as `herd php`. */
   herd?: boolean
+  /** Django: a manage.py at the root. */
+  manage?: boolean
+  /** Rails: bin/rails and a Gemfile. */
+  rails?: boolean
+  /** Hugo: a hugo.toml/yaml/json or config.toml at the root. */
+  hugo?: boolean
 }
 
 /** Frameworks in order of precedence (a Nuxt app also has vite), with their default port. */
@@ -58,13 +64,42 @@ export function detectDevServers(f: ProjectFiles): DetectedServer[] {
   const laravel = !!f.artisan && !!(f.composer?.require?.['laravel/framework'] || f.composer?.['require-dev']?.['laravel/framework'])
   if (laravel) out.push({ cmd: `${php} artisan serve --port=8000`, port: '8000', label: 'Laravel' })
 
+  if (f.manage) out.push({ cmd: 'python manage.py runserver 8000', port: '8000', label: 'Django' })
+  if (f.rails) out.push({ cmd: 'bin/rails server -p 3000', port: '3000', label: 'Rails' })
+  if (f.hugo) out.push({ cmd: 'hugo server', port: '1313', label: 'Hugo' })
+
   if (script) {
     const fw = JS.find(j => deps[j.dep])
     // A Laravel app's JS is only its assets (vite), listed after the PHP server.
     if (fw) out.push({ cmd: `${run} ${script}`, port: scriptPort(scripts[script]!) || fw.port, label: fw.label })
-    else if (!out.length && !f.composer) out.push({ cmd: `${run} ${script}`, port: scriptPort(scripts[script]!) || '', label: 'Node' })
+    else if (!out.length && !f.composer && !f.manage && !f.rails && !f.hugo) out.push({ cmd: `${run} ${script}`, port: scriptPort(scripts[script]!) || '', label: 'Node' })
   }
   return out
+}
+
+export interface InstallFacts {
+  locks?: string[]
+  herd?: boolean
+  hasNodeModules?: boolean
+  hasVendor?: boolean
+}
+
+/**
+ * The command that installs what `cmd` needs before it can run (node_modules, vendor, gems), or null when nothing is missing
+ * or `cmd` is not one of those. Works in cmd.exe and POSIX shells alike (only `&&` and `||` are used).
+ */
+export function installStep(cmd: string, f: InstallFacts): string | null {
+  const c = cmd.trim()
+  if (/^(npm|pnpm|yarn|bun)\b/.test(c)) return f.hasNodeModules ? null : `${runner(f.locks).replace(/ run$/, '')} install`
+  if (/^(herd )?php\s+artisan\b/.test(c)) return f.hasVendor ? null : `${f.herd ? 'herd composer' : 'composer'} install`
+  if (/^bin[\\/]rails\b/.test(c)) return 'bundle check || bundle install'
+  return null
+}
+
+/** `cmd`, with its install step in front when one is needed. */
+export function withInstall(cmd: string, f: InstallFacts): string {
+  const step = installStep(cmd, f)
+  return step ? `${step} && ${cmd}` : cmd
 }
 
 /** The port in a "Local: http://localhost:5174/" style line a dev server prints (Vite, Nuxt, Next, artisan serve...); only this machine's addresses count. */

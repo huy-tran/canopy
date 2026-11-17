@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { detectDevServers, type DetectedServer } from '../../shared/devdetect'
+import { detectDevServers, withInstall, type DetectedServer } from '../../shared/devdetect'
 
 function json(file: string): any {
   try {
@@ -18,6 +18,17 @@ function hasHerd(): Promise<boolean> {
   return herd
 }
 
+/** `cmd` with the install it needs in front (npm install, composer install...) when the folder has no node_modules or vendor yet. */
+export async function commandWithInstall(dir: string, cmd: string): Promise<string> {
+  const has = (n: string) => fs.existsSync(path.join(dir, n))
+  return withInstall(cmd, {
+    locks: ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json'].filter(has),
+    herd: await hasHerd(),
+    hasNodeModules: has('node_modules'),
+    hasVendor: has('vendor'),
+  })
+}
+
 export async function detectServers(dir: string): Promise<DetectedServer[]> {
   if (typeof dir !== 'string' || !dir) return []
   const has = (n: string) => fs.existsSync(path.join(dir, n))
@@ -27,5 +38,8 @@ export async function detectServers(dir: string): Promise<DetectedServer[]> {
     artisan: has('artisan'),
     locks: ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json'].filter(has),
     herd: await hasHerd(),
+    manage: has('manage.py'),
+    rails: has(path.join('bin', 'rails')) && has('Gemfile'),
+    hugo: ['hugo.toml', 'hugo.yaml', 'hugo.json', 'config.toml'].some(has),
   })
 }

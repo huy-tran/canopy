@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectDevServers, listeningPort } from '../shared/devdetect'
+import { detectDevServers, listeningPort, withInstall } from '../shared/devdetect'
 
 describe('detectDevServers', () => {
   it('runs a Laravel app with artisan, and its vite assets beside it', () => {
@@ -28,6 +28,24 @@ describe('detectDevServers', () => {
   it('knows a plain node app has no known port, and a folder with nothing to run', () => {
     expect(detectDevServers({ pkg: { scripts: { dev: 'node server.js' } } })).toEqual([{ cmd: 'npm run dev', port: '', label: 'Node' }])
     expect(detectDevServers({})).toEqual([])
+  })
+
+  it('puts an install in front only when dependencies are missing', () => {
+    expect(withInstall('npm run dev', {})).toBe('npm install && npm run dev')
+    expect(withInstall('pnpm run dev', { locks: ['pnpm-lock.yaml'] })).toBe('pnpm install && pnpm run dev')
+    expect(withInstall('yarn dev', { locks: ['yarn.lock'] })).toBe('yarn install && yarn dev')
+    expect(withInstall('npm run dev', { hasNodeModules: true })).toBe('npm run dev')
+    expect(withInstall('php artisan serve --port=8000', {})).toBe('composer install && php artisan serve --port=8000')
+    expect(withInstall('herd php artisan serve', { herd: true })).toBe('herd composer install && herd php artisan serve')
+    expect(withInstall('php artisan serve', { hasVendor: true })).toBe('php artisan serve')
+    expect(withInstall('bin/rails server -p 3000', {})).toBe('bundle check || bundle install && bin/rails server -p 3000')
+    expect(withInstall('hugo server', {})).toBe('hugo server')
+  })
+
+  it('knows Django, Rails and Hugo', () => {
+    expect(detectDevServers({ manage: true })[0]).toMatchObject({ label: 'Django', port: '8000' })
+    expect(detectDevServers({ rails: true })[0]).toMatchObject({ label: 'Rails', port: '3000' })
+    expect(detectDevServers({ hugo: true })[0]).toMatchObject({ label: 'Hugo', port: '1313' })
   })
 })
 

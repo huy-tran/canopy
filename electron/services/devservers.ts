@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process'
 import { cleanEnv, CONPTY } from './pty'
 import { commandLine, IS_WIN } from './shellcmd'
 import { listeningPort } from '../../shared/devdetect'
+import { commandWithInstall } from './detect'
 
 export type SvcStatus = 'starting' | 'running' | 'stopped'
 
@@ -37,11 +38,14 @@ function portOpen(port: number): Promise<boolean> {
   })
 }
 
-export function startService(o: { id: string; cwd: string; cmd: string; port?: string }, emit: Emit) {
+export async function startService(o: { id: string; cwd: string; cmd: string; port?: string }, emit: Emit) {
   const cur = procs.get(o.id)
   if (cur && cur.status !== 'stopped') return
   // `o.cmd` is the command the user set for the service, run as typed; only the app's own window can send it (see trusted() in main.ts).
-  const sh = commandLine(o.cmd)
+  // A fresh clone gets its dependencies installed first, in the same terminal, so the output shows it.
+  const full = await commandWithInstall(o.cwd, o.cmd).catch(() => o.cmd)
+  if (procs.get(o.id) && procs.get(o.id)!.status !== 'stopped') return
+  const sh = commandLine(full)
   const p = pty.spawn(sh.file, sh.args, {
     name: 'xterm-256color', cols: 160, rows: 40, cwd: o.cwd,
     env: { ...cleanEnv(), FORCE_COLOR: '1' },
