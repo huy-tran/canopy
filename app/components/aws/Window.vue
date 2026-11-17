@@ -4,6 +4,7 @@
 // click or a key switches, and a dry-run badge while changes only go to the audit log.
 import { useEventListener } from '@vueuse/core'
 import { comboOf, matchAction, matchActions } from '#shared/actions'
+import { focusTerminal } from '~/utils/terminals'
 
 const ui = useUiStore()
 const prefs = usePrefsStore()
@@ -19,11 +20,26 @@ function focusRoot() {
   nextTick(() => root.value?.focus())
 }
 
+/** Where the keyboard goes as the window comes forward: the shell session in view, if there is one, else the window. */
+function focusIn() {
+  if (A.term) nextTick(() => focusTerminal(A.term!))
+  else focusRoot()
+}
+
 watch(open, (on) => {
   if (!on) return
-  setTimeout(focusRoot, 60)
+  setTimeout(focusIn, 60)
   A.checkLock()
 }, { immediate: true })
+
+// The window comes forward from behind another (its shortcut or title bar button): the keyboard lands in it,
+// unless focus is already somewhere in it (a field being typed in, a terminal).
+useEventListener(window, 'focus', () => {
+  if (!ui.aws) return
+  const a = document.activeElement
+  if (a && a !== document.body && root.value?.contains(a)) return
+  setTimeout(focusIn, 30)
+})
 
 /**
  * Esc and Back: a dialog closes first, then the screen in front goes back a step, and from a
