@@ -4,6 +4,9 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Lookout now also recognises Django, Rails and Hugo projects, and installs what a server needs first (npm, pnpm, yarn or bun install, composer install, bundle install) when a fresh clone has no dependencies yet.
+- The AWS window puts the keyboard into the EC2 or ECS shell session in view when it opens or comes forward, instead of leaving it on the window.
+
 ## [0.30.0] - 2026-11-13
 
 - Lookout: a button in the project header (Ctrl+Shift+U) shows your running app beside the chat, two thirds wide with a draggable edge. Opening it starts the project's dev server and loads it. Canopy works out the server from the project's files (Laravel, Nuxt, Next.js, Vite, Astro, React, Angular and more) when none is set up, or type an address such as magpie.test.
