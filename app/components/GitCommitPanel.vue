@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Commit, push and pull request for one working folder, under the explorer's Changes list.
 import type { GitChange, GitSync } from '#shared/types'
+import type { GitAsk } from '#shared/bridge'
 
 const props = defineProps<{ cwd: string; changes: GitChange[] }>()
 
@@ -24,6 +25,32 @@ watch(() => props.cwd, () => {
   message.value = ''
   loadSync()
 }, { immediate: true })
+
+// A push asks for a key's passphrase (or a password) while it runs: a field shows here, Enter answers and Esc cancels the push.
+const ask = ref<GitAsk | null>(null)
+const secret = ref('')
+const secretInput = ref<{ inputRef?: HTMLInputElement } | null>(null)
+
+const offAsk = api.git.onAsk((q) => {
+  if (q.cwd !== props.cwd) return
+  ask.value = q
+  secret.value = ''
+  nextTick(() => secretInput.value?.inputRef?.focus())
+})
+onBeforeUnmount(() => {
+  offAsk()
+  // A push waiting on a field that is gone is cancelled, not left hanging.
+  if (ask.value) api.git.answer(ask.value.id, null)
+})
+
+function answerAsk(ok: boolean) {
+  const q = ask.value
+  if (!q) return
+  const s = secret.value
+  ask.value = null
+  secret.value = ''
+  api.git.answer(q.id, ok ? s : null)
+}
 
 function fail(title: string, error?: string) {
   ui.toast({ title, body: error, error: true })
@@ -118,6 +145,28 @@ const syncText = computed(() => {
           Create PR
         </UButton>
       </UTooltip>
+    </div>
+    <div v-if="ask" class="flex flex-col gap-1.5 rounded-md border border-(--bb) bg-(--chrome) p-2">
+      <span class="text-[11.5px] text-(--tx2)">
+        {{ ask.kind === 'passphrase' ? 'Passphrase for' : 'Password for' }}
+        <span class="mono text-(--fa)" :title="ask.label">{{ ask.label }}</span>
+      </span>
+      <div class="flex items-center gap-1.5">
+        <UInput
+          ref="secretInput"
+          v-model="secret"
+          type="password"
+          size="xs"
+          autocomplete="off"
+          class="min-w-0 flex-1"
+          :placeholder="ask.kind === 'passphrase' ? 'Key passphrase' : 'Password'"
+          @keydown.enter.prevent.stop="answerAsk(true)"
+          @keydown.esc.prevent.stop="answerAsk(false)"
+          @keydown.stop
+        />
+        <UButton color="neutral" variant="ghost" size="xs" label="Cancel" @click="answerAsk(false)" />
+        <UButton color="primary" size="xs" label="Push" @click="answerAsk(true)" />
+      </div>
     </div>
     <UTextarea
       v-model="message"

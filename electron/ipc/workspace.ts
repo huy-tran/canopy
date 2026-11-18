@@ -6,6 +6,8 @@ import { claimPty, handle, handleWin, ptyData, ptyExit, send, store, trusted } f
 import { startService, stopService } from '../services/devservers'
 import { runClaude } from '../services/claude'
 import * as git from '../services/git'
+import { pushInPty } from '../services/gitpush'
+import { answerAsk, askUser } from '../services/gitask'
 import { bufferOf, killSession, resizeSession, spawnSession, spawnShell, spawnSsh, writeSession } from '../services/pty'
 import { sshArgs } from '../services/ssh'
 import { sshPassword } from '../services/sshsecrets'
@@ -80,7 +82,15 @@ export function registerWorkspaceIpc() {
   handle('git:unstage', (cwd: string, paths: string[]) => git.unstage(cwd, paths))
   handle('git:commit', (cwd: string, message: string, all: boolean) => git.commit(cwd, message, all))
   handle('git:sync', (cwd: string) => git.syncInfo(cwd))
-  handle('git:push', (cwd: string) => git.push(cwd))
+  // The push runs in a pty so ssh can ask for a key's passphrase; the window that pushed is asked, and answers with git:answer.
+  handleWin('git:push', async (_win, sender, cwd: string) => {
+    try {
+      return await pushInPty(cwd, await git.pushArgs(cwd), p => askUser(sender, cwd, p))
+    } catch (e) {
+      return { ok: false, error: errMessage(e) }
+    }
+  })
+  handle('git:answer', (id: string, secret: string | null) => answerAsk(id, secret))
   handle('git:prUrl', (cwd: string) => git.pullRequestUrl(cwd))
   handle('git:draftMessage', async (cwd: string) => {
     const diff = await git.diffForMessage(cwd)

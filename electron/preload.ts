@@ -41,6 +41,8 @@ const api: CanopyApi = {
     commit: inv('git:commit'),
     sync: inv('git:sync'),
     push: inv('git:push'),
+    onAsk: on('git:ask'),
+    answer: inv('git:answer'),
     prUrl: inv('git:prUrl'),
     draftMessage: inv('git:draftMessage'),
   },

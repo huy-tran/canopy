@@ -3,6 +3,9 @@ import type { DetectedServer } from './devdetect'
 import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshFileResult, SshPuttyResult, SshTabbyResult } from './types'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
+/** A running push asking for a secret: a key's passphrase, or an account password. */
+export interface GitAsk { id: string; cwd: string; kind: 'passphrase' | 'password'; label: string }
+
 /** The windows that open on their own beside the main one. */
 export type ToolKind = 'gh' | 'aws' | 'ssh'
 export const TOOL_KINDS: ToolKind[] = ['gh', 'aws', 'ssh']
@@ -166,6 +169,10 @@ export interface CanopyApi {
     commit(cwd: string, message: string, all: boolean): Promise<{ ok: boolean; error?: string }>
     sync(cwd: string): Promise<GitSync>
     push(cwd: string): Promise<{ ok: boolean; error?: string }>
+    /** A running push needs a secret (a key's passphrase, a password): the window that pushed shows a field and answers with `answer`. */
+    onAsk(fn: (q: GitAsk) => void): Off
+    /** What was typed for a question from `onAsk`; null cancels the push. */
+    answer(id: string, secret: string | null): Promise<void>
     prUrl(cwd: string): Promise<{ ok: boolean; url?: string; error?: string }>
     /** A commit message for the current changes, written by Claude. */
     draftMessage(cwd: string): Promise<{ ok: boolean; text: string; error?: string }>

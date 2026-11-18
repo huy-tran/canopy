@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Pushing from the Files window now asks for your SSH key's passphrase (or a password) in the commit panel, instead of failing with "Permission denied". Enter sends it, Esc cancels the push.
+
 ## [0.31.0] - 2026-11-17
 
 - Lookout now also recognises Django, Rails and Hugo projects, and installs what a server needs first (npm, pnpm, yarn or bun install, composer install, bundle install) when a fresh clone has no dependencies yet.

@@ -21,6 +21,7 @@ const browserFallback: CanopyApi = {
     commit: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     sync: async () => ({ branch: '', upstream: '', ahead: 0, behind: 0, remote: '' }),
     push: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    onAsk: noop, answer: async () => {},
     prUrl: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     draftMessage: async () => ({ ok: false, text: '', error: 'Needs the desktop app.' }),
   },

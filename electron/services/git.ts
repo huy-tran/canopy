@@ -319,12 +319,10 @@ export async function syncInfo(cwd: string): Promise<SyncInfo> {
   return { branch, upstream, ahead, behind, remote }
 }
 
-export function push(cwd: string): Promise<GitResult> {
-  return attempt(async () => {
-    const upstream = (await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '')).trim()
-    if (upstream) await git(cwd, ['push'])
-    else await git(cwd, ['push', '-u', 'origin', 'HEAD'])
-  })
+/** The arguments of the push for this folder: plain when the branch has an upstream, else it is published to origin. */
+export async function pushArgs(cwd: string): Promise<string[]> {
+  const upstream = (await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '')).trim()
+  return upstream ? ['push'] : ['push', '-u', 'origin', 'HEAD']
 }
 
 /** The web page for opening a pull (or merge) request from the current branch, worked out from the origin URL. */
