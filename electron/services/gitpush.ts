@@ -3,7 +3,7 @@
 import * as pty from 'node-pty'
 import { execFile } from 'node:child_process'
 import { cleanEnv, CONPTY } from './pty'
-import { commandLine, IS_WIN } from './shellcmd'
+import { IS_WIN } from './shellcmd'
 import { failureText, promptOf, type GitPrompt } from '../../shared/gitprompt'
 
 /** Gives the secret typed for a prompt, or null when the user cancelled. */
@@ -26,8 +26,8 @@ function kill(p: pty.IPty) {
 
 export function pushInPty(cwd: string, args: string[], ask: Ask): Promise<{ ok: boolean; error?: string }> {
   return new Promise((resolve) => {
-    const sh = commandLine(['git', ...args].join(' '))
-    const p = pty.spawn(sh.file, sh.args, {
+    // git is started directly with its argument list, not through a shell, so nothing in `args` is ever parsed as a command line.
+    const p = pty.spawn(IS_WIN ? 'git.exe' : 'git', args, {
       name: 'xterm-256color', cols: 200, rows: 40, cwd,
       env: { ...cleanEnv(), GIT_TERMINAL_PROMPT: '0' },
       ...CONPTY,

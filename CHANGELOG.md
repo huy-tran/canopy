@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Pushing from the Files window starts git directly instead of through a shell, so nothing in the push command is ever read as a command line.
+
 ## [0.31.1] - 2026-11-18
 
 - Pushing from the Files window now asks for your SSH key's passphrase (or a password) in the commit panel, instead of failing with "Permission denied". Enter sends it, Esc cancels the push.
