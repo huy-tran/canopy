@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.31.2] - 2026-11-23
+
 - Pushing from the Files window starts git directly instead of through a shell, so nothing in the push command is ever read as a command line.
 
 ## [0.31.1] - 2026-11-18
@@ -304,6 +306,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.31.2]: https://github.com/huy-tran/canopy/releases/tag/v0.31.2
 [0.31.1]: https://github.com/huy-tran/canopy/releases/tag/v0.31.1
 [0.31.0]: https://github.com/huy-tran/canopy/releases/tag/v0.31.0
 [0.30.0]: https://github.com/huy-tran/canopy/releases/tag/v0.30.0
