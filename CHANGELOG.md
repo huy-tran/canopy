@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-23
+
 - A working session shows a spinning ring in place of its status dot, in the sidebar, the session tabs and the pane header.
 - Review comments for Claude: in Files, hover a line of a diff or file and press + to leave a comment. "Send comments to Claude" puts them all at the prompt of the session in that folder, for you to send.
 - Find in the terminal (Ctrl Alt F): searches a session's scrollback, with every match marked, Enter and Shift Enter to step through them, and a match-case switch.
@@ -315,6 +317,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.32.0]: https://github.com/huy-tran/canopy/releases/tag/v0.32.0
 [0.31.2]: https://github.com/huy-tran/canopy/releases/tag/v0.31.2
 [0.31.1]: https://github.com/huy-tran/canopy/releases/tag/v0.31.1
 [0.31.0]: https://github.com/huy-tran/canopy/releases/tag/v0.31.0
