@@ -11,6 +11,8 @@ interface Draft {
   autoServices: boolean
   resume: boolean
   editor: Editor
+  /** The gh account for its repos; '' leaves it to whichever account can reach each repo. */
+  ghAccount: string
 }
 
 const ui = useUiStore()
@@ -22,6 +24,26 @@ const prefs = usePrefsStore()
 const EDITORS: Editor[] = ['VS Code', 'Cursor', 'PhpStorm', 'Zed']
 
 const draft = ref<Draft | null>(null)
+
+/** The accounts gh is signed in with, read each time the form opens. The choice only shows when there is more than one. */
+const ghLogins = ref<string[]>([])
+const AUTO = 'auto'
+const accountItems = computed(() => {
+  const d = draft.value?.ghAccount
+  // An account that has since signed out stays listed, so the form shows what is saved.
+  const logins = d && !ghLogins.value.includes(d) ? [...ghLogins.value, d] : ghLogins.value
+  return [{ label: 'Automatic', value: AUTO, title: 'Whichever signed-in account can reach each repo' }, ...logins.map(l => ({ label: l, value: l }))]
+})
+const accountModel = computed({
+  get: () => draft.value?.ghAccount || AUTO,
+  set: (v: string) => {
+    if (draft.value) draft.value.ghAccount = v === AUTO ? '' : v
+  },
+})
+// Optional: a main process from before accounts has no such call until the app restarts.
+watch(() => ui.projectModal != null, (on) => {
+  if (on) api.gh.accounts?.().then((a) => { ghLogins.value = a?.list || [] }).catch(() => {})
+}, { immediate: true })
 const tried = ref(false)
 const drag = ref<number | null>(null)
 /** Card that may start a drag: set on mousedown outside inputs and buttons, so text in fields stays selectable. */
@@ -58,12 +80,12 @@ watch(() => ui.projectModal, (m, prev) => {
     draft.value = {
       pid: p.id, name: p.name,
       repos: p.repos.map(r => ({ ...r, services: (r.services || []).map(v => ({ ...v })) })),
-      autoStart: p.autoStart, autoServices: !!p.autoServices, resume: p.resume, editor: p.editor,
+      autoStart: p.autoStart, autoServices: !!p.autoServices, resume: p.resume, editor: p.editor, ghAccount: p.ghAccount || '',
     }
   } else {
     draft.value = {
       pid: null, name: '', repos: [emptyRepo()],
-      autoStart: true, autoServices: true, resume: true, editor: prefs.prefs.editor,
+      autoStart: true, autoServices: true, resume: true, editor: prefs.prefs.editor, ghAccount: '',
     }
   }
 }, { immediate: true })
@@ -231,7 +253,7 @@ async function save() {
       services: (r.services || []).filter(v => (v.cmd || '').trim()).map(v => ({ id: v.id || uid('v'), cmd: v.cmd.trim(), port: String(v.port || '').replace(/[^0-9]/g, '') })),
     }
   })
-  const fields = { name: d.name.trim(), repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor }
+  const fields = { name: d.name.trim(), repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor, ghAccount: d.ghAccount || undefined }
 
   if (mode.value === 'add') {
     const p: Project = {
@@ -497,6 +519,12 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
             <div class="flex items-center gap-2.5 text-[12.5px]">
               <span class="text-(--tx3)">Editor</span>
               <Seg v-model="draft.editor" :items="EDITOR_ITEMS" />
+            </div>
+            <div v-if="accountItems.length > 2 || draft.ghAccount" class="flex items-center gap-2.5 text-[12.5px]">
+              <UTooltip text="The gh account this project's pull requests, workflow runs and alerts are read and changed as">
+                <span class="text-(--tx3)">GitHub account</span>
+              </UTooltip>
+              <Seg v-model="accountModel" :items="accountItems" />
             </div>
           </div>
         </div>

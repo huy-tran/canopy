@@ -3,6 +3,7 @@
 import { execFile } from 'node:child_process'
 import os from 'node:os'
 import { isRepoName, safeId, safePullUrl, safeRef, safeRepo } from './guard'
+import { accountFor, envFor, ghAccounts, learnAccount, loginFor } from './ghaccounts'
 import { load as loadYaml } from 'js-yaml'
 import { errMessage } from '../../shared/errors'
 import type {
@@ -19,11 +20,12 @@ interface SearchHit {
   repository: { nameWithOwner: string }
 }
 
-/** Open, non-draft PRs where the user (or one of their teams) is a requested reviewer. */
-export function reviewRequests(): Promise<{ ok: boolean; prs: ReviewRequest[]; error?: string; problem?: GhProblem }> {
+type Reviews = { ok: boolean; prs: ReviewRequest[]; error?: string; problem?: GhProblem }
+
+function reviewRequestsAs(env: NodeJS.ProcessEnv | undefined): Promise<Reviews> {
   const args = ['search', 'prs', '--review-requested=@me', '--state=open', '--limit', '100', '--json', 'number,title,url,createdAt,isDraft,author,repository']
   return new Promise((resolve) => {
-    execFile('gh', args, { windowsHide: true, encoding: 'utf8', timeout: 30_000 }, (err, stdout, stderr) => {
+    execFile('gh', args, { windowsHide: true, encoding: 'utf8', timeout: 30_000, env }, (err, stdout, stderr) => {
       if (err) {
         const error = (stderr || err.message).trim()
         // gh exits with 4 when it has no sign-in.
@@ -43,6 +45,36 @@ export function reviewRequests(): Promise<{ ok: boolean; prs: ReviewRequest[]; e
   })
 }
 
+/** The accounts a search for "mine" covers: every one signed in, or just gh's own when it can't list them. */
+async function everyAccount(): Promise<string[]> {
+  const a = await ghAccounts()
+  return a.list.length ? a.list : ['']
+}
+
+/**
+ * Open, non-draft PRs where the user (or one of their teams) is a requested reviewer, for every account gh is signed in with.
+ * It works when any account answers; an account that fails is left out.
+ */
+export async function reviewRequests(): Promise<Reviews> {
+  const logins = await everyAccount()
+  const results = await Promise.all(logins.map(async login => ({ login, r: await reviewRequestsAs(await envFor(login)) })))
+  const good = results.filter(x => x.r.ok)
+  if (!good.length) return results[0]!.r
+  const seen = new Set<string>()
+  const prs: ReviewRequest[] = []
+  for (const { login, r } of good) {
+    for (const pr of r.prs) {
+      learnAccount(pr.repo, login)
+      if (seen.has(pr.url)) continue
+      seen.add(pr.url)
+      prs.push(pr)
+    }
+  }
+  return { ok: true, prs: prs.sort((x, y) => y.createdAt - x.createdAt) }
+}
+
+/** owner/name from a pull request link. */
+const repoOfPull = (url: string) => url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//)?.[1]
 
 // ---------------------------------------------------------------- GitHub HQ
 
@@ -66,10 +98,14 @@ function unsafe(...checks: (() => unknown)[]): GhDone | null {
   }
 }
 
-/** Runs gh from the home folder, so commands such as `pr merge --delete-branch` never touch a local checkout. */
-function runGh(args: string[]): Promise<{ out: string; err: Error | null; stderr: string }> {
+/**
+ * Runs gh from the home folder, so commands such as `pr merge --delete-branch` never touch a local checkout.
+ * With `as.repo` it runs as the account that can reach that repo, with `as.login` as that account; else as gh's active one.
+ */
+async function runGh(args: string[], as: { repo?: string | null; login?: string } = {}): Promise<{ out: string; err: Error | null; stderr: string }> {
+  const env = await envFor(as.login ?? await accountFor(as.repo))
   return new Promise((resolve) => {
-    execFile('gh', args, { cwd: os.homedir(), windowsHide: true, encoding: 'utf8', timeout: 60_000, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => resolve({ out: stdout || '', err, stderr: (stderr || '').trim() }))
+    execFile('gh', args, { cwd: os.homedir(), windowsHide: true, encoding: 'utf8', timeout: 60_000, maxBuffer: 32 * 1024 * 1024, env }, (err, stdout, stderr) => resolve({ out: stdout || '', err, stderr: (stderr || '').trim() }))
   })
 }
 
@@ -79,7 +115,7 @@ function problemOf(err: Error, stderr: string): GhProblem {
 }
 
 /** owner/name of a folder's GitHub origin, or null for a folder that isn't one. */
-function githubRepoOf(cwd: string): Promise<string | null> {
+export function githubRepoOf(cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
     execFile('git', ['remote', 'get-url', 'origin'], { cwd, windowsHide: true, encoding: 'utf8', timeout: 10_000 }, (err, stdout) => {
       if (err) return resolve(null)
@@ -118,15 +154,18 @@ const REPO_FIELDS = `
 const CHECKS: Record<string, GhPull['checks']> = { SUCCESS: 'pass', FAILURE: 'fail', ERROR: 'fail', PENDING: 'pending', EXPECTED: 'pending' }
 
 /** Repos, their open PRs and their alerts, a dozen repos per GraphQL query. Repos gh can't see are left out. */
-async function readRepos(names: string[], canopy: Set<string>): Promise<{ repos: GhRepo[]; pulls: GhPull[] }> {
+async function readRepos(all: string[], canopy: Set<string>): Promise<{ repos: GhRepo[]; pulls: GhPull[] }> {
   const repos: GhRepo[] = [], pulls: GhPull[] = []
-  for (let i = 0; i < names.length; i += 12) {
+  // Each account reads the repos it can reach, a dozen to a query.
+  const byLogin = new Map<string, string[]>()
+  for (const [i, login] of (await Promise.all(all.map(n => accountFor(n)))).entries()) byLogin.set(login, [...(byLogin.get(login) || []), all[i]!])
+  for (const [login, names] of byLogin) for (let i = 0; i < names.length; i += 12) {
     const body = names.slice(i, i + 12).map((n, j) => {
       const [owner, name] = n.split('/')
       return `r${j}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { ${REPO_FIELDS} }`
     }).join('\n')
     // Errors for one repo (no access, or alerts hidden) still come with the others' data.
-    const r = await runGh(['api', 'graphql', '-f', `query=query { ${body} }`])
+    const r = await runGh(['api', 'graphql', '-f', `query=query { ${body} }`], { login })
     let data: Record<string, any> = {}
     try {
       data = JSON.parse(r.out).data || {}
@@ -173,7 +212,7 @@ function runState(status: string, conclusion: string | null): GhRun['state'] {
 export async function workflowRuns(repos: string[]): Promise<GhRun[]> {
   const since = Date.now() - RUN_DAYS * 86_400_000
   const lists = await pool(repos.filter(isRepo), 6, async (repo) => {
-    const r = await runGh(['api', `/repos/${repo}/actions/runs?per_page=${RUNS_PER_REPO}`, '--jq', RUN_JQ])
+    const r = await runGh(['api', `/repos/${repo}/actions/runs?per_page=${RUNS_PER_REPO}`, '--jq', RUN_JQ], { repo })
     if (r.err) return []
     try {
       return (JSON.parse(r.out) as any[]).flatMap((w): GhRun[] => {
@@ -199,12 +238,15 @@ export async function githubWorld(folders: string[], hidden: string[]): Promise<
   const perPage = Math.min(100, MAX_REPOS + skip.size)
   const active = await runGh(['api', `/user/repos?sort=pushed&per_page=${perPage}&affiliation=owner,collaborator,organization_member`, '--jq', '[.[] | .full_name]'])
   if (active.err) return { repos: [], pulls: [], runs: [], at, error: active.stderr || active.err.message, problem: problemOf(active.err, active.stderr) }
+  const account = (await ghAccounts()).active
+  const listed = JSON.parse(active.out || '[]') as string[]
+  for (const n of listed) learnAccount(n, account)
   const mine = (await Promise.all(folders.map(githubRepoOf))).filter((n): n is string => !!n)
   const canopy = new Set(mine.map(n => n.toLowerCase()))
   const names: string[] = []
   const seen = new Set(skip)
   // Canopy's repos first, so the library always holds them.
-  for (const n of [...mine, ...(JSON.parse(active.out || '[]') as string[])]) {
+  for (const n of [...mine, ...listed]) {
     if (seen.has(n.toLowerCase())) continue
     seen.add(n.toLowerCase())
     names.push(n)
@@ -213,7 +255,7 @@ export async function githubWorld(folders: string[], hidden: string[]): Promise<
     const { repos, pulls } = await readRepos(names.slice(0, MAX_REPOS), canopy)
     repos.sort((a, b) => Number(b.canopy) - Number(a.canopy) || b.pushedAt - a.pushedAt)
     const runs = await workflowRuns(repos.map(r => r.name))
-    return { repos, pulls, runs, at }
+    return { repos, pulls, runs, at, account }
   } catch (e: any) {
     return { repos: [], pulls: [], runs: [], at, error: errMessage(e), problem: e?.problem || 'other' }
   }
@@ -236,14 +278,13 @@ export async function rateLimit(): Promise<GhRateLimit | null> {
 
 const done = (r: { err: Error | null; stderr: string }): GhDone => (r.err ? { ok: false, error: r.stderr || r.err.message } : { ok: true })
 
-let viewer: string | null = null
-
-/** The signed-in user's login, asked for once. */
-async function viewerLogin(): Promise<string> {
-  if (viewer) return viewer
+/** The login calls for this repo run as. Asked from gh each time it may have changed, so switching accounts is followed. */
+async function viewerLogin(repo: string): Promise<string> {
+  const login = await loginFor(repo)
+  if (login) return login
+  // A gh too old to list its accounts: ask GitHub who is signed in.
   const r = await runGh(['api', 'user', '--jq', '.login'])
-  if (!r.err) viewer = r.out.trim()
-  return viewer || ''
+  return r.err ? '' : r.out.trim()
 }
 
 const SEARCH_QUERY = `query($q: String!) { search(query: $q, type: ISSUE, first: 50) { nodes { ... on PullRequest {
@@ -253,7 +294,17 @@ const SEARCH_QUERY = `query($q: String!) { search(query: $q, type: ISSUE, first:
 
 /** Open PRs from a GitHub search, such as `review-requested:@me` or `author:@me`, with their review and checks. */
 export async function searchPulls(filter: string): Promise<{ ok: boolean; pulls: GhPull[]; error?: string; problem?: GhProblem }> {
-  const r = await runGh(['api', 'graphql', '-f', `query=${SEARCH_QUERY}`, '-f', `q=is:pr is:open archived:false ${filter}`])
+  // "@me" is a different person for each account, so each is asked.
+  const results = await Promise.all((await everyAccount()).map(login => searchPullsAs(filter, login)))
+  const good = results.filter(r => r.ok)
+  if (!good.length) return results[0]!
+  const seen = new Set<string>()
+  const pulls = good.flatMap(r => r.pulls).filter(p => !seen.has(p.url) && !!seen.add(p.url)).sort((a, b) => b.createdAt - a.createdAt)
+  return { ok: true, pulls }
+}
+
+async function searchPullsAs(filter: string, login: string): Promise<{ ok: boolean; pulls: GhPull[]; error?: string; problem?: GhProblem }> {
+  const r = await runGh(['api', 'graphql', '-f', `query=${SEARCH_QUERY}`, '-f', `q=is:pr is:open archived:false ${filter}`], { login })
   if (r.err) return { ok: false, pulls: [], error: r.stderr || r.err.message, problem: problemOf(r.err, r.stderr) }
   try {
     const nodes = (JSON.parse(r.out).data?.search?.nodes || []) as any[]
@@ -266,6 +317,7 @@ export async function searchPulls(filter: string): Promise<{ ok: boolean; pulls:
         checks: state ? CHECKS[state] ?? null : null,
       }
     })
+    for (const p of pulls) learnAccount(p.repo, login)
     return { ok: true, pulls }
   } catch (e: any) {
     return { ok: false, pulls: [], error: errMessage(e), problem: 'other' }
@@ -286,13 +338,13 @@ function checkOf(c: any): GhPullDetail['checks'][number] {
 
 /** A PR with its files, reviews, checks and comments, and the repo's merge settings. */
 export async function pullDetail(url: string): Promise<{ ok: boolean; pull?: GhPullDetail; error?: string }> {
-  const repo = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//)?.[1]
+  const repo = repoOfPull(url)
   const bad = unsafe(() => safePullUrl(url))
   if (bad || !repo) return bad ?? { ok: false, error: `Not a pull request link: ${url}` }
   const [pr, settings, me] = await Promise.all([
-    runGh(['pr', 'view', url, '--json', PR_FIELDS]),
-    runGh(['repo', 'view', repo, '--json', 'mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,deleteBranchOnMerge,viewerPermission']),
-    viewerLogin(),
+    runGh(['pr', 'view', url, '--json', PR_FIELDS], { repo }),
+    runGh(['repo', 'view', repo, '--json', 'mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,deleteBranchOnMerge,viewerPermission'], { repo }),
+    viewerLogin(repo),
   ])
   if (pr.err) return { ok: false, error: pr.stderr || pr.err.message }
   try {
@@ -328,7 +380,7 @@ export async function pullDetail(url: string): Promise<{ ok: boolean; pull?: GhP
 export async function pullDiff(url: string): Promise<{ ok: boolean; diff?: string; error?: string }> {
   const bad = unsafe(() => safePullUrl(url))
   if (bad) return bad
-  const r = await runGh(['pr', 'diff', url, '--color', 'never'])
+  const r = await runGh(['pr', 'diff', url, '--color', 'never'], { repo: repoOfPull(url) })
   return r.err ? { ok: false, error: r.stderr || r.err.message } : { ok: true, diff: r.out }
 }
 
@@ -338,7 +390,7 @@ export async function reviewPull(url: string, kind: 'approve' | 'request-changes
   if (bad) return bad
   const args = ['pr', 'review', url, `--${kind}`]
   if (body.trim()) args.push('--body', body.trim())
-  return done(await runGh(args))
+  return done(await runGh(args, { repo: repoOfPull(url) }))
 }
 
 /** Merges a PR by merge commit, squash or rebase, optionally deleting its branch on GitHub. */
@@ -347,7 +399,7 @@ export async function mergePull(url: string, method: 'merge' | 'squash' | 'rebas
   if (bad) return bad
   const args = ['pr', 'merge', url, `--${method}`]
   if (deleteBranch) args.push('--delete-branch')
-  return done(await runGh(args))
+  return done(await runGh(args, { repo: repoOfPull(url) }))
 }
 
 const RUN_FIELDS = 'jobs,name,displayTitle,status,conclusion,headBranch,event,url,createdAt,attempt,workflowName,databaseId'
@@ -355,7 +407,7 @@ const RUN_FIELDS = 'jobs,name,displayTitle,status,conclusion,headBranch,event,ur
 export async function runDetail(repo: string, id: number): Promise<{ ok: boolean; run?: GhRunDetail; error?: string }> {
   const bad = unsafe(() => safeRepo(repo), () => safeId(id))
   if (bad) return bad
-  const r = await runGh(['run', 'view', String(id), '-R', repo, '--json', RUN_FIELDS])
+  const r = await runGh(['run', 'view', String(id), '-R', repo, '--json', RUN_FIELDS], { repo })
   if (r.err) return { ok: false, error: r.stderr || r.err.message }
   try {
     const w = JSON.parse(r.out)
@@ -381,7 +433,7 @@ export async function runLog(repo: string, id: number, job?: number): Promise<{ 
   const bad = unsafe(() => safeRepo(repo), () => safeId(id), () => job && safeId(job))
   if (bad) return bad
   const args = job ? ['run', 'view', '--job', String(job), '-R', repo, '--log'] : ['run', 'view', String(id), '-R', repo, '--log-failed']
-  const r = await runGh(args)
+  const r = await runGh(args, { repo })
   if (r.err) return { ok: false, error: r.stderr || r.err.message }
   const lines = r.out.split(/\r?\n/)
   return { ok: true, log: lines.slice(-4000).join('\n') }
@@ -390,13 +442,13 @@ export async function runLog(repo: string, id: number, job?: number): Promise<{ 
 export async function rerunRun(repo: string, id: number, failedOnly: boolean): Promise<GhDone> {
   const bad = unsafe(() => safeRepo(repo), () => safeId(id))
   if (bad) return bad
-  return done(await runGh(['run', 'rerun', String(id), '-R', repo, ...(failedOnly ? ['--failed'] : [])]))
+  return done(await runGh(['run', 'rerun', String(id), '-R', repo, ...(failedOnly ? ['--failed'] : [])], { repo }))
 }
 
 export async function cancelRun(repo: string, id: number): Promise<GhDone> {
   const bad = unsafe(() => safeRepo(repo), () => safeId(id))
   if (bad) return bad
-  return done(await runGh(['run', 'cancel', String(id), '-R', repo]))
+  return done(await runGh(['run', 'cancel', String(id), '-R', repo], { repo }))
 }
 
 const SEVERITY: Record<string, GhAlert['severity']> = { critical: 'critical', high: 'high', medium: 'moderate', moderate: 'moderate', low: 'low' }
@@ -407,7 +459,7 @@ const RANK = { critical: 0, high: 1, moderate: 2, low: 3 }
 /** Open Dependabot alerts in these repos, most severe first. Repos whose alerts the user can't see are skipped. */
 export async function securityAlerts(repos: string[]): Promise<GhAlert[]> {
   const lists = await pool(repos.filter(isRepo), 6, async (repo) => {
-    const r = await runGh(['api', '--paginate', `/repos/${repo}/dependabot/alerts?state=open&per_page=100`, '--jq', ALERT_JQ])
+    const r = await runGh(['api', '--paginate', `/repos/${repo}/dependabot/alerts?state=open&per_page=100`, '--jq', ALERT_JQ], { repo })
     if (r.err) return []
     try {
       return r.out.split('\n').filter(l => l.trim()).map(l => JSON.parse(l)).map((a): GhAlert => ({
@@ -432,6 +484,8 @@ export async function allRepos(): Promise<{ ok: boolean; repos: GhRepoInfo[]; er
       const x = JSON.parse(l)
       return { ...x, description: x.description || '', language: x.language || '', pushedAt: Date.parse(x.pushedAt) || 0 }
     })
+    const account = (await ghAccounts()).active
+    for (const x of repos) learnAccount(x.name, account)
     return { ok: true, repos: repos.sort((a, b) => b.pushedAt - a.pushedAt) }
   } catch (e: any) {
     return { ok: false, repos: [], error: errMessage(e), problem: 'other' }
@@ -475,7 +529,7 @@ export async function dispatchables(repo: string, ref?: string): Promise<{ ok: b
     const bad = unsafe(() => safeRef(ref))
     if (bad) return { ok: false, workflows: [], error: bad.error }
   }
-  const list = await runGh(['workflow', 'list', '-R', repo, '--json', 'id,name,path,state'])
+  const list = await runGh(['workflow', 'list', '-R', repo, '--json', 'id,name,path,state'], { repo })
   if (list.err) return { ok: false, workflows: [], error: list.stderr || list.err.message }
   let listed: { id: number; name: string; path: string; state: string }[]
   try {
@@ -487,13 +541,13 @@ export async function dispatchables(repo: string, ref?: string): Promise<{ ok: b
   let environments: string[] | null = null
   const envs = async () => {
     if (!environments) {
-      const r = await runGh(['api', `/repos/${repo}/environments`, '--jq', '.environments[].name'])
+      const r = await runGh(['api', `/repos/${repo}/environments`, '--jq', '.environments[].name'], { repo })
       environments = r.err ? [] : r.out.split('\n').filter(Boolean)
     }
     return environments
   }
   const found = await pool(active, 6, async (w): Promise<GhDispatchable | null> => {
-    const r = await runGh(['api', `/repos/${repo}/contents/${w.path}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`, '--jq', '.content'])
+    const r = await runGh(['api', `/repos/${repo}/contents/${w.path}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`, '--jq', '.content'], { repo })
     if (r.err) return null
     try {
       const trigger = dispatchOf(Buffer.from(r.out.replace(/\\n|\s/g, ''), 'base64').toString('utf8'))
@@ -510,8 +564,8 @@ export async function dispatchables(repo: string, ref?: string): Promise<{ ok: b
 export async function branches(repo: string): Promise<string[]> {
   if (!isRepo(repo)) return []
   const [list, info] = await Promise.all([
-    runGh(['api', '--paginate', `/repos/${repo}/branches?per_page=100`, '--jq', '.[].name']),
-    runGh(['repo', 'view', repo, '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name']),
+    runGh(['api', '--paginate', `/repos/${repo}/branches?per_page=100`, '--jq', '.[].name'], { repo }),
+    runGh(['repo', 'view', repo, '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'], { repo }),
   ])
   const names = list.err ? [] : list.out.split('\n').filter(Boolean)
   const main = info.err ? '' : info.out.trim()
@@ -524,7 +578,7 @@ export async function runWorkflow(repo: string, id: number, ref: string, inputs:
   if (bad) return bad
   const args = ['workflow', 'run', String(id), '-R', repo, '--ref', ref]
   for (const [k, v] of Object.entries(inputs)) args.push('-f', `${k}=${v}`)
-  return done(await runGh(args))
+  return done(await runGh(args, { repo }))
 }
 
 const PULL_URL = /https:\/\/[\w.-]+\/[\w.-]+\/[\w.-]+\/pull\/\d+/
@@ -533,11 +587,13 @@ const PULL_URL = /https:\/\/[\w.-]+\/[\w.-]+\/[\w.-]+\/pull\/\d+/
  * Opens a pull request from the branch checked out in a folder (already pushed) into `base`, with its title and
  * description taken from the commits. A branch that already has an open one answers with that one.
  */
-export function createPull(cwd: string, base: string): Promise<{ ok: boolean; url?: string; existed?: boolean; error?: string }> {
+export async function createPull(cwd: string, base: string): Promise<{ ok: boolean; url?: string; existed?: boolean; error?: string }> {
+  // As the account that can reach the folder's repo, which need not be the active one.
+  const env = await envFor(await accountFor(await githubRepoOf(cwd)))
   return new Promise((resolve) => {
     if (!/^[\w.][\w./-]*$/.test(base)) return resolve({ ok: false, error: 'Not a branch name.' })
     // Run in the folder itself: gh reads the repo, the branch and its commits from there.
-    execFile('gh', ['pr', 'create', '--fill', '--base', base], { cwd, windowsHide: true, encoding: 'utf8', timeout: 60_000 }, (err, stdout, stderr) => {
+    execFile('gh', ['pr', 'create', '--fill', '--base', base], { cwd, windowsHide: true, encoding: 'utf8', timeout: 60_000, env }, (err, stdout, stderr) => {
       const said = `${stdout || ''}\n${stderr || ''}`
       const url = said.match(PULL_URL)?.[0]
       if (!err && url) return resolve({ ok: true, url })

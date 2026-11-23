@@ -39,7 +39,7 @@ export function dryRunFrom(): 'setting' | 'env' | null {
 /** A small ini reader for ~/.aws/config and ~/.aws/credentials. */
 function readIni(file: string): Record<string, Record<string, string>> {
   const out: Record<string, Record<string, string>> = {}
-  let text = ''
+  let text: string
   try {
     text = fs.readFileSync(file, 'utf8')
   } catch {

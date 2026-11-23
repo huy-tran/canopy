@@ -18,7 +18,8 @@ const r = computed(() => P.repoOf(s.value.pid, s.value.repoId))
 const statusC = computed(() => SC[s.value.status])
 /** Plain shells show a terminal icon and no Claude-only chips (cost, context, details). */
 const isShell = computed(() => s.value.kind === 'shell')
-const cost = computed(() => usd(S.cost(s.value)))
+const cost = computed(() => S.costText(s.value))
+const costTip = computed(() => (S.costEstimated(s.value) ? `Session cost, estimated: no price is known for ${s.value.model} yet` : 'Session cost (API-equivalent)'))
 const git = computed(() => G.get(s.value.cwd))
 const chgN = computed(() => git.value?.changes.length || 0)
 const share = computed(() => ui.shareInfo(s.value.id))
@@ -116,7 +117,7 @@ watch(() => props.focused, (f) => {
         <UTooltip text="Git branch">
           <span class="mono flex h-[18px] flex-none items-center gap-[5px] whitespace-nowrap rounded-sm px-1.5 text-[10.5px] text-(--vio)" style="background: color-mix(in oklch, var(--vio) 14%, transparent)"><UIcon name="i-hugeicons-git-branch" class="size-3" />{{ branch }}</span>
         </UTooltip>
-        <UTooltip v-if="!isShell" text="Session cost (API-equivalent)">
+        <UTooltip v-if="!isShell" :text="costTip">
           <span class="mono box-border flex h-[18px] flex-none items-center whitespace-nowrap rounded-sm border border-(--ln) px-1.5 text-[10.5px] text-(--tx)">{{ cost }}</span>
         </UTooltip>
       </template>
@@ -167,7 +168,7 @@ watch(() => props.focused, (f) => {
           <span :style="{ color: s.ctx < 80 ? 'var(--tx3)' : 'var(--red)' }">{{ ctx }}%</span>
         </span>
       </UTooltip>
-      <UTooltip v-if="!isShell" text="Session cost (API-equivalent)">
+      <UTooltip v-if="!isShell" :text="costTip">
         <span class="box-border flex h-[21px] flex-none items-center rounded-sm border border-(--ln) px-1.5 text-(--tx)">{{ cost }}</span>
       </UTooltip>
     </div>

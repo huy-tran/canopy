@@ -34,6 +34,12 @@ export function priceOf(model: string): Price {
   return FALLBACK
 }
 
+/** True when the model id has its own row in the table; false means its cost is a guess from the family or the fallback rates. */
+export function isPriced(model: string): boolean {
+  const m = (model || '').toLowerCase()
+  return TABLE.some(([k]) => m.startsWith(k))
+}
+
 export function costOf(model: string, u: { tokIn: number; tokOut: number; cacheR: number; cacheW: number }): number {
   const p = priceOf(model)
   return (u.tokIn * p.in + u.tokOut * p.out + u.cacheR * p.cacheR + u.cacheW * p.cacheW) / 1e6
@@ -47,7 +53,7 @@ export function contextOf(model: string): number {
 
 /** "claude-sonnet-4-6" -> "Sonnet 4.6" */
 export function modelLabel(model: string): string {
-  const m = (model || '').match(/claude-(?:(\d)-(\d)-)?([a-z]+)(?:-(\d+)(?:-(\d{1,2}))?)?/i)
+  const m = (model || '').match(/claude-(?:(\d)-(\d)-)?([a-z]+)(?:-(\d+)(?:-(\d{1,2})(?!\d))?)?/i)
   if (!m) return model || ''
   const fam = m[3]!.charAt(0).toUpperCase() + m[3]!.slice(1)
   if (m[1]) return `${fam} ${m[1]}.${m[2]}`

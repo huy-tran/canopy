@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { fileManager, isWin } from '~/utils/platform'
+import { isWin } from '~/utils/platform'
 const prefs = usePrefsStore()
 
 const REMIND = [
@@ -22,6 +22,7 @@ const remind = computed({
     <SettingsToggle label="When a session needs input" sub="Permission prompts and questions." k="notifyWaiting" />
     <SettingsToggle label="When a session finishes" k="notifyDone" />
     <SettingsToggle label="Skip the session I’m looking at" k="skipViewing" />
+    <SettingsToggle label="When a plan limit is running out" sub="At 80% and 95% of the 5-hour and weekly limits." k="notifyLimit" />
     <SettingsToggle label="When someone requests my review" sub="Pull requests on GitHub, checked every 5 minutes with the gh CLI. Clicking opens the GitHub view." k="reviewNotify" />
     <SettingsRow label="Remind me about waiting reviews" sub="Repeats while any pull request is still waiting for your review." wrap>
       <Seg v-model="remind" :items="REMIND" size="lg" />

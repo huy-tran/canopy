@@ -30,6 +30,8 @@ npm run build      # nuxt generate + bundle electron/ to dist-electron/
 npm run dist       # build and package a Windows installer into release/
 npm run dist:linux # build and package a Linux AppImage into release/ (run it on Linux)
 npm run typecheck  # renderer (vue-tsc) and main process (tsc)
+npm run lint       # ESLint over the renderer, main process, scripts and tests
+npm test           # unit tests (vitest)
 npm run sim:check  # screenshot the workspace simulation with made-up data into .sim-check/
 npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, commit, tag, push
 ```
@@ -38,15 +40,17 @@ npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, comm
 
 | Feature | Source |
 |---|---|
-| Session status | Each terminal runs `claude --settings <file>`; the file's hooks (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`) pipe their JSON to a local HTTP server with `curl`. |
+| Session status | Each terminal runs `claude --settings <file>`; the file's hooks (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `SubagentStop`, `Stop`) pipe their JSON to a local HTTP server with `curl`. |
 | Tokens, cost, model, context | The session's JSONL transcript under `~/.claude/projects/`, priced at API rates (`shared/pricing.ts`). |
 | Overview history | All JSONL logs for the project's repo folders (and their worktrees). |
 | Plan usage bars | The OAuth usage endpoint, using the credentials Claude Code stores in `~/.claude/.credentials.json`. |
 | Git changes, diffs, files | `git status`, `git diff`, `git ls-files` (respects `.gitignore`). |
 | Worktrees | `git worktree add` into `<repo>.worktrees\<slug>`; Merge runs `git merge` then `git worktree remove`; Open PR pushes the branch and runs `gh pr create --fill`. |
 | Worker sessions | Each terminal also runs with `--mcp-config <file>`, pointing at an MCP endpoint on the same local server as the hooks. Its tools (`start_worker`, `worker_result`, `message_worker`, `close_worker`, `list_sessions`) are carried out by the main window, which owns the sessions. |
-| Scheduled prompts | A timer in the main window; the prompt is pasted and sent once Claude Code reports `SessionStart`. |
-| Review comments | Kept in memory per folder and pasted at Claude's prompt as one numbered list. |
+| Scheduled prompts | A timer in the main window; the prompt is pasted and sent once Claude Code reports `SessionStart`, or straight into a free session already open in the repo. |
+| Plan limit warnings | The same usage endpoint, checked every two minutes: one warning at 80% and one at 95% of each window. |
+| Review comments | Saved per folder until sent, and pasted at Claude's prompt as one numbered list. |
+| GitHub window, review requests | The `gh` CLI and its sign-in. With several accounts signed in (`gh auth login` more than once), each repo is read and changed as the account that can reach it, by passing that account's token to `gh` for the call; a project can name its account. Nothing is stored by Canopy. |
 | Dev servers | node-pty, with the whole process tree killed on Stop. |
 | Lookout (app preview) | An Electron `<webview>` on its own session, locked to http(s); Select element and annotations run inside the page and reach Claude's prompt as pasted text and image paths. |
 | Screenshots | A pasted image is saved to disk and its path pasted at Claude's prompt, which attaches it as `[Image #n]`. |
@@ -63,8 +67,8 @@ npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, comm
 
 ## Releasing
 
-1. Bump `version` in `package.json` and add a matching `## [x.y.z]` entry to `CHANGELOG.md`.
-2. Commit, then tag and push: `git tag vx.y.z && git push origin master vx.y.z`.
+1. Write the notes under `## [Unreleased]` in `CHANGELOG.md` and commit.
+2. Run `npm run release -- patch` (or `minor`, `major`, or an exact version). It typechecks and runs the tests, moves the notes under the new version, bumps `package.json`, then commits, tags and pushes. `--dry` shows what would happen; `--no-push` leaves the pushing to you.
 3. The `Release` workflow drafts a GitHub release from the changelog entry, builds the Windows installer and the Linux AppImage in parallel, then publishes the release once both are uploaded. Installed copies pick it up as an update.
 
 Builds are not code-signed, so Windows SmartScreen warns on first install ("More info" then "Run anyway").

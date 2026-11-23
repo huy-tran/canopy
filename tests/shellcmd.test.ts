@@ -6,7 +6,7 @@ import { commandLine, findOnPath, posixShell } from '../electron/services/shellc
 
 describe('commandLine', () => {
   it('goes through cmd.exe on Windows, as one raw string', () => {
-    expect(commandLine('claude --x "a b"', 'win32', { ComSpec: 'C:\Windows\System32\cmd.exe' })).toEqual({ file: 'C:\Windows\System32\cmd.exe', args: '/d /s /c "claude --x "a b""' })
+    expect(commandLine('claude --x "a b"', 'win32', { ComSpec: 'C:\\Windows\\System32\\cmd.exe' })).toEqual({ file: 'C:\\Windows\\System32\\cmd.exe', args: '/d /s /c "claude --x "a b""' })
     expect(commandLine('npm run dev', 'win32', {}).file).toBe('cmd.exe')
   })
   it('goes through a login, interactive shell elsewhere', () => {

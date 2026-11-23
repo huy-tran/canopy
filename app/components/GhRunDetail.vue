@@ -36,7 +36,8 @@ function parseLog(txt: string) {
   return txt.split('\n').filter(Boolean).map((l) => {
     const [, step = '', rest = ''] = l.match(/^[^\t]*\t([^\t]*)\t(.*)$/) || [null, '', l]
     // A job's own log has no step names: gh says UNKNOWN STEP for every line.
-    return { step: step === 'UNKNOWN STEP' ? '' : step, text: rest.replace(/^﻿/, '').replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, '').replace(/\x1b\[[0-9;]*m/g, '') }
+    // eslint-disable-next-line no-control-regex
+    return { step: step === 'UNKNOWN STEP' ? '' : step, text: rest.replace(/^\uFEFF/, '').replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, '').replace(/\x1b\[[0-9;]*m/g, '') }
   })
 }
 

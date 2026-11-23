@@ -4,6 +4,17 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- More than one GitHub account in the gh CLI: Canopy now reads and changes each repo as the account that can reach it, instead of only the active one. Review requests and your pull requests come from every signed-in account, and a project can name its account (Edit project > GitHub account).
+- After `gh auth switch`, the GitHub window no longer opens on the other account's repos, and "your" pull requests follow the switch without a restart.
+- A warning when your Claude plan's 5-hour or weekly limit reaches 80% and again at 95%, as a notification and in the app. Turn it off in Settings > Notifications.
+- Scheduled prompts can run once, on a day you pick, and can go to a session already open in the repo instead of starting a new one.
+- Review comments you have not sent to Claude yet are kept when Canopy restarts.
+- A session shows as waiting the moment Claude asks you a question or presents a plan, with the question as its label, instead of a minute later.
+- Permission prompts for PowerShell commands name the command, instead of the tool that ran before it.
+- Session cost is priced by the exact model again: sessions on newer models were counted at Sonnet rates while running. A cost for a model Canopy has no price for yet is marked with "~".
+- Opening a file in your editor from the Files window works on Windows again.
+- Model names with a date in them read "Opus 4", not "Opus 4.20".
+
 ## [0.32.0] - 2026-11-23
 
 - A working session shows a spinning ring in place of its status dot, in the sidebar, the session tabs and the pane header.

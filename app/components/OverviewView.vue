@@ -197,7 +197,7 @@ const rows = computed<Row[]>(() => {
     out.push({
       id: e.key, sid: s.id, repoId: s.repoId, dot: SC[s.status] || SC.idle!, stLabel: SL[s.status] || '', repo: label(s.repoId),
       title: s.title, branch: s.branch, start: startLabel(s.started), dur: dur(now.value - s.started),
-      tin: k(s.tokIn), tout: k(s.tokOut), cache: `${k(s.cacheR)} / ${k(s.cacheW)}`, cost: usd(S.cost(s)),
+      tin: k(s.tokIn), tout: k(s.tokOut), cache: `${k(s.cacheR)} / ${k(s.cacheW)}`, cost: S.costText(s),
     })
   }
   for (const e of past) {

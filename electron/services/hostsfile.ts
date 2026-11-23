@@ -4,6 +4,7 @@ import type { SshHost } from '../../shared/types'
 const HOSTNAME = /^[A-Za-z0-9][A-Za-z0-9._:%\-[\]]*$/
 const USER = /^[A-Za-z0-9_][A-Za-z0-9._\-@]*$/
 /** A key path: no leading dash and no control characters. It reaches ssh as its own argument after -i, never through a shell. */
+// eslint-disable-next-line no-control-regex
 const keyOk = (k: string | undefined) => (k && !k.startsWith('-') && !/[\x00-\x1f]/.test(k) ? k : undefined)
 
 export interface HostsFileResult {

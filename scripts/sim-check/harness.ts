@@ -1,6 +1,6 @@
 // A page that runs the workspace simulation on its own with made-up rooms and people, for
 // scripts/sim-check.mjs to screenshot. The query string picks the view, time of day and weather.
-import * as THREE from 'three'
+import type * as THREE from 'three'
 import { WorkspaceScene } from '../../app/simulation/scene'
 import { HQ_WINGS } from '../../app/simulation/github'
 import { DC_WINGS } from '../../app/simulation/aws'

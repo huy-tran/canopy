@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Editor } from '#shared/types'
 import { zoneCity } from '~/composables/useWeather'
-import { fileManager, isWin } from '~/utils/platform'
+import { isWin } from '~/utils/platform'
 
 const prefs = usePrefsStore()
 

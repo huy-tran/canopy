@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ThemePref, WaitStyle } from '#shared/types'
 import { SIM_GLASS_MAX, simGlassOf } from '~/stores/prefs'
-import { fileManager, isWin } from '~/utils/platform'
+import { isWin } from '~/utils/platform'
 
 const prefs = usePrefsStore()
 

@@ -17,9 +17,6 @@ const groups = computed(() => sshGroups(shown.value))
 function save(list: SshHost[]) {
   prefs.set({ sshHosts: list })
 }
-function patch(id: string, p: Partial<SshHost>) {
-  save(hosts.value.map(h => (h.id === id ? { ...h, ...p } : h)))
-}
 
 // ---------- List ----------
 

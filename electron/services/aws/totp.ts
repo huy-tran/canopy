@@ -76,7 +76,7 @@ let checked = { at: 0, until: 0 }
 /** When the current unlock runs out, or 0; read again at most every two seconds. */
 export function unlockedUntil(): number {
   if (Date.now() - checked.at < 2000) return checked.until
-  let until = 0
+  let until: number
   try {
     until = new Date(fs.readFileSync(MARKER, 'utf8').trim()).getTime() || 0
   } catch {

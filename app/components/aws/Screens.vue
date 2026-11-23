@@ -111,7 +111,7 @@ onBeforeUnmount(() => AW.stop())
     <div v-else-if="!A.ctx" class="grid flex-1 place-items-center text-[12px] text-(--fa)">
       <span>Pick a profile <span class="mono text-(--tx2)">({{ prefs.kl('awsProfile') }})</span> to start.</span>
     </div>
-    <AwsTerminal v-else-if="A.term" :key="A.term" :id="A.term" />
+    <AwsTerminal v-else-if="A.term" :id="A.term" :key="A.term" />
     <!-- A new profile or region starts every service afresh. -->
     <div v-else :key="ctxKey" class="flex min-h-0 min-w-0 flex-1">
       <KeepAlive>

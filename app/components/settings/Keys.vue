@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ACTIONS, RESERVED, clashes, comboOf, type ActionDef } from '#shared/actions'
 import { DEFAULT_PREFS } from '~/stores/prefs'
-import { fileManager, isWin } from '~/utils/platform'
+import { isWin } from '~/utils/platform'
 
 type Msg =
   | { kind: 'err'; id: string; t: string }

@@ -56,6 +56,8 @@ if (dry) {
 
 console.log('Typechecking…')
 run('npm run typecheck', { show: true })
+console.log('Running the tests…')
+run('npm test', { show: true })
 fs.writeFileSync(logPath, next)
 run(`npm version ${version} --no-git-tag-version`)
 run('git add CHANGELOG.md package.json package-lock.json')

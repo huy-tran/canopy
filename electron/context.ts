@@ -1,5 +1,6 @@
 // State and helpers the main process modules share.
-import { app, BrowserWindow, ipcMain, nativeImage, Tray } from 'electron'
+import type { Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron'
 import path from 'node:path'
 import Store from 'electron-store'
 import type { AwsWorld } from '../shared/aws'

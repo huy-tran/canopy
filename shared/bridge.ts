@@ -1,6 +1,6 @@
 // The API the preload script exposes as window.canopy.
 import type { DetectedServer } from './devdetect'
-import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshFileResult, SshPuttyResult, SshTabbyResult } from './types'
+import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAccounts, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshFileResult, SshPuttyResult, SshTabbyResult } from './types'
 import type { AgentCall, AgentReply } from './agenttools'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
@@ -234,6 +234,8 @@ export interface CanopyApi {
     dispatchables(repo: string, ref?: string): Promise<{ ok: boolean; workflows: GhDispatchable[]; error?: string }>
     branches(repo: string): Promise<string[]>
     runWorkflow(repo: string, id: number, ref: string, inputs: Record<string, string>): Promise<GhDone>
+    /** The accounts the gh CLI is signed in with, the active one first. */
+    accounts(): Promise<GhAccounts>
   }
   aws: AwsApi
   sys: {

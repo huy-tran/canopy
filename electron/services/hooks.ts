@@ -110,8 +110,9 @@ export function writeSessionSettings(sid: string): string {
       Stop: hook,
       SubagentStop: hook,
       // Task and Agent start subagents, which the workspace simulation shows.
-      PreToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|Task|Agent', hooks: hook[0]!.hooks }],
-      PostToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Task|Agent', hooks: hook[0]!.hooks }],
+      // AskUserQuestion and ExitPlanMode stop for the user's answer: the session is waiting from the moment they are called.
+      PreToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Task|Agent|AskUserQuestion|ExitPlanMode', hooks: hook[0]!.hooks }],
+      PostToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Task|Agent|AskUserQuestion|ExitPlanMode', hooks: hook[0]!.hooks }],
     },
   }
   const file = path.join(hooksDir(), `${sid}.json`)

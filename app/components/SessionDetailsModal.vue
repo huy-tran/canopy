@@ -30,7 +30,7 @@ const d = computed(() => {
     model: fs.model || '-', branch: fs.branch, started: 'Today ' + clock(fs.started), dur: dur(ui.now - fs.started, true),
     folder: fs.cwd, cmd: fs.cmd, uid: fs.claudeId ? fs.claudeId.slice(0, 8) + '…' : '-',
     wt: fs.wt, wtText: fs.wt ? fs.branch + ' → ' + fs.wt.base : '',
-    cost: usd(S.cost(fs)), tin: k(fs.tokIn), tout: k(fs.tokOut), cr: k(fs.cacheR), cw: k(fs.cacheW),
+    cost: S.costText(fs), tin: k(fs.tokIn), tout: k(fs.tokOut), cr: k(fs.cacheR), cw: k(fs.cacheW),
     ctx: Math.round(fs.ctx), editor: cur.editor, prompts,
   }
 })

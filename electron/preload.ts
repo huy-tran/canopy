@@ -73,6 +73,7 @@ const api: CanopyApi = {
     dispatchables: inv('gh:dispatchables'),
     branches: inv('gh:branches'),
     runWorkflow: inv('gh:runWorkflow'),
+    accounts: inv('gh:accounts'),
   },
   aws: { ...Object.fromEntries(AWS_CALLS.map(c => [c, inv(`aws:${c}`)])), onTail: on('aws:tail') } as unknown as AwsApi,
   ssh: { importConfig: inv('ssh:importConfig'), pickKey: inv('ssh:pickKey'), setPassword: inv('ssh:setPassword'), hasPassword: inv('ssh:hasPassword'), importTabby: inv('ssh:importTabby'), importPutty: inv('ssh:importPutty'), importFile: inv('ssh:importFile') },

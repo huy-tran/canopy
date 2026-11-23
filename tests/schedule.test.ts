@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysLabel, dueAt, minutesOf } from '../shared/schedule'
+import { dayOf, daysLabel, dueAt, expired, minutesOf, whenLabel } from '../shared/schedule'
 import type { Schedule } from '../shared/types'
 
 /** A Wednesday. */
@@ -34,6 +34,36 @@ describe('dueAt', () => {
     expect(dueAt(sched({ enabled: false }), at(10))).toBeNull()
     expect(dueAt(sched({ prompt: ' ' }), at(10))).toBeNull()
     expect(dueAt(sched({ time: 'soon' }), at(10))).toBeNull()
+  })
+})
+
+describe('a schedule that runs once', () => {
+  const once = (o: Partial<Schedule> = {}) => sched({ date: '2026-11-25', days: [], ...o })
+
+  it('is due on its day from its time on, whatever the weekdays say', () => {
+    expect(dueAt(once(), at(8, 59))).toBeNull()
+    expect(dueAt(once(), at(9))).toBe(at(9))
+    expect(dueAt(once({ days: [0] }), at(15))).toBe(at(9))
+  })
+
+  it('is not due on any other day, nor twice', () => {
+    expect(dueAt(once(), at(9) + 86_400_000)).toBeNull()
+    expect(dueAt(once(), at(9) - 86_400_000)).toBeNull()
+    expect(dueAt(once({ lastRun: at(9) + 1 }), at(10))).toBeNull()
+  })
+
+  it('counts as past once its day has gone by', () => {
+    expect(expired(once(), at(23, 59))).toBe(false)
+    expect(expired(once(), at(0) + 86_400_000)).toBe(true)
+    expect(expired(sched(), at(0) + 86_400_000)).toBe(false)
+  })
+})
+
+describe('dayOf and whenLabel', () => {
+  it('writes the local day and says when a schedule runs', () => {
+    expect(dayOf(at(23, 59))).toBe('2026-11-25')
+    expect(whenLabel(sched())).toBe('Weekdays at 09:00')
+    expect(whenLabel(sched({ date: '2026-11-25', time: '14:30' }))).toBe('Once on Wed 25 Nov at 14:30')
   })
 })
 

@@ -6,6 +6,7 @@ import type { GhTab } from '~/stores/github'
 import type { SettingsTab } from '~/stores/ui'
 import { comboOf, matchAction } from '#shared/actions'
 import { NERD_SYMBOLS } from '#shared/fonts'
+import { limitWarnings, type LimitSeen } from '#shared/planlimit'
 import { DEFAULT_PREFS } from '~/stores/prefs'
 
 /** ANSI colours readable on a light terminal (xterm's defaults assume a dark one). */
@@ -63,6 +64,7 @@ export default defineNuxtPlugin({
       ui.recaps = recent(saved.recaps)
       ui.recapHours = recent(saved.recapHours)
       if (!tool) useSchedulesStore().list = saved.schedules || []
+      if (!tool) useNotesStore().byCwd = saved.notes || {}
     }
 
     let saveT: ReturnType<typeof setTimeout> | undefined
@@ -71,13 +73,13 @@ export default defineNuxtPlugin({
     const snapshot = (): Persisted => plain({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, stripOn: ui.stripOn,
       sessions: reopened ? [...S.saved, ...ui.sshSaved] : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
-      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels, previews: ui.previews, schedules: useSchedulesStore().list,
+      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels, previews: ui.previews, schedules: useSchedulesStore().list, notes: useNotesStore().byCwd,
     })
     /** When the first unsaved change came; saves wait for a quiet moment, but never longer than SAVE_MAX after it. */
     let dirtySince = 0
     const SAVE_MAX = 2000
     // One string of everything saved: the watcher fires only when it really changes, not on every session update.
-    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels, ui.previews, useSchedulesStore().list]), () => {
+    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels, ui.previews, useSchedulesStore().list, useNotesStore().byCwd]), () => {
       if (demo) return
       const now = Date.now()
       dirtySince ||= now
@@ -276,7 +278,23 @@ export default defineNuxtPlugin({
     }, 1000)
 
     // ---------- Plan usage ----------
-    const pollUsage = () => api.usage().then((u) => { ui.usage = u }).catch(() => {})
+    // A warning when the 5-hour or weekly limit reaches 80% and 95%, once each per window.
+    let limitSeen: LimitSeen | null = null
+    const pollUsage = () => api.usage().then((u) => {
+      ui.usage = u
+      const r = limitWarnings(u, limitSeen)
+      // Nothing is remembered until a reading comes back, so the first one never warns.
+      if (u) limitSeen = r.seen
+      const pr = prefs.prefs
+      if (pr.notifyLimit === false) return
+      for (const w of r.warn) {
+        const name = w.key === 'five' ? '5-hour' : 'weekly'
+        const title = `Claude plan: ${Math.round(w.pct)}% of the ${name} limit used`
+        const body = w.resetsAt ? `Resets ${w.key === 'week' ? new Date(w.resetsAt).toLocaleDateString(undefined, { weekday: 'short' }) + ' ' : ''}${clock(w.resetsAt)}${w.key === 'five' ? ` · in ${dur(w.resetsAt - Date.now())}` : ''}` : ''
+        ui.toast({ title, body, error: w.step >= 95 })
+        if (!pr.dnd) api.sys.notify({ title, body, silent: !pr.sound })
+      }
+    }).catch(() => {})
     pollUsage()
     setInterval(pollUsage, 120_000)
 

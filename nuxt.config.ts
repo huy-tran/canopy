@@ -3,7 +3,7 @@ import { TERM_FONTS } from './shared/fonts'
 
 export default defineNuxtConfig({
   ssr: false,
-  modules: ['@nuxt/ui', '@pinia/nuxt'],
+  modules: ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint'],
   css: ['@xterm/xterm/css/xterm.css', '~/assets/css/main.css'],
   devtools: { enabled: false },
   compatibilityDate: '2026-10-01',

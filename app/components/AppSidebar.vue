@@ -272,7 +272,7 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             <span class="mono min-w-8 text-right text-[11px] text-(--fa)">{{ pAgo(p) }}</span>
           </div>
         </UContextMenu>
-        <UCollapsible :open="isOpen(p)":ui="{ content: 'flex flex-col gap-0.5' }">
+        <UCollapsible :open="isOpen(p)" :ui="{ content: 'flex flex-col gap-0.5' }">
           <template #content>
           <div
             v-for="s in S.ofProject(p.id)"

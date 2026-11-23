@@ -26,6 +26,7 @@ export const DEFAULT_PREFS: Prefs = {
   scrollback: '3000',
   notifyWaiting: true,
   notifyDone: true,
+  notifyLimit: true,
   skipViewing: true,
   sound: false,
   dnd: false,

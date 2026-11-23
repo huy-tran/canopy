@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Schedule } from '#shared/types'
-import { daysLabel, minutesOf } from '#shared/schedule'
+import { dayOf, expired, minutesOf, whenLabel } from '#shared/schedule'
 
 const C = useSchedulesStore()
 const P = useProjectsStore()
@@ -27,6 +27,16 @@ function setProject(pid: string) {
   if (e) edit.value = { ...e, pid, repoId: P.byId(pid)?.repos[0]?.id || '' }
 }
 
+/** Repeating on weekdays, or once on a day (today unless changed). */
+const REPEAT = [{ label: 'Repeat', value: 'repeat' }, { label: 'Once', value: 'once' }]
+const once = computed({
+  get: () => (edit.value?.date !== undefined ? 'once' : 'repeat'),
+  set: (v: string) => {
+    const e = edit.value
+    if (e) edit.value = { ...e, date: v === 'once' ? dayOf(Date.now()) : undefined }
+  },
+})
+
 function toggleDay(d: number) {
   const e = edit.value
   if (e) edit.value = { ...e, days: e.days.includes(d) ? e.days.filter(x => x !== d) : [...e.days, d] }
@@ -37,7 +47,11 @@ const problem = computed(() => {
   if (!e) return ''
   if (!e.prompt.trim()) return 'Write the prompt to send.'
   if (minutesOf(e.time) == null) return 'Set a time.'
-  if (!e.days.length) return 'Pick at least one day.'
+  if (e.date !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) return 'Set a date.'
+    const at = new Date(`${e.date}T${e.time}`).getTime()
+    if (!(at > Date.now())) return 'Pick a time that is still to come.'
+  } else if (!e.days.length) return 'Pick at least one day.'
   if (!e.repoId) return 'Pick a repo.'
   return ''
 })
@@ -51,7 +65,7 @@ function save() {
 
 const rows = computed(() => C.list.map((s) => {
   const p = P.byId(s.pid), r = p?.repos.find(x => x.id === s.repoId)
-  return { s, where: p && r ? `${p.name} · ${r.label}` : 'Project or repo removed', when: `${daysLabel(s.days)} at ${s.time}`, gone: !p || !r }
+  return { s, where: p && r ? `${p.name} · ${r.label}` : 'Project or repo removed', when: whenLabel(s), gone: !p || !r, past: expired(s, Date.now()) }
 }))
 </script>
 
@@ -62,7 +76,7 @@ const rows = computed(() => C.list.map((s) => {
       <UButton v-if="!edit" color="primary" size="xs" icon="i-hugeicons-add-01" class="h-[26px] px-2.5 text-[11.5px]" :disabled="!projects.length" label="New schedule" @click="add" />
     </div>
     <div class="mb-2 text-[12px] leading-[1.5] text-(--mu)">
-      Starts a Claude session with a prompt at a set time, for chores such as dependency updates or triage. Runs while Canopy is open, including in the tray; a run missed while it was closed happens when you open it later the same day.
+      Starts a Claude session with a prompt at a set time, for chores such as dependency updates or triage. Runs while Canopy is open, including in the tray; a run missed while it was closed happens when you open it later the same day. A prompt set to run once turns itself off afterwards.
     </div>
 
     <div v-if="edit" class="mb-3 flex flex-col gap-2.5 rounded-lg border border-(--bb) bg-(--chrome) p-3">
@@ -73,8 +87,10 @@ const rows = computed(() => C.list.map((s) => {
       </div>
       <UTextarea v-model="edit.prompt" :rows="4" autoresize :maxrows="12" variant="none" placeholder="The prompt Claude gets, e.g. Update the npm dependencies, run the tests and summarise what changed." :ui="{ base: 'w-full bg-(--inp) border border-(--ln) rounded-md px-[10px] py-2 text-[12.5px] leading-[1.5] text-(--tx)' }" />
       <div class="flex flex-wrap items-center gap-2">
+        <Seg v-model="once" :items="REPEAT" size="lg" />
         <input v-model="edit.time" type="time" class="mono h-[30px] rounded-md border border-(--ln) bg-(--inp) px-2 text-[12.5px] text-(--tx) outline-none">
-        <div class="flex gap-1">
+        <input v-if="edit.date !== undefined" v-model="edit.date" type="date" :min="dayOf(Date.now())" class="mono h-[30px] rounded-md border border-(--ln) bg-(--inp) px-2 text-[12.5px] text-(--tx) outline-none">
+        <div v-else class="flex gap-1">
           <button
             v-for="d in DAYS"
             :key="d.d"
@@ -86,7 +102,8 @@ const rows = computed(() => C.list.map((s) => {
           >{{ d.l }}</button>
         </div>
       </div>
-      <UCheckbox v-model="edit.wt" color="neutral" size="xs" label="Run in a fresh git worktree, away from the files other sessions are working on" :ui="{ root: 'items-center cursor-pointer', base: 'size-[13px] rounded-sm ring-(--bb)', wrapper: 'ms-2', label: 'text-[12px] font-normal text-(--tx3) cursor-pointer' }" />
+      <UCheckbox v-model="edit.reuse" color="neutral" size="xs" label="Send it to a session already open in that repo, when one is free; start one only when there is none" :ui="{ root: 'items-center cursor-pointer', base: 'size-[13px] rounded-sm ring-(--bb)', wrapper: 'ms-2', label: 'text-[12px] font-normal text-(--tx3) cursor-pointer' }" />
+      <UCheckbox v-if="!edit.reuse" v-model="edit.wt" color="neutral" size="xs" label="Run in a fresh git worktree, away from the files other sessions are working on" :ui="{ root: 'items-center cursor-pointer', base: 'size-[13px] rounded-sm ring-(--bb)', wrapper: 'ms-2', label: 'text-[12px] font-normal text-(--tx3) cursor-pointer' }" />
       <div class="flex items-center gap-1.5">
         <span class="flex-1 text-[11.5px] text-(--amb)">{{ problem }}</span>
         <UButton color="neutral" variant="ghost" size="xs" class="h-[26px] px-2.5 text-[11.5px]" label="Cancel" @click="edit = null" />
@@ -97,7 +114,7 @@ const rows = computed(() => C.list.map((s) => {
     <div v-for="r in rows" :key="r.s.id" class="flex items-center gap-3 border-b border-(--ln2) py-2.5">
       <div class="flex min-w-0 flex-1 flex-col gap-[3px]">
         <span class="ellipsis text-[12.5px]" :class="r.s.enabled ? 'text-(--tx)' : 'text-(--fa)'">{{ r.s.name }}</span>
-        <span class="ellipsis text-[11.5px]" :class="r.gone ? 'text-(--red)' : 'text-(--mu)'">{{ r.when }} · {{ r.where }}{{ r.s.wt ? ' · worktree' : '' }}</span>
+        <span class="ellipsis text-[11.5px]" :class="r.gone ? 'text-(--red)' : 'text-(--mu)'">{{ r.when }}{{ r.past ? ' · past' : '' }} · {{ r.where }}{{ r.s.reuse ? ' · open session' : r.s.wt ? ' · worktree' : '' }}</span>
       </div>
       <UTooltip text="Start it now">
         <UButton color="neutral" variant="ghost" class="size-6 justify-center p-0 text-(--fa)" :disabled="r.gone" @click="C.run(r.s.id)"><UIcon name="i-hugeicons-play" class="size-3.5" /></UButton>

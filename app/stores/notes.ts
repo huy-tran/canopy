@@ -3,7 +3,7 @@ import type { ReviewNote } from '#shared/reviewnotes'
 
 const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
 
-/** Review comments on lines in the file explorer, per working folder, kept until they are sent to Claude or cleared. */
+/** Review comments on lines in the file explorer, per working folder, kept (across restarts too) until they are sent to Claude or cleared. */
 export const useNotesStore = defineStore('notes', () => {
   const byCwd = ref<Record<string, ReviewNote[]>>({})
 

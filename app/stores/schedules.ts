@@ -26,14 +26,26 @@ export const useSchedulesStore = defineStore('schedules', () => {
     if (!s) return
     const ui = useUiStore(), P = useProjectsStore()
     // Marked first, so a start that takes a while (or fails) is not tried again every second.
-    list.value = list.value.map(x => (x.id === id ? { ...x, lastRun: Date.now() } : x))
+    // A one-off has had its run: it turns itself off.
+    list.value = list.value.map(x => (x.id === id ? { ...x, lastRun: Date.now(), enabled: x.date ? false : x.enabled } : x))
     const p = P.byId(s.pid), r = p?.repos.find(x => x.id === s.repoId)
     if (!p || !r) {
       list.value = list.value.map(x => (x.id === id ? { ...x, enabled: false } : x))
       ui.toast({ title: `Scheduled prompt "${s.name}" turned off`, body: 'Its project or repo no longer exists.', error: true })
       return
     }
-    const started = await useSessionsStore().start(p, r, { wt: s.wt, prompt: s.prompt, title: s.name })
+    const S = useSessionsStore()
+    if (s.reuse) {
+      // The session in that repo that is free to take a prompt and was used last; a busy or asking one is left alone.
+      const open = S.claudeOf(p.id)
+        .filter(x => x.repoId === r.id && !x.exited && !x.parent && (x.status === 'done' || (x.status === 'idle' && !!x.claudeId)))
+        .sort((a, b) => b.lastAt - a.lastAt)[0]
+      if (open && S.prompt(open.id, s.prompt)) {
+        ui.toast({ title: `Scheduled prompt sent: ${s.name}`, body: `${p.name} · ${r.label} · ${open.title}`, hue: p.hue })
+        return
+      }
+    }
+    const started = await S.start(p, r, { wt: s.wt && !s.reuse, prompt: s.prompt, title: s.name })
     if (!started) return
     P.patch(p.id, { expanded: true })
     ui.toast({ title: `Scheduled prompt started: ${s.name}`, body: `${p.name} · ${r.label}`, hue: p.hue })

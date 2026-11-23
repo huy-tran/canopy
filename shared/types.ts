@@ -1,4 +1,5 @@
 // Types shared by the Electron main process and the Nuxt renderer.
+import type { ReviewNote } from './reviewnotes'
 
 export type Status = 'working' | 'waiting' | 'done' | 'idle'
 export type Layout = 'tabs' | 'split' | 'grid'
@@ -240,8 +241,16 @@ export interface GhWorld {
   pulls: GhPull[]
   runs: GhRun[]
   at: number
+  /** The gh account that was active for this read: a saved read from another account is not shown. */
+  account?: string
   error?: string
   problem?: GhProblem
+}
+
+/** The accounts the gh CLI is signed in with on github.com, the active one first. Empty when gh can't say. */
+export interface GhAccounts {
+  list: string[]
+  active: string
 }
 
 /** Why gh could not be used: not installed, not signed in, or anything else (such as being offline). */
@@ -280,6 +289,8 @@ export interface Project {
   starred?: boolean
   /** When it was last switched to, for the sidebar's Recent section. */
   openedAt?: number
+  /** The gh account its repos are read and changed as. Unset: whichever signed-in account can reach each repo. */
+  ghAccount?: string
 }
 
 export interface Worktree {
@@ -316,7 +327,10 @@ export interface Session {
   status: Status
   branch: string
   wt: Worktree | null
+  /** The model's name as shown, such as "Sonnet 4.6". */
   model: string
+  /** The model id from the transcript, such as "claude-sonnet-4-6": what the cost is priced by. */
+  modelId?: string
   ctx: number
   tokIn: number
   tokOut: number
@@ -350,6 +364,10 @@ export interface Schedule {
   time: string
   /** Weekdays it runs on, 0 (Sunday) to 6. */
   days: number[]
+  /** Set for a prompt that runs once: its day, "YYYY-MM-DD". The weekdays are then left aside, and it turns itself off after running. */
+  date?: string
+  /** Send the prompt to a Claude session already open in the repo (one that is not busy), and start one only when there is none. */
+  reuse?: boolean
   /** Run in a fresh git worktree, so it never touches the files other sessions are working on. */
   wt: boolean
   enabled: boolean
@@ -389,6 +407,8 @@ export interface Prefs {
   scrollback: string
   notifyWaiting: boolean
   notifyDone: boolean
+  /** Warn when the Claude plan's 5-hour or weekly limit reaches 80% and 95% (on unless turned off). */
+  notifyLimit: boolean
   skipViewing: boolean
   sound: boolean
   dnd: boolean
@@ -461,6 +481,8 @@ export interface Persisted {
   previews?: Record<string, PreviewState>
   /** Scheduled prompts. */
   schedules?: Schedule[]
+  /** Review comments not yet sent to Claude, per working folder. */
+  notes?: Record<string, ReviewNote[]>
 }
 
 /** The app preview beside a project's chat. */

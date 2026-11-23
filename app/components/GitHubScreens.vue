@@ -85,7 +85,7 @@ onBeforeUnmount(() => GW.stop())
     </div>
 
     <GhPullDetail v-else-if="G.pr" :key="G.pr" :url="G.pr" />
-    <GhRunDetail v-else-if="G.run" :key="`${G.run.repo}#${G.run.id}`" :repo="G.run.repo" :id="G.run.id" />
+    <GhRunDetail v-else-if="G.run" :id="G.run.id" :key="`${G.run.repo}#${G.run.id}`" :repo="G.run.repo" />
     <!-- Back from a PR or run opened here returns to the repo, read again. -->
     <GhRepoDetail v-else-if="G.repo" :key="G.repo" :name="G.repo" />
     <GhRepoList v-else-if="G.tab === 'repos'" />

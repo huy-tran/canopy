@@ -1,28 +1,8 @@
 import { defineStore } from 'pinia'
 import type { Activity, Chatter, HookEvent, Project, Repo, SavedSession, Session, ShellKind, SshHost, Subagent, UsageUpdate } from '#shared/types'
-import { costOf, modelLabel } from '#shared/pricing'
+import { costOf, isPriced, modelLabel } from '#shared/pricing'
 import { errMessage } from '#shared/errors'
-
-function relPath(cwd: string, file: string) {
-  const f = file.replace(/\\/g, '/'), c = cwd.replace(/\\/g, '/').replace(/\/$/, '')
-  return f.toLowerCase().startsWith(c.toLowerCase() + '/') ? f.slice(c.length + 1) : f
-}
-
-/** "Permission: edit schema.ts" plus the longer "Edit file src/.../schema.ts" for notifications. */
-function describeTool(s: Session, tool: { name: string; input: any } | undefined) {
-  if (!tool) return { what: 'Permission needed', action: 'Permission needed' }
-  const file = tool.input?.file_path || tool.input?.notebook_path
-  if (file) {
-    const rel = relPath(s.cwd, String(file)), base = rel.split('/').pop()
-    const create = tool.name === 'Write'
-    return { what: `Permission: ${create ? 'create' : 'edit'} ${base}`, action: `${create ? 'Create' : 'Edit'} file ${rel}` }
-  }
-  if (tool.name === 'Bash') {
-    const cmd = String(tool.input?.command || '').split('\n')[0]!.slice(0, 60)
-    return { what: `Permission: run ${cmd.slice(0, 30)}`, action: `Run ${cmd}` }
-  }
-  return { what: `Permission: ${tool.name}`, action: tool.name }
-}
+import { askWhat, closingQuestion, describeTool, notificationKind, relPath } from '#shared/hookstate'
 
 /** Prompts kept in memory per session; the saved list keeps fewer. */
 const PROMPTS_KEPT = 50
@@ -120,7 +100,18 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function cost(s: Session) {
-    return costOf(s.model, s)
+    // By the model id: the shown name ("Sonnet 4.6") is not something the price table knows.
+    return costOf(s.modelId || s.model, s)
+  }
+
+  /** True when the session's model has no price of its own yet, so its cost is a guess. */
+  function costEstimated(s: Session) {
+    return !!s.modelId && !isPriced(s.modelId)
+  }
+
+  /** A session's cost as shown: "$1.20", or "~$1.20" when it is a guess. */
+  function costText(s: Session) {
+    return (costEstimated(s) ? '~' : '') + usd(cost(s))
   }
 
   /** Starts Claude Code in a repo, optionally in a fresh git worktree, or reopens a saved session. */
@@ -306,7 +297,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(u.sid)
     if (!s) return
     const title = s.title === 'New session' && u.lastPrompt ? u.lastPrompt.slice(0, 200) : s.title
-    const next = { model: u.model ? modelLabel(u.model) : s.model, tokIn: u.tokIn, tokOut: u.tokOut, cacheR: u.cacheR, cacheW: u.cacheW, ctx: u.ctx, claudeId: u.claudeId || s.claudeId, title }
+    const next = { model: u.model ? modelLabel(u.model) : s.model, modelId: u.model || s.modelId, tokIn: u.tokIn, tokOut: u.tokOut, cacheR: u.cacheR, cacheW: u.cacheW, ctx: u.ctx, claudeId: u.claudeId || s.claudeId, title }
     // Replacing the session re-runs everything that reads the list, so only when something moved.
     if ((Object.keys(next) as (keyof typeof next)[]).some(k => next[k] !== s[k])) patch(u.sid, next)
     const text = u.latest === 'said' ? u.said : u.latest === 'doing' ? u.doing : ''
@@ -384,6 +375,11 @@ export const useSessionsStore = defineStore('sessions', () => {
           setSubagents(s.id, [...(subagents.value[s.id] || []), a])
         }
         lastTool.set(s.id, { name: String(p.tool_name || ''), input: p.tool_input || {} })
+        const ask = askWhat(String(p.tool_name || ''), p.tool_input)
+        if (ask) {
+          patch(s.id, { status: 'waiting', perm: false, waitingSince: now, waitWhat: ask, editing: '', lastAt: now })
+          break
+        }
         const f = p.tool_input?.file_path || p.tool_input?.notebook_path
         patch(s.id, { editing: f ? relPath(s.cwd, String(f)) : '', ...(s.status === 'waiting' ? { status: 'working', waitingSince: null, perm: false } : {}), lastAt: now })
         break
@@ -407,9 +403,11 @@ export const useSessionsStore = defineStore('sessions', () => {
         break
       }
       case 'Notification': {
-        const msg = String(p.message || '')
-        if (/permission/i.test(msg)) {
-          const d = describeTool(s, lastTool.get(s.id))
+        const kind = notificationKind(p)
+        // A question or plan Claude put to the user is already shown as that, not as a permission prompt.
+        if (!kind || (s.status === 'waiting' && askWhat(lastTool.get(s.id)?.name || '', lastTool.get(s.id)?.input))) break
+        if (kind === 'permission') {
+          const d = describeTool(s.cwd, lastTool.get(s.id))
           permAction.value = { ...permAction.value, [s.id]: d.action }
           patch(s.id, { status: 'waiting', perm: true, waitingSince: now, waitWhat: d.what, lastAt: now })
         } else if (s.status === 'working') {
@@ -430,8 +428,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         setSubagents(s.id, (subagents.value[s.id] || []).filter(a => a.bg))
         const last = (e.lastText || '').trim()
         results.value = { ...results.value, [s.id]: last }
-        if (/\?\s*$/.test(last)) {
-          const q = last.split(/(?<=[.!?])\s+/).filter(x => /\?$/.test(x)).pop() || last
+        const q = closingQuestion(last)
+        if (q) {
           patch(s.id, { status: 'waiting', perm: false, waitingSince: now, waitWhat: 'Question: ' + q.slice(0, 80), lastAt: now })
         } else {
           patch(s.id, { status: 'done', perm: false, waitingSince: null, waitWhat: '', endedAt: now, lastAt: now })
@@ -472,7 +470,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   return {
-    sessions, focus, permAction, subagents, chatter, activity, results, shells, prompt, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
+    sessions, focus, permAction, subagents, chatter, activity, results, shells, prompt, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost, costEstimated, costText,
     start, startShell, close, respawn, resume, onUsage, onExit, onHook, addImage, removeImage, saved, reopen,
   }
 })

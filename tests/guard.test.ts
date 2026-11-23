@@ -32,8 +32,8 @@ describe('safeSegment', () => {
 
 describe('noShellMeta', () => {
   it('refuses cmd.exe syntax', () => {
-    for (const s of ['C:\a&calc', 'a|b', 'a>b', '50%', 'a"b', 'a^b', 'a\nb']) expect(() => noShellMeta(s)).toThrow()
-    expect(noShellMeta('C:\Users\me\My Project (1)\file.ts')).toContain('My Project')
+    for (const s of ['C:\\a&calc', 'a|b', 'a>b', '50%', 'a"b', 'a^b', 'a\nb']) expect(() => noShellMeta(s)).toThrow()
+    expect(noShellMeta('C:\\Users\\me\\My Project (1)\\file.ts')).toContain('My Project')
   })
 })
 
