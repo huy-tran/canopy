@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-24
+
 - More than one GitHub account in the gh CLI: Canopy now reads and changes each repo as the account that can reach it, instead of only the active one. Review requests and your pull requests come from every signed-in account, and a project can name its account (Edit project > GitHub account).
 - After `gh auth switch`, the GitHub window no longer opens on the other account's repos, and "your" pull requests follow the switch without a restart.
 - A warning when your Claude plan's 5-hour or weekly limit reaches 80% and again at 95%, as a notification and in the app. Turn it off in Settings > Notifications.
@@ -328,6 +330,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.33.0]: https://github.com/huy-tran/canopy/releases/tag/v0.33.0
 [0.32.0]: https://github.com/huy-tran/canopy/releases/tag/v0.32.0
 [0.31.2]: https://github.com/huy-tran/canopy/releases/tag/v0.31.2
 [0.31.1]: https://github.com/huy-tran/canopy/releases/tag/v0.31.1
