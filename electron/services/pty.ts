@@ -3,7 +3,7 @@ import * as pty from 'node-pty'
 import fs from 'node:fs'
 import os from 'node:os'
 import type { ShellInfo, ShellKind } from '../../shared/types'
-import { writeSessionSettings, removeSessionSettings } from './hooks'
+import { writeSessionSettings, writeSessionTools, removeSessionSettings } from './hooks'
 import { commandLine, IS_WIN } from './shellcmd'
 
 export interface SpawnOpts {
@@ -12,6 +12,8 @@ export interface SpawnOpts {
   cmd: string
   cols: number
   rows: number
+  /** Give the session the worker tools. */
+  agent?: boolean
 }
 
 interface Term {
@@ -49,16 +51,18 @@ export function cleanEnv(): Record<string, string> {
 }
 
 /** Adds `--settings` so our hooks run, when the startup command launches claude. */
-export function withHooks(cmd: string, settingsFile: string): string {
+export function withHooks(cmd: string, settingsFile: string, toolsFile?: string): string {
   const first = cmd.trim().split(/\s+/)[0] || ''
   if (!/(^|[\\/])claude(\.cmd|\.exe|\.ps1)?$/i.test(first)) return cmd
-  return `${cmd} --settings "${settingsFile}"`
+  // The worker tools come on top of the MCP servers the user has set up; a command that names its own config keeps it.
+  const tools = toolsFile && !/--mcp-config\b/.test(cmd) ? ` --mcp-config "${toolsFile}"` : ''
+  return `${cmd} --settings "${settingsFile}"${tools}`
 }
 
 export function spawnSession(o: SpawnOpts, onData: (id: string, d: string) => void, onExit: (id: string, code: number) => void) {
   killSession(o.id)
   const settings = writeSessionSettings(o.id)
-  const full = withHooks(o.cmd || 'claude', settings)
+  const full = withHooks(o.cmd || 'claude', settings, o.agent ? writeSessionTools(o.id) : undefined)
   // `o.cmd` is the command the user set for the project (Settings > Projects) and runs as typed, in cmd.exe or the user's shell: only the app's own window can send it (see trusted() in main.ts).
   const sh = commandLine(full)
   const p = pty.spawn(sh.file, sh.args, {

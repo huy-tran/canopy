@@ -4,6 +4,15 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- A working session shows a spinning ring in place of its status dot, in the sidebar, the session tabs and the pane header.
+- Review comments for Claude: in Files, hover a line of a diff or file and press + to leave a comment. "Send comments to Claude" puts them all at the prompt of the session in that folder, for you to send.
+- Find in the terminal (Ctrl Alt F): searches a session's scrollback, with every match marked, Enter and Shift Enter to step through them, and a match-case switch.
+- Emoji and other wide characters take two cells in the terminal, so Claude Code's lines no longer drift out of line after one.
+- Scheduled prompts (Settings > Scheduled prompts): start a Claude session with a prompt at a set time on chosen weekdays, in a fresh worktree if you like. They run while Canopy is open, including in the tray.
+- Open PR on a worktree session (Session details, or the command palette): pushes its branch, opens a pull request into the branch it came from with the gh CLI, and shows it in the GitHub window.
+- Worker sessions: Claude can start other sessions in the project as workers, each in its own worktree and pane, send them follow-ups and read what they report. A worker shows a robot icon in the sidebar. Turn it off in Settings > General.
+- Pasting a prompt into a session that has not been shown yet (a tab not opened since it started) no longer fails after the text is typed, which could stop Prompt all part-way.
+
 ## [0.31.2] - 2026-11-23
 
 - Pushing from the Files window starts git directly instead of through a shell, so nothing in the push command is ever read as a command line.

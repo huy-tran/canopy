@@ -62,6 +62,7 @@ export default defineNuxtPlugin({
       ui.sshSaved = (saved.sessions || []).filter(x => x.win === 'ssh')
       ui.recaps = recent(saved.recaps)
       ui.recapHours = recent(saved.recapHours)
+      if (!tool) useSchedulesStore().list = saved.schedules || []
     }
 
     let saveT: ReturnType<typeof setTimeout> | undefined
@@ -70,13 +71,13 @@ export default defineNuxtPlugin({
     const snapshot = (): Persisted => plain({
       projects: P.projects, prefs: prefs.prefs, keys: prefs.keys, theme: prefs.theme, sel: P.sel, stripOn: ui.stripOn,
       sessions: reopened ? [...S.saved, ...ui.sshSaved] : (saved?.sessions || []), focus: reopened ? S.focus : (saved?.focus || {}),
-      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels, previews: ui.previews,
+      recaps: ui.recaps, recapHours: ui.recapHours, panels: ui.panels, previews: ui.previews, schedules: useSchedulesStore().list,
     })
     /** When the first unsaved change came; saves wait for a quiet moment, but never longer than SAVE_MAX after it. */
     let dirtySince = 0
     const SAVE_MAX = 2000
     // One string of everything saved: the watcher fires only when it really changes, not on every session update.
-    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels, ui.previews]), () => {
+    if (!tool) watch(() => JSON.stringify([P.projects, P.sel, prefs.prefs, prefs.keys, prefs.theme, ui.stripOn, S.saved, S.focus, ui.sshSaved, ui.recaps, ui.recapHours, ui.panels, ui.previews, useSchedulesStore().list]), () => {
       if (demo) return
       const now = Date.now()
       dirtySince ||= now
@@ -251,6 +252,7 @@ export default defineNuxtPlugin({
     // ---------- Main process events ----------
     api.session.onHook(e => S.onHook(e))
     api.session.onUsage(u => S.onUsage(u))
+    api.agent.onCall(c => runAgentTool(c).then(r => api.agent.reply(c.id, r)))
     api.pty.onExit((id, code) => (id.startsWith('aws-') ? useAwsStore().onTermExit(id, code) : S.onExit(id, code)))
     api.svc.onData((id, d) => V.onData(id, d))
     api.svc.onStatus((id, s, code) => V.onStatus(id, s, code))
@@ -316,6 +318,9 @@ export default defineNuxtPlugin({
       S.focus = { ...(saved?.focus || {}) }
     }
     reopened = true
+    // Scheduled prompts, once the sessions that were open are back.
+    const C = useSchedulesStore()
+    setInterval(() => C.tick(), 1000)
     // Projects with nothing to reopen fall back to "start all sessions when I open this project".
     const restoredPids = new Set(restore.map(x => x.pid))
     if (prefs.prefs.resume) P.projects.filter(p => p.resume && !restoredPids.has(p.id)).forEach(p => ui.resumeOnce.add(p.id))

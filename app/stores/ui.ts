@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
 import type { ToolCmd } from '#shared/bridge'
+import { notesPrompt } from '#shared/reviewnotes'
 import type { DockPanelState, Layout, PreviewState, PlanUsage, RecapHours, SavedSession, Session, UpdateState, ShellKind } from '#shared/types'
 
 export type PaletteMode = 'nav' | 'cmd'
-export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'ssh' | 'notifications' | 'aws' | 'keys'
+export type SettingsTab = 'general' | 'appearance' | 'terminal' | 'schedules' | 'ssh' | 'notifications' | 'aws' | 'keys'
 
 export const useUiStore = defineStore('ui', () => {
   const P = useProjectsStore()
@@ -31,6 +32,20 @@ export const useUiStore = defineStore('ui', () => {
   const updOpen = ref(false)
   const upd = ref<UpdateState | null>(null)
   const details = ref(false)
+  /** The session whose find bar is open, and a count of the presses that asked for it. */
+  const find = ref<string | null>(null)
+  const findTick = ref(0)
+  function toggleFind() {
+    const id = fid.value
+    if (!id || cur.value?.view === 'overview' || sim.value) return
+    findTick.value++
+    if (find.value !== id) find.value = id
+    else if (document.activeElement?.closest('.xterm')) return
+    else {
+      find.value = null
+      focusTerminal(id)
+    }
+  }
   /** The workspace simulation fills the main area in place of the selected project. */
   const sim = ref(false)
   /** A character or room the simulation flies the camera to; `at` makes a repeat click count. `follow` (stepping with the keys) carries an open session terminal along. */
@@ -445,6 +460,49 @@ export const useUiStore = defineStore('ui', () => {
     toast({ title: `Merged ${from} into ${base}`, body: 'Worktree removed. The session now runs in the main folder.', hue: p.hue })
   }
 
+  /** The worktree session a pull request is being opened for, and the folder whose push may ask for a passphrase. */
+  const prBusy = ref<string | null>(null)
+  const pushCwd = ref<string | null>(null)
+
+  /** Pushes a worktree session's branch and opens a pull request into the branch it came from, shown in the GitHub window. */
+  async function prWt(sid: string) {
+    const s = S.byId(sid)
+    if (!s?.wt || prBusy.value) return
+    const cwd = s.cwd, base = s.wt.base
+    prBusy.value = sid
+    try {
+      const [st, sync] = await Promise.all([api.git.status(cwd), api.git.sync(cwd)])
+      if (!sync.remote) return toast({ title: 'No remote to push to', body: 'This repo has no origin remote.', error: true })
+      if (!sync.upstream || sync.ahead > 0) {
+        pushCwd.value = cwd
+        const pushed = await api.git.push(cwd)
+        pushCwd.value = null
+        if (!pushed.ok) return toast({ title: 'Push failed', body: pushed.error, error: true })
+      }
+      const r = await api.gh.createPull(cwd, base)
+      if (!r.ok || !r.url) {
+        // Not on GitHub, or no gh CLI: the remote's own page for opening one.
+        const web = await api.git.prUrl(cwd)
+        if (web.ok && web.url) {
+          api.sys.openExternal(web.url)
+          toast({ title: 'Opening the pull request page in your browser', body: r.error })
+        } else toast({ title: 'Could not open a pull request', body: r.error || web.error, error: true })
+        return
+      }
+      const left = st.changes.length
+      toast({
+        title: r.existed ? `${s.branch} already has a pull request` : `Pull request opened into ${base}`,
+        body: left ? `${left} uncommitted change${left === 1 ? ' is' : 's are'} not in it.` : r.url,
+        hue: P.byId(s.pid)?.hue,
+      })
+      details.value = false
+      openGithub({ pull: r.url })
+    } finally {
+      prBusy.value = null
+      pushCwd.value = null
+    }
+  }
+
   // ---------- GitHub window ----------
 
   /** Opens the GitHub window, on a section or a pull request if asked. */
@@ -592,6 +650,35 @@ export const useUiStore = defineStore('ui', () => {
       pasteInto(target.id, '@' + path + ' ')
       focusTerminal(target.id)
     }, 60)
+  }
+
+  /**
+   * Puts the review comments left on a folder's files at the prompt of a Claude session running there
+   * (the focused one when it is), without sending. False when there was nothing to send or nowhere to send it.
+   */
+  function sendNotes(cwd?: string) {
+    const N = useNotesStore()
+    const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
+    const dir = cwd || explorer.value?.cwd || focused.value?.cwd || ''
+    const text = notesPrompt(N.of(dir))
+    if (!dir || !text) {
+      toast({ title: 'No review comments yet', body: 'Open Files, hover a line of a diff and press + to leave one.' })
+      return false
+    }
+    const ss = S.sessions.filter(s => s.kind === 'claude' && !s.exited && norm(s.cwd) === norm(dir))
+    const target = ss.find(s => s.id === fid.value) || ss[0]
+    if (!target) {
+      toast({ title: 'No Claude session in this folder', body: 'Start one there, then send the comments. They are kept until then.', error: true })
+      return false
+    }
+    explorer.value = null
+    focusSession(target.id)
+    setTimeout(() => {
+      pasteInto(target.id, text)
+      focusTerminal(target.id)
+    }, 60)
+    N.clear(dir)
+    return true
   }
 
   // ---------- Overlays ----------
@@ -858,6 +945,9 @@ export const useUiStore = defineStore('ui', () => {
       promptAll: openBc,
       share: shareFocused,
       details: () => { details.value = !details.value },
+      find: toggleFind,
+      reviewNotes: () => { sendNotes() },
+      schedules: () => openSettings('schedules'),
       cycleLayout,
       closeTerminal,
       closeAll,
@@ -891,6 +981,6 @@ export const useUiStore = defineStore('ui', () => {
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
     toggleLogs, openShell, openSshTerminal, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
-    openGithub, openAws,
+    openGithub, openAws, find, findTick, toggleFind, sendNotes, prWt, prBusy, pushCwd,
   }
 })

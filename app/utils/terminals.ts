@@ -4,6 +4,8 @@ import { Terminal, type FontWeight, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { SearchAddon } from '@xterm/addon-search'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { api } from './bridge'
 
 export interface TermHooks {
@@ -36,6 +38,7 @@ export interface TermOptions {
 interface Entry {
   term: Terminal
   fit: FitAddon
+  search: SearchAddon
   el: HTMLDivElement
   opened: boolean
   ro: ResizeObserver | null
@@ -209,6 +212,12 @@ export function ensureTerminal(sid: string): Entry {
   const term = new Terminal(xtermOptions(opts!, seeThrough.has(sid)))
   const fit = new FitAddon()
   term.loadAddon(fit)
+  const search = new SearchAddon()
+  term.loadAddon(search)
+  search.onDidChangeResults(r => findListeners.get(sid)?.({ index: r.resultIndex, count: r.resultCount }))
+  // Emoji and other wide characters take two cells, as Claude Code lays them out.
+  term.loadAddon(new Unicode11Addon())
+  term.unicode.activeVersion = '11'
   term.loadAddon(new WebLinksAddon((_ev, url) => hooks?.openUrl(url)))
   term.registerLinkProvider(linkProvider(sid, term))
   const el = document.createElement('div')
@@ -234,7 +243,7 @@ export function ensureTerminal(sid: string): Entry {
     }
     return true
   })
-  e = { term, fit, el, opened: false, ro: null, gl: null, fitRaf: 0 }
+  e = { term, fit, search, el, opened: false, ro: null, gl: null, fitRaf: 0 }
   entries.set(sid, e)
   return e
 }
@@ -283,6 +292,7 @@ export function detachTerminal(sid: string, host: HTMLElement) {
 
 export function disposeTerminal(sid: string) {
   seeThrough.delete(sid)
+  findListeners.delete(sid)
   const e = entries.get(sid)
   if (!e) return
   e.ro?.disconnect()
@@ -293,6 +303,47 @@ export function disposeTerminal(sid: string) {
   entries.delete(sid)
 }
 
+// ---------- Find in the scrollback ----------
+
+export interface FindState { index: number; count: number }
+const findListeners = new Map<string, (f: FindState) => void>()
+
+/** Colours of the matches: every one marked, the one the search stands on brighter. */
+const FIND_MARKS = {
+  matchBackground: '#7a5c1e', matchOverviewRuler: '#c9a227',
+  activeMatchBackground: '#d19a1f', activeMatchColorOverviewRuler: '#f0c040',
+}
+
+/** Goes to the next (or previous) match of `q`, marking every match. False when there is none. */
+export function findInTerminal(sid: string, q: string, dir: 1 | -1, o: { caseSensitive?: boolean; typing?: boolean } = {}) {
+  const e = entries.get(sid)
+  if (!e) return false
+  if (!q) {
+    clearFind(sid)
+    findListeners.get(sid)?.({ index: -1, count: 0 })
+    return false
+  }
+  // While typing, the match the search stands on grows with the query instead of jumping to the next one.
+  const opts = { caseSensitive: !!o.caseSensitive, incremental: !!o.typing, decorations: FIND_MARKS }
+  return dir > 0 ? e.search.findNext(q, opts) : e.search.findPrevious(q, opts)
+}
+
+/** Removes the match marks, when the find bar closes. */
+export function clearFind(sid: string) {
+  const e = entries.get(sid)
+  if (!e) return
+  e.search.clearDecorations()
+  e.term.clearSelection()
+}
+
+/** Tells `fn` which match the search stands on and how many there are; returns the way to stop. */
+export function onFindResults(sid: string, fn: (f: FindState) => void) {
+  findListeners.set(sid, fn)
+  return () => {
+    if (findListeners.get(sid) === fn) findListeners.delete(sid)
+  }
+}
+
 export function focusTerminal(sid: string) {
   const e = entries.get(sid)
   if (e?.opened) e.term.focus()
@@ -301,7 +352,22 @@ export function focusTerminal(sid: string) {
 /** Inserts text at Claude's prompt without sending it. */
 export function pasteInto(sid: string, text: string) {
   const e = ensureTerminal(sid)
-  e.term.paste(text)
+  const clean = pasteText(text)
+  if (e.opened) return e.term.paste(clean)
+  // xterm's own paste needs the terminal on screen: for one never shown (a session started in the background) it delivers
+  // the text and then throws. So the same bytes are sent by hand.
+  const t = clean.replace(/\n/g, '\r')
+  api.pty.write(sid, e.term.modes.bracketedPasteMode ? `\x1b[200~${t}\x1b[201~` : t)
+}
+
+/**
+ * Text that is safe to paste: only tabs and line breaks are kept of the control characters. A prompt can come from
+ * another session (a worker's task) or a file, and an escape sequence in it could end the paste early and type keys
+ * of its own, such as the answer to a permission prompt.
+ */
+export function pasteText(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\r\n?/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
 }
 
 export function writeToTerminal(sid: string, text: string) {

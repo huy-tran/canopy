@@ -526,3 +526,24 @@ export async function runWorkflow(repo: string, id: number, ref: string, inputs:
   for (const [k, v] of Object.entries(inputs)) args.push('-f', `${k}=${v}`)
   return done(await runGh(args))
 }
+
+const PULL_URL = /https:\/\/[\w.-]+\/[\w.-]+\/[\w.-]+\/pull\/\d+/
+
+/**
+ * Opens a pull request from the branch checked out in a folder (already pushed) into `base`, with its title and
+ * description taken from the commits. A branch that already has an open one answers with that one.
+ */
+export function createPull(cwd: string, base: string): Promise<{ ok: boolean; url?: string; existed?: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    if (!/^[\w.][\w./-]*$/.test(base)) return resolve({ ok: false, error: 'Not a branch name.' })
+    // Run in the folder itself: gh reads the repo, the branch and its commits from there.
+    execFile('gh', ['pr', 'create', '--fill', '--base', base], { cwd, windowsHide: true, encoding: 'utf8', timeout: 60_000 }, (err, stdout, stderr) => {
+      const said = `${stdout || ''}\n${stderr || ''}`
+      const url = said.match(PULL_URL)?.[0]
+      if (!err && url) return resolve({ ok: true, url })
+      if (url && /already exists/i.test(said)) return resolve({ ok: true, url, existed: true })
+      if (err && (err as NodeJS.ErrnoException).code === 'ENOENT') return resolve({ ok: false, error: 'The gh CLI is not installed.' })
+      resolve({ ok: false, error: (stderr || '').trim() || err?.message || 'gh did not return a pull request.' })
+    })
+  })
+}

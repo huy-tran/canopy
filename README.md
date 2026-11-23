@@ -43,7 +43,10 @@ npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, comm
 | Overview history | All JSONL logs for the project's repo folders (and their worktrees). |
 | Plan usage bars | The OAuth usage endpoint, using the credentials Claude Code stores in `~/.claude/.credentials.json`. |
 | Git changes, diffs, files | `git status`, `git diff`, `git ls-files` (respects `.gitignore`). |
-| Worktrees | `git worktree add` into `<repo>.worktrees\<slug>`; Merge runs `git merge` then `git worktree remove`. |
+| Worktrees | `git worktree add` into `<repo>.worktrees\<slug>`; Merge runs `git merge` then `git worktree remove`; Open PR pushes the branch and runs `gh pr create --fill`. |
+| Worker sessions | Each terminal also runs with `--mcp-config <file>`, pointing at an MCP endpoint on the same local server as the hooks. Its tools (`start_worker`, `worker_result`, `message_worker`, `close_worker`, `list_sessions`) are carried out by the main window, which owns the sessions. |
+| Scheduled prompts | A timer in the main window; the prompt is pasted and sent once Claude Code reports `SessionStart`. |
+| Review comments | Kept in memory per folder and pasted at Claude's prompt as one numbered list. |
 | Dev servers | node-pty, with the whole process tree killed on Stop. |
 | Lookout (app preview) | An Electron `<webview>` on its own session, locked to http(s); Select element and annotations run inside the page and reach Claude's prompt as pasted text and image paths. |
 | Screenshots | A pasted image is saved to disk and its path pasted at Claude's prompt, which attaches it as `[Image #n]`. |

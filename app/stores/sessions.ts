@@ -52,6 +52,38 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   const isSubagentTool = (name: unknown) => name === 'Task' || name === 'Agent'
 
+  /** The prompt a session was started with (a scheduled prompt, or a worker's task), typed once Claude Code is up. */
+  const firstPrompt = new Map<string, string>()
+  /** Claude Code reports its start a moment before its prompt box takes input. */
+  const FIRST_PROMPT_WAIT = 1500
+  /** What Claude said last when each session's turn ended. */
+  const results = ref<Record<string, string>>({})
+  /** Sessions get the tools that start and follow worker sessions, unless turned off in Settings. */
+  const agentTools = () => usePrefsStore().prefs.agentTools !== false
+
+  /** Types a prompt into a live Claude session and sends it. False when the session can't take one. */
+  function prompt(id: string, text: string) {
+    const s = byId(id)
+    if (!s || s.kind !== 'claude' || s.exited || !text.trim()) return false
+    const before = s.promptCount
+    pasteInto(id, text.trim())
+    // Claude Code takes a moment to take a paste in and ignores an Enter that comes before it has,
+    // so Enter is pressed again until the prompt is reported as sent.
+    for (const ms of ENTER_AT) {
+      setTimeout(() => {
+        const now = byId(id)
+        // Never while Claude is asking something: Enter would pick an answer.
+        if (now && !now.exited && now.promptCount === before && now.status !== 'waiting') api.pty.write(id, '\r')
+      }, ms)
+    }
+    return true
+  }
+  /**
+   * When Enter is pressed after a prompt is pasted, in ms; the later ones only if the earlier did not send it.
+   * A session that is still starting (loading its plugins and MCP servers) can take the paste long before it takes the Enter.
+   */
+  const ENTER_AT = [500, 1500, 3000, 6000, 10_000, 15_000, 22_000, 30_000, 45_000, 60_000]
+
   const byId = (id: string | null | undefined) => sessions.value.find(s => s.id === id) || null
   /** Panes of a project: Claude sessions and pane shells (docked shells live in the dock panel). */
   const ofProject = (pid: string) => sessions.value.filter(s => s.pid === pid && !s.docked && !s.win)
@@ -92,7 +124,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   /** Starts Claude Code in a repo, optionally in a fresh git worktree, or reopens a saved session. */
-  async function start(p: Project, r: Repo, o: { wt?: boolean; resume?: boolean; reopen?: SavedSession } = {}): Promise<Session | null> {
+  async function start(p: Project, r: Repo, o: { wt?: boolean; resume?: boolean; reopen?: SavedSession; prompt?: string; parent?: string; title?: string } = {}): Promise<Session | null> {
     const prefs = usePrefsStore().prefs
     const re = o.reopen
     const id = re?.id || uid('s')
@@ -115,15 +147,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     else if (o.resume && !/--continue|\s-c\b|--resume|\s-r\b/.test(cmd) && /^claude\b/.test(cmd)) cmd += ' --continue'
     const now = Date.now()
     const s: Session = {
-      id, kind: 'claude', pid: p.id, repoId: r.id, cwd, cmd, title: re?.title || 'New session', status: 'idle', branch, wt,
+      id, kind: 'claude', pid: p.id, repoId: r.id, cwd, cmd, title: re?.title || o.title || 'New session', status: 'idle', branch, wt, parent: o.parent,
       model: '', ctx: 0, tokIn: 0, tokOut: 0, cacheR: 0, cacheW: 0, images: [],
       started: re?.started || now, lastAt: now, endedAt: null, waitingSince: null, waitWhat: '', perm: false,
       promptCount: re?.prompts.length || 0, prompts: re?.prompts || [], claudeId: re?.claudeId || '', changed: [], editing: '', exited: false,
     }
     sessions.value = [...sessions.value, s]
+    if (o.prompt?.trim()) firstPrompt.set(id, o.prompt.trim())
     ensureTerminal(id)
     const { cols, rows } = terminalSize(id)
-    api.pty.spawn({ id, cwd, cmd, cols, rows }).catch((e) => {
+    api.pty.spawn({ id, cwd, cmd, cols, rows, agent: agentTools() }).catch((e) => {
+      firstPrompt.delete(id)
       writeToTerminal(id, `\r\n\x1b[31mCould not start "${cmd}": ${errMessage(e)}\x1b[0m\r\n`)
     })
     useGitStore().refresh(cwd)
@@ -188,6 +222,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     disposeTerminal(id)
     s.images.forEach(im => URL.revokeObjectURL(im.src))
     lastTool.delete(id)
+    firstPrompt.delete(id)
+    if (results.value[id] != null) {
+      const { [id]: _, ...rest } = results.value
+      results.value = rest
+    }
     setSubagents(id, [])
     if (activity.value[id]) {
       const { [id]: _, ...rest } = activity.value
@@ -207,7 +246,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     patch(id, { ...patchS, cwd, exited: false, status: 'idle' })
     writeToTerminal(id, '\x1b[2J\x1b[3J\x1b[H')
     const { cols, rows } = terminalSize(id)
-    await api.pty.spawn({ id, cwd, cmd: s.cmd, cols, rows })
+    await api.pty.spawn({ id, cwd, cmd: s.cmd, cols, rows, agent: agentTools() })
   }
 
   /** Restarts an ended pane in place: Claude resumes its conversation, a shell starts fresh in the same folder. */
@@ -231,7 +270,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         await api.pty.shell({ id, cwd: s.cwd, kind: s.shell || 'powershell', cols, rows })
         return
       }
-      await api.pty.spawn({ id, cwd: s.cwd, cmd, cols, rows })
+      await api.pty.spawn({ id, cwd: s.cwd, cmd, cols, rows, agent: agentTools() })
     } catch (e) {
       patch(id, { exited: true, endedAt: Date.now() })
       writeToTerminal(id, `\r\n\x1b[31mCould not resume "${cmd}": ${errMessage(e)}\x1b[0m\r\n`)
@@ -321,9 +360,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     const now = Date.now(), p = e.payload
     const prev = s.status
     switch (e.event) {
-      case 'SessionStart':
+      case 'SessionStart': {
         patch(s.id, { claudeId: String(p.session_id || s.claudeId) })
+        const first = firstPrompt.get(s.id)
+        firstPrompt.delete(s.id)
+        if (first) setTimeout(() => prompt(s.id, first), FIRST_PROMPT_WAIT)
         break
+      }
       case 'UserPromptSubmit': {
         const text = String(p.prompt || '').trim()
         const pc = s.promptCount + 1
@@ -386,6 +429,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Foreground subagents never outlive the turn.
         setSubagents(s.id, (subagents.value[s.id] || []).filter(a => a.bg))
         const last = (e.lastText || '').trim()
+        results.value = { ...results.value, [s.id]: last }
         if (/\?\s*$/.test(last)) {
           const q = last.split(/(?<=[.!?])\s+/).filter(x => /\?$/.test(x)).pop() || last
           patch(s.id, { status: 'waiting', perm: false, waitingSince: now, waitWhat: 'Question: ' + q.slice(0, 80), lastAt: now })
@@ -428,7 +472,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   return {
-    sessions, focus, permAction, subagents, chatter, activity, shells, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
+    sessions, focus, permAction, subagents, chatter, activity, results, shells, prompt, byId, ofProject, claudeOf, dockedOf, shellLabel, focusedId, setFocus, update, patch, cost,
     start, startShell, close, respawn, resume, onUsage, onExit, onHook, addImage, removeImage, saved, reopen,
   }
 })

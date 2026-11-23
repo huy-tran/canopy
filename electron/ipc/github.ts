@@ -1,7 +1,7 @@
 // GitHub: the PR, run, repo and alert calls, and GitHub HQ's cache.
 import { ghCache, handle } from '../context'
 import {
-  allRepos, branches, cancelRun, dispatchables, githubWorld, mergePull, pullDetail, pullDiff, rateLimit, rerunRun, reviewPull, reviewRequests, runDetail, runLog, runWorkflow, searchPulls, securityAlerts, workflowRuns,
+  allRepos, branches, cancelRun, createPull, dispatchables, githubWorld, mergePull, pullDetail, pullDiff, rateLimit, rerunRun, reviewPull, reviewRequests, runDetail, runLog, runWorkflow, searchPulls, securityAlerts, workflowRuns,
 } from '../services/github'
 
 /** The GitHub HQ data last written to the cache, to skip rewriting it unchanged. */
@@ -29,6 +29,7 @@ export function registerGithubIpc() {
   handle('gh:pullDiff', (url: string) => pullDiff(url))
   handle('gh:review', (url: string, kind: 'approve' | 'request-changes' | 'comment', body: string) => reviewPull(url, kind, body))
   handle('gh:merge', (url: string, method: 'merge' | 'squash' | 'rebase', deleteBranch: boolean) => mergePull(url, method, deleteBranch))
+  handle('gh:createPull', (cwd: string, base: string) => createPull(String(cwd), String(base)))
   handle('gh:run', (repo: string, id: number) => runDetail(repo, id))
   handle('gh:runLog', (repo: string, id: number, job?: number) => runLog(repo, id, job))
   handle('gh:rerun', (repo: string, id: number, failedOnly: boolean) => rerunRun(repo, id, failedOnly))

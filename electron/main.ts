@@ -9,13 +9,14 @@ import { registerSystemIpc } from './ipc/system'
 import { registerToolsIpc } from './ipc/tools'
 import { registerWorkspaceIpc } from './ipc/workspace'
 import { serveApp } from './protocol'
+import { callAgent } from './services/agent'
 import * as aws from './services/aws'
 import { stopAllServices } from './services/devservers'
 import { clearSessionSettings, startHookServer, stopHookServer } from './services/hooks'
 import { killAllSessions } from './services/pty'
 import { adoptLoginPath } from './services/shellcmd'
 import { clearImages } from './services/system'
-import { lastAssistantText, watchTranscript } from './services/transcript'
+import { forgetLastText, lastAssistantText, watchTranscript } from './services/transcript'
 import { applySummonKey, ensureTray } from './tray'
 import { checkUpdates, registerUpdateIpc, wireUpdater } from './updates'
 import { startTools } from './tools'
@@ -40,7 +41,15 @@ function onHook(sid: string, event: string, payload: Record<string, any>) {
   const ev: HookEvent = { sid, event, payload }
   if (payload.transcript_path) watchTranscript(sid, String(payload.session_id || ''), String(payload.transcript_path), u => send('session:usage', u))
   hookQueue = hookQueue.then(async () => {
-    if (event === 'Stop') ev.lastText = await lastAssistantText(sid)
+    if (event === 'UserPromptSubmit') forgetLastText(sid)
+    if (event === 'Stop') {
+      ev.lastText = await lastAssistantText(sid)
+      // The hook can beat the turn's last message to the transcript: look again for a moment.
+      for (let i = 0; i < 4 && !ev.lastText; i++) {
+        await new Promise(r => setTimeout(r, 250))
+        ev.lastText = await lastAssistantText(sid)
+      }
+    }
     send('session:hook', ev)
   }).catch(() => undefined)
 }
@@ -62,7 +71,7 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
   serveApp()
   clearSessionSettings()
-  await startHookServer(onHook)
+  await startHookServer(onHook, callAgent)
   wireUpdater()
   registerIpc()
   registerDesktopEntry()

@@ -1,6 +1,7 @@
 // The API the preload script exposes as window.canopy.
 import type { DetectedServer } from './devdetect'
 import type { AppInfo, AppMetrics, DayCommit, DaySession, GitSync, GitStatus, HistorySession, HookEvent, Persisted, GhAlert, GhDispatchable, GhDone, GhProblem, GhPull, GhPullDetail, GhRateLimit, GhRepoInfo, GhRun, GhRunDetail, GhWorld, PlanUsage, RepoInfo, ReviewRequest, UpdateState, UsageUpdate, ShellInfo, ShellKind, SshHost, SshFileResult, SshPuttyResult, SshTabbyResult } from './types'
+import type { AgentCall, AgentReply } from './agenttools'
 import type { AwsBookmark, AwsCtx, AwsDone, AwsEnrolment, AwsLockState, AwsProfile, AwsRegionStatus, AwsResult, AwsSearchItem, AwsState, AwsTerm, AwsWorld, CdApp, CdDeployment, CdGroup, CfDistribution, CfInvalidation, EbEnv, EbEvent, EbVersion, EcResource, EcServiceUpdate, EcUpdateAction, Ec2Instance, LogEvent, LogGroup, LogStream, LogTailMsg, RdsInstance, S3Bucket, S3Entry, ShFinding, ShFindingsQuery, ShInsight, ShInsightResult, SsmParam, SsmParamValue, SsmParamVersion } from './aws'
 
 /** A running push asking for a secret: a key's passphrase, or an account password. */
@@ -137,7 +138,8 @@ export interface CanopyApi {
     save(s: Persisted): Promise<void>
   }
   pty: {
-    spawn(o: { id: string; cwd: string; cmd: string; cols: number; rows: number }): Promise<{ pid: number }>
+    /** `agent` gives the session the worker tools (see shared/agenttools.ts). */
+    spawn(o: { id: string; cwd: string; cmd: string; cols: number; rows: number; agent?: boolean }): Promise<{ pid: number }>
     shell(o: { id: string; cwd: string; kind: ShellKind; cols: number; rows: number }): Promise<{ pid: number }>
     ssh(o: { id: string; cwd: string; host: SshHost; cols: number; rows: number }): Promise<{ pid: number }>
     write(id: string, data: string): void
@@ -150,6 +152,11 @@ export interface CanopyApi {
   session: {
     onHook(fn: (e: HookEvent) => void): Off
     onUsage(fn: (u: UsageUpdate) => void): Off
+  }
+  /** Tool calls from Claude sessions (start a worker, read its result), answered by the main window. */
+  agent: {
+    onCall(fn: (c: AgentCall) => void): Off
+    reply(id: string, r: AgentReply): Promise<void>
   }
   git: {
     info(path: string): Promise<RepoInfo>
@@ -213,6 +220,8 @@ export interface CanopyApi {
     pullDiff(url: string): Promise<{ ok: boolean; diff?: string; error?: string }>
     review(url: string, kind: 'approve' | 'request-changes' | 'comment', body: string): Promise<GhDone>
     merge(url: string, method: 'merge' | 'squash' | 'rebase', deleteBranch: boolean): Promise<GhDone>
+    /** Opens a pull request from a folder's branch (already pushed) into `base`, titled from its commits; an open one is returned as it is. */
+    createPull(cwd: string, base: string): Promise<{ ok: boolean; url?: string; existed?: boolean; error?: string }>
     run(repo: string, id: number): Promise<{ ok: boolean; run?: GhRunDetail; error?: string }>
     /** A job's log, or without `job` the failed steps' logs of the run. */
     runLog(repo: string, id: number, job?: number): Promise<{ ok: boolean; log?: string; error?: string }>

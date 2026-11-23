@@ -335,6 +335,26 @@ export interface Session {
   changed: string[]
   editing: string
   exited: boolean
+  /** The session that started this one as a worker, with the start_worker tool. */
+  parent?: string
+}
+
+/** A prompt that starts a Claude session by itself at a time of day, on chosen weekdays. */
+export interface Schedule {
+  id: string
+  name: string
+  pid: string
+  repoId: string
+  prompt: string
+  /** Local time of day, "HH:MM". */
+  time: string
+  /** Weekdays it runs on, 0 (Sunday) to 6. */
+  days: number[]
+  /** Run in a fresh git worktree, so it never touches the files other sessions are working on. */
+  wt: boolean
+  enabled: boolean
+  /** When it last ran, or was last edited: it only runs for times after this. */
+  lastRun: number
 }
 
 export interface Prefs {
@@ -406,6 +426,8 @@ export interface Prefs {
   explorer?: ExplorerLayout
   /** Show Canopy's own memory, CPU and frame rate in the status bar. */
   showMetrics: boolean
+  /** Give Claude sessions the tools that start and follow worker sessions (on unless turned off). */
+  agentTools: boolean
 }
 
 export interface ExplorerLayout {
@@ -437,6 +459,8 @@ export interface Persisted {
   panels?: Record<string, DockPanelState>
   /** App preview per project. */
   previews?: Record<string, PreviewState>
+  /** Scheduled prompts. */
+  schedules?: Schedule[]
 }
 
 /** The app preview beside a project's chat. */

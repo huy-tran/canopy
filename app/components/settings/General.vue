@@ -46,6 +46,7 @@ const editor = computed({
     <SettingsToggle v-if="isWin" label="Start Canopy when Windows starts" k="launchLogin" />
     <SettingsToggle label="Keep running in the system tray" sub="Closing the window hides it. Notifications keep arriving." k="tray" />
     <SettingsToggle label="Resume sessions when the app starts" sub="Each repo reopens with claude --continue." k="resume" />
+    <SettingsToggle label="Let sessions start worker sessions" sub="Gives each new Claude session tools to start other sessions in the project, in their own worktrees, and read what they report. Claude asks before using them. Applies to sessions started from now on." k="agentTools" />
     <SettingsToggle label="Show performance in the status bar" sub="Canopy's memory, CPU and frame rate. Click it for the details." k="showMetrics" />
     <SettingsToggle label="Install updates automatically" sub="Downloads in the background and installs on the next restart." k="autoUpdate" />
   </div>

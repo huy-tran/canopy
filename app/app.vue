@@ -56,5 +56,6 @@ watchEffect(() => {
     <UpdateModal />
     <ImageLightbox />
     <ImageHoverPreview />
+    <GitAskPrompt />
   </UApp>
 </template>

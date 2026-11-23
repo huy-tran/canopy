@@ -283,9 +283,10 @@ const ctxUi = { content: 'w-[200px]', item: 'px-2.5 text-[12px]' }
             @dblclick.stop="ui.showSession(s.id, true)"
           >
             <UIcon v-if="s.kind === 'shell'" name="i-hugeicons-command-line" class="size-3 flex-none text-(--mu)" />
-            <span v-else class="h-1.5 w-1.5 flex-none rounded-full" :style="{ background: SC[s.status] }" />
+            <StatusDot v-else :status="s.status" :size="6" />
             <span class="chip-repo">{{ P.repoOf(p.id, s.repoId).label }}</span>
             <UIcon v-if="s.wt" title="Git worktree" name="i-hugeicons-git-fork" class="size-3 flex-none text-(--teal)" />
+            <UIcon v-if="s.parent" :title="`Worker started by: ${S.byId(s.parent)?.title || 'a session that has closed'}`" name="i-hugeicons-robot-01" class="size-3 flex-none text-(--vio)" />
             <span class="ellipsis flex-1 text-[12.5px]" :style="{ color: s.status === 'waiting' ? 'var(--tx)' : 'var(--tx3)' }">{{ s.title }}</span>
             <span class="mono text-[11px] text-(--fa)">{{ sAgo(s) }}</span>
           </div>

@@ -479,6 +479,60 @@ watch(() => [cwd.value, cur.value?.type, cur.value?.path, diffMode.value, status
 
 onBeforeUnmount(() => clearTimeout(prevTimer))
 
+// ---------- Review comments on lines, sent to Claude as one prompt ----------
+
+const N = useNotesStore()
+const notes = computed(() => N.of(cwd.value))
+/** Comments on the file in view, by the line they sit on. */
+const lineNotes = computed(() => {
+  const p = cur.value?.type === 'file' ? cur.value.path : ''
+  return new Map(notes.value.filter(n => n.path === p).map(n => [`${n.sign}|${n.line}`, n]))
+})
+const noteCounts = computed(() => {
+  const m: Record<string, number> = {}
+  for (const n of notes.value) m[n.path] = (m[n.path] || 0) + 1
+  return m
+})
+const noteKey = (ln: Line) => `${ln.sign.trim()}|${ln.n}`
+/** The comment being written: the line it is on and its text so far. */
+const draft = ref<{ key: string; text: string } | null>(null)
+const draftEl = ref<HTMLTextAreaElement[] | HTMLTextAreaElement | null>(null)
+
+function startNote(ln: Line) {
+  if (ln.hunk || !ln.n) return
+  const key = noteKey(ln)
+  draft.value = { key, text: lineNotes.value.get(key)?.text || '' }
+  nextTick(() => {
+    const el = Array.isArray(draftEl.value) ? draftEl.value[0] : draftEl.value
+    el?.focus()
+  })
+}
+
+function saveNote(ln: Line) {
+  const d = draft.value, s = cur.value
+  if (!d || s?.type !== 'file') return
+  N.save(cwd.value, { path: s.path, line: ln.n, sign: ln.sign.trim(), code: ln.t, text: d.text })
+  draft.value = null
+}
+
+function onNoteKey(e: KeyboardEvent, ln: Line) {
+  // The explorer's own keys (arrows, Tab, Enter, Esc) stay out of the comment box.
+  e.stopPropagation()
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    draft.value = null
+  } else if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    saveNote(ln)
+  }
+}
+
+watch(() => [cwd.value, cur.value?.path], () => { draft.value = null })
+
+function sendNotes() {
+  if (ui.sendNotes(cwd.value)) draft.value = null
+}
+
 const dirInfo = computed(() => {
   const s = cur.value
   if (!s || s.type !== 'dir') return null
@@ -860,6 +914,7 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                   class="flex-none whitespace-nowrap text-[10.5px]"
                   :style="{ color: r.c.by === fsid ? 'var(--lnk)' : 'var(--mu)' }"
                 >{{ r.c.by === fsid ? 'this session' : 'other session' }}</span>
+                <span v-if="noteCounts[r.row.path]" class="mono flex flex-none items-center gap-0.5 text-[10.5px] text-(--lnk)" title="Your comments for Claude"><UIcon name="i-hugeicons-comment-01" class="size-3" />{{ noteCounts[r.row.path] }}</span>
                 <template v-if="r.c && (r.c.a || r.c.d)">
                   <span class="mono flex-none text-[10.5px] text-(--grn)">+{{ r.c.a }}</span>
                   <span class="mono flex-none text-[10.5px] text-(--red)">−{{ r.c.d }}</span>
@@ -965,11 +1020,46 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
                 {{ editingBy }}
               </div>
               <div v-if="!editing" ref="previewEl" tabindex="0" class="mono min-h-0 flex-1 select-text overflow-auto bg-(--term) py-2 outline-none text-[12px] leading-[1.6]" @keydown="selectPreview">
-                <div v-for="(ln, k) in previewShown" :key="k" class="flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
-                  <span class="w-11 flex-none select-none pr-2.5 text-right text-(--fa)">{{ ln.n }}</span>
-                  <span class="w-4 flex-none select-none" :style="{ color: ln.sc }">{{ ln.sign }}</span>
-                  <span class="pr-4" :class="lay.wrap && 'min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]'" :style="{ color: ln.tc }"><span v-for="(g, j) in ln.segs" :key="j" :style="{ color: g.color, fontStyle: g.fs }">{{ g.t }}</span></span>
-                </div>
+                <template v-for="(ln, k) in previewShown" :key="k">
+                  <div class="group/ln flex" :class="lay.wrap ? '' : 'min-w-max whitespace-pre'" :style="{ background: ln.bg }">
+                    <span class="relative w-11 flex-none select-none pr-2.5 text-right text-(--fa)">
+                      <span
+                        v-if="!ln.hunk && ln.n"
+                        title="Comment on this line for Claude"
+                        class="absolute top-[2px] left-1 hidden size-[15px] cursor-pointer place-items-center rounded-sm bg-(--lnk) text-[11px] leading-none font-bold text-[#131417] group-hover/ln:grid"
+                        @mousedown.prevent
+                        @click.stop="startNote(ln)"
+                      >+</span>{{ ln.n }}</span>
+                    <span class="w-4 flex-none select-none" :style="{ color: ln.sc }">{{ ln.sign }}</span>
+                    <span class="pr-4" :class="lay.wrap && 'min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]'" :style="{ color: ln.tc }"><span v-for="(g, j) in ln.segs" :key="j" :style="{ color: g.color, fontStyle: g.fs }">{{ g.t }}</span></span>
+                  </div>
+                  <div
+                    v-if="!ln.hunk && ln.n && (draft?.key === noteKey(ln) || lineNotes.has(noteKey(ln)))"
+                    class="sticky left-0 my-1 ml-[60px] box-border flex w-[min(560px,calc(100%-76px))] select-none flex-col gap-1.5 rounded-md border border-(--bb) bg-(--modal) p-2 whitespace-normal [font-family:var(--app-font)]"
+                  >
+                    <template v-if="draft?.key === noteKey(ln)">
+                      <textarea
+                        ref="draftEl"
+                        v-model="draft.text"
+                        rows="2"
+                        placeholder="What should Claude change here?"
+                        class="w-full resize-y rounded-sm border border-(--ln) bg-(--term) px-2 py-1.5 text-[12.5px] leading-[1.45] text-(--tx) outline-none placeholder:text-(--fa) focus:border-(--lnk)"
+                        @keydown="onNoteKey($event, ln)"
+                      />
+                      <div class="flex items-center gap-1.5 text-[11px] text-(--fa)">
+                        <span class="flex-1">Enter saves · Shift Enter for a new line · Esc cancels</span>
+                        <UButton color="neutral" variant="ghost" size="xs" class="h-[22px] px-2 text-[11px]" label="Cancel" @click="draft = null" />
+                        <UButton color="primary" size="xs" class="h-[22px] px-2 text-[11px]" label="Save comment" @click="saveNote(ln)" />
+                      </div>
+                    </template>
+                    <div v-else class="flex items-start gap-2">
+                      <UIcon name="i-hugeicons-comment-01" class="mt-[3px] size-3.5 flex-none text-(--lnk)" />
+                      <span class="min-w-0 flex-1 select-text whitespace-pre-wrap text-[12.5px] leading-[1.45] text-(--tx) [overflow-wrap:anywhere]">{{ lineNotes.get(noteKey(ln))!.text }}</span>
+                      <UButton color="neutral" variant="ghost" title="Edit" class="size-5 flex-none justify-center p-0 text-(--fa)" @click="startNote(ln)"><UIcon name="i-hugeicons-edit-02" class="size-3" /></UButton>
+                      <UButton color="neutral" variant="ghost" title="Delete" class="size-5 flex-none justify-center p-0 text-(--fa)" @click="N.remove(cwd, lineNotes.get(noteKey(ln))!.id)"><UIcon name="i-hugeicons-delete-02" class="size-3" /></UButton>
+                    </div>
+                  </div>
+                </template>
                 <div v-if="preview.length > previewShown.length" class="px-[14px] pt-2">
                   <UButton color="neutral" variant="outline" size="xs" @mousedown.prevent @click="previewMax += PREVIEW_STEP * 4">
                     Show {{ Math.min(preview.length - previewShown.length, PREVIEW_STEP * 4) }} more of {{ preview.length - previewShown.length }} lines
@@ -997,6 +1087,16 @@ const kbdCls = 'h-auto min-w-0 p-0 ring-0 bg-transparent normal-case font-normal
             <span>↑ ↓ move</span><span>Tab Changes / Files</span><span>← → folders</span><span>Alt Z wrap</span><span>Esc close</span>
           </template>
           <div class="flex-1" />
+          <div v-if="notes.length" class="flex items-center gap-1.5">
+            <UTooltip text="Puts every comment at the prompt of this folder's Claude session, for you to send">
+              <UButton color="primary" variant="solid" size="xs" :class="[actBtn, 'gap-1.5']" icon="i-hugeicons-comment-01" @mousedown.prevent @click="sendNotes">
+                Send {{ notes.length }} comment{{ notes.length === 1 ? '' : 's' }} to Claude
+              </UButton>
+            </UTooltip>
+            <UButton color="neutral" variant="ghost" size="xs" :class="actBtn" @mousedown.prevent @click="N.clear(cwd)">
+              Discard
+            </UButton>
+          </div>
           <UTooltip :text="`Plain shell in ${shellDir || 'the repo folder'}`">
             <UButton color="neutral" variant="outline" size="xs" :class="[actBtn, 'gap-1.5']" icon="i-hugeicons-command-line" @mousedown.prevent @click="actShell">
               Open shell here

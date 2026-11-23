@@ -9,6 +9,7 @@ const browserFallback: CanopyApi = {
   state: { load: none, save: none },
   pty: { spawn: async () => ({ pid: 0 }), shell: async () => ({ pid: 0 }), ssh: async () => ({ pid: 0 }), write: () => {}, resize: () => {}, kill: none, buffer: async () => '', onData: noop, onExit: noop },
   session: { onHook: noop, onUsage: noop },
+  agent: { onCall: noop, reply: async () => {} },
   git: {
     info: async () => ({ exists: false, isRepo: false, branch: '', stack: '' }),
     status: async () => ({ isRepo: false, branch: '', changes: [] }),
@@ -41,6 +42,7 @@ const browserFallback: CanopyApi = {
     pullDiff: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     review: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     merge: async () => ({ ok: false, error: 'Needs the desktop app.' }),
+    createPull: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     run: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     runLog: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     rerun: async () => ({ ok: false, error: 'Needs the desktop app.' }),

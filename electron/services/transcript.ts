@@ -263,6 +263,12 @@ export async function lastAssistantText(sid: string): Promise<string> {
   return w.totals.lastText
 }
 
+/** A new turn began: what Claude said last belongs to the turn before, and must not be read as this one's answer. */
+export function forgetLastText(sid: string) {
+  const w = watches.get(sid)
+  if (w) w.totals.lastText = ''
+}
+
 export function unwatchTranscript(sid: string) {
   const w = watches.get(sid)
   if (w) clearInterval(w.timer)

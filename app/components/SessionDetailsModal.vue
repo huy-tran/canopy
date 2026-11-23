@@ -98,7 +98,10 @@ function copyId() {
             <span class="flex items-center gap-1 text-[12px] font-semibold text-(--teal)"><UIcon name="i-hugeicons-git-fork" class="size-3" />Worktree</span>
             <span class="mono ellipsis text-[11px] text-(--tx3)">{{ d.wtText }}</span>
           </div>
-          <UButton size="sm" color="neutral" variant="outline" class="text-[11.5px] whitespace-nowrap" :label="`Merge into ${d.wt.base}`" @click="ui.mergeWt(s!.id)" />
+          <UTooltip :text="`Pushes ${d.branch} and opens a pull request into ${d.wt.base}`">
+            <UButton size="sm" color="neutral" variant="outline" class="text-[11.5px] whitespace-nowrap" label="Open PR" :loading="ui.prBusy === s!.id" :disabled="!!ui.prBusy" @click="ui.prWt(s!.id)" />
+          </UTooltip>
+          <UButton size="sm" color="neutral" variant="outline" class="text-[11.5px] whitespace-nowrap" :label="`Merge into ${d.wt.base}`" :disabled="!!ui.prBusy" @click="ui.mergeWt(s!.id)" />
         </div>
 
         <div class="flex flex-col gap-2">

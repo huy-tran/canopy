@@ -98,7 +98,7 @@ watch(() => props.focused, (f) => {
   >
     <div v-if="multi" class="flex h-8 flex-none items-center gap-2 border-b border-(--ln2) bg-(--chrome) pl-2.5 pr-2">
       <UIcon v-if="isShell" name="i-hugeicons-command-line" class="size-3.5 flex-none text-(--mu)" />
-      <span v-else class="h-[7px] w-[7px] flex-none rounded-full" :style="{ background: statusC }" />
+      <StatusDot v-else :status="s.status" />
       <span class="mono flex-none rounded-sm bg-(--chip) px-[5px] py-px text-[10.5px] text-(--tx2)">{{ r.label }}</span>
       <span class="ellipsis flex-1 text-[12px] text-(--tx2)">{{ s.title }}</span>
       <UTooltip v-if="canShare" :text="`Draft a prompt in ${shareTo} with this session's changes (${prefs.kl('share')})`">
@@ -128,7 +128,8 @@ watch(() => props.focused, (f) => {
       </UTooltip>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-hidden px-2.5 pt-1" @click="clickFocus">
+    <div class="relative min-h-0 flex-1 overflow-hidden px-2.5 pt-1" @click="clickFocus">
+      <TerminalFind v-if="ui.find === s.id" :sid="s.id" />
       <div ref="host" class="h-full w-full" />
     </div>
 

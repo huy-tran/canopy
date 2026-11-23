@@ -26,6 +26,7 @@ const api: CanopyApi = {
     onExit: on('pty:exit'),
   },
   session: { onHook: on('session:hook'), onUsage: on('session:usage') },
+  agent: { onCall: on('agent:call'), reply: inv('agent:reply') },
   git: {
     info: inv('git:info'),
     status: inv('git:status'),
@@ -62,6 +63,7 @@ const api: CanopyApi = {
     pullDiff: inv('gh:pullDiff'),
     review: inv('gh:review'),
     merge: inv('gh:merge'),
+    createPull: inv('gh:createPull'),
     run: inv('gh:run'),
     runLog: inv('gh:runLog'),
     rerun: inv('gh:rerun'),

@@ -5,6 +5,8 @@ import { errMessage } from '../../shared/errors'
 import { claimPty, handle, handleWin, ptyData, ptyExit, send, store, trusted } from '../context'
 import { startService, stopService } from '../services/devservers'
 import { runClaude } from '../services/claude'
+import { answerAgent } from '../services/agent'
+import type { AgentReply } from '../../shared/agenttools'
 import * as git from '../services/git'
 import { pushInPty } from '../services/gitpush'
 import { answerAsk, askUser } from '../services/gitask'
@@ -112,5 +114,6 @@ export function registerWorkspaceIpc() {
     return { sessions: await dayActivity(repos, since, until), commits }
   })
   handle('claude:run', (prompt: string) => runClaude(prompt))
+  handle('agent:reply', (id: string, r: AgentReply) => answerAgent(String(id), r))
   handle('usage', () => planUsage())
 }

@@ -24,7 +24,7 @@ const ss = computed(() => S.ofProject(props.project.id))
       @click="ui.focusSession(s.id)"
     >
       <UIcon v-if="s.kind === 'shell'" name="i-hugeicons-command-line" class="size-3.5 flex-none text-(--mu)" />
-      <span v-else class="h-[7px] w-[7px] flex-none rounded-full" :style="{ background: SC[s.status] }" />
+      <StatusDot v-else :status="s.status" />
       <span class="mono flex-none rounded-sm bg-(--chip) px-[5px] text-[10.5px] text-(--tx2)">{{ P.repoOf(s.pid, s.repoId).label }}</span>
       <span class="ellipsis flex-1 text-[12px]" :style="{ color: s.id === ui.fid ? 'var(--tx)' : 'var(--tx3)' }">{{ s.title }}</span>
       <UTooltip text="Close session">

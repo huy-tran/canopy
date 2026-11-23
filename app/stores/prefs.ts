@@ -41,6 +41,7 @@ export const DEFAULT_PREFS: Prefs = {
   awsTotp: true,
   awsUnlockHours: 4,
   awsDryRun: false,
+  agentTools: true,
 }
 
 /** The session window in the workspace simulation is always a little see-through: 90% at most, 90% unless set. */
