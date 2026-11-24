@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-24
+
 - A Serve button for every project (Lookout's header, the command palette, Ctrl+Shift+Y) starts what the project runs: a Laravel app's queue worker or Horizon, Reverb, scheduler and frontend dev server, or any other app's dev server. A second press stops them. Servers you added yourself start too.
 - Laravel apps served by Herd, Lerd or Flock no longer start `artisan serve`: Lookout opens the site (`folder.test`, or the name it is linked under) and runs Serve beside it. A folder the manager does not serve still gets `artisan serve`. Lerd's own workers are left to Lerd.
 - Reverb uses the port in `.env` (REVERB_SERVER_PORT), and a server whose port is already taken says so instead of showing as running.
@@ -340,6 +342,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.34.0]: https://github.com/huy-tran/canopy/releases/tag/v0.34.0
 [0.33.1]: https://github.com/huy-tran/canopy/releases/tag/v0.33.1
 [0.33.0]: https://github.com/huy-tran/canopy/releases/tag/v0.33.0
 [0.32.0]: https://github.com/huy-tran/canopy/releases/tag/v0.32.0
