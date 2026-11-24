@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-24
+
 - The GitHub window's account chip is a menu when several gh accounts are signed in: pick one to run `gh auth switch`, and the current screen reads again as that account.
 - The port-in-use line in a server's log now says the server may move to a free port or share it.
 
@@ -357,6 +359,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.35.0]: https://github.com/huy-tran/canopy/releases/tag/v0.35.0
 [0.34.2]: https://github.com/huy-tran/canopy/releases/tag/v0.34.2
 [0.34.1]: https://github.com/huy-tran/canopy/releases/tag/v0.34.1
 [0.34.0]: https://github.com/huy-tran/canopy/releases/tag/v0.34.0
