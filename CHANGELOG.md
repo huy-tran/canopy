@@ -3,6 +3,9 @@
 All notable changes to Canopy are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.33.1] - 2026-11-24
+
 n- The GitHub window shows which gh account is active in its header.
 
 ## [0.33.0] - 2026-11-24
@@ -331,6 +334,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.33.1]: https://github.com/huy-tran/canopy/releases/tag/v0.33.1
 [0.33.0]: https://github.com/huy-tran/canopy/releases/tag/v0.33.0
 [0.32.0]: https://github.com/huy-tran/canopy/releases/tag/v0.32.0
 [0.31.2]: https://github.com/huy-tran/canopy/releases/tag/v0.31.2
