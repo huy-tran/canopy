@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-11-24
+
 - Lookout and Serve work on one repo of a project: the focused session's, else a frontend before a Laravel site. Other repos stay off, but a Laravel backend beside it keeps its queue, scheduler and Reverb. Stop reaches the same set.
 - A repo picker in Lookout's header (projects with several repos) chooses the repo. Lookout follows the focused session when it changes.
 - A saved address that Canopy chose for another repo is replaced by the shown repo's site or dev server. An address you typed is kept.
@@ -346,6 +348,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.34.1]: https://github.com/huy-tran/canopy/releases/tag/v0.34.1
 [0.34.0]: https://github.com/huy-tran/canopy/releases/tag/v0.34.0
 [0.33.1]: https://github.com/huy-tran/canopy/releases/tag/v0.33.1
 [0.33.0]: https://github.com/huy-tran/canopy/releases/tag/v0.33.0
