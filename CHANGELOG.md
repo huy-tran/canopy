@@ -6,7 +6,7 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [0.33.1] - 2026-11-24
 
-n- The GitHub window shows which gh account is active in its header.
+- The GitHub window shows which gh account is active in its header.
 
 ## [0.33.0] - 2026-11-24
 
