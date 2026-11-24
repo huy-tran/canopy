@@ -24,6 +24,13 @@ export interface ProjectFiles {
   rails?: boolean
   /** Hugo: a hugo.toml/yaml/json or config.toml at the root. */
   hugo?: boolean
+  /** The port the dev server's own config sets (quasar.config, vite.config, nuxt.config), when it does. */
+  devPort?: string
+}
+
+/** The port a JS framework config sets for its dev server: `devServer: { port: 8000 }` or `server: { port: 4000 }`. */
+export function configPort(text: string): string | undefined {
+  return /\b(?:devServer|server)\s*:\s*\{[^}]*?\bport\s*:\s*(\d{2,5})\b/.exec(text)?.[1]
 }
 
 /** Frameworks in order of precedence (a Nuxt app also has vite), with their default port. */
@@ -37,6 +44,8 @@ const JS: { dep: string; label: string; port: string }[] = [
   { dep: 'react-scripts', label: 'React', port: '3000' },
   { dep: 'gatsby', label: 'Gatsby', port: '8000' },
   { dep: '@vue/cli-service', label: 'Vue CLI', port: '8080' },
+  { dep: '@quasar/app-vite', label: 'Quasar', port: '9000' },
+  { dep: '@quasar/app-webpack', label: 'Quasar', port: '9000' },
   { dep: 'vite', label: 'Vite', port: '5173' },
   { dep: 'webpack-dev-server', label: 'Webpack', port: '8080' },
 ]
@@ -71,7 +80,7 @@ export function detectDevServers(f: ProjectFiles): DetectedServer[] {
   if (script) {
     const fw = JS.find(j => deps[j.dep])
     // A Laravel app's JS is only its assets (vite), listed after the PHP server.
-    if (fw) out.push({ cmd: `${run} ${script}`, port: scriptPort(scripts[script]!) || fw.port, label: fw.label })
+    if (fw) out.push({ cmd: `${run} ${script}`, port: scriptPort(scripts[script]!) || f.devPort || fw.port, label: fw.label })
     else if (!out.length && !f.composer && !f.manage && !f.rails && !f.hugo) out.push({ cmd: `${run} ${script}`, port: scriptPort(scripts[script]!) || '', label: 'Node' })
   }
   return out
@@ -86,6 +95,8 @@ export interface LaravelFacts extends ProjectFiles {
   served?: boolean
   /** The site manager runs the queue, scheduler and Reverb itself (Lerd's `workers:`): Serve must not start a second copy. */
   managedWorkers?: boolean
+  /** Some Blade view calls @vite. False for an API whose package.json is the stock one; left out when unknown. */
+  usesVite?: boolean
   /** REVERB_SERVER_PORT from .env, when it sets one. */
   reverbPort?: string
 }
@@ -124,11 +135,12 @@ export function detectLaravelServe(f: LaravelFacts): DetectedServer[] {
   }
 
   // The frontend: whichever of dev/start/serve the package.json has, run with the package manager its lockfile names.
+  // A Laravel app that serves no page through Vite (an API with the stock package.json) has no frontend to run.
   const script = ['dev', 'start', 'serve'].find(s => f.pkg?.scripts?.[s])
-  if (script) {
+  if (script && f.usesVite !== false) {
     const deps = { ...(f.pkg?.dependencies || {}), ...(f.pkg?.devDependencies || {}) }
     const fw = JS.find(j => deps[j.dep])
-    out.push({ cmd: `${runner(f.locks)} ${script}`, port: scriptPort(f.pkg!.scripts![script]!) || fw?.port || '', label: fw?.label || 'Frontend' })
+    out.push({ cmd: `${runner(f.locks)} ${script}`, port: scriptPort(f.pkg!.scripts![script]!) || f.devPort || fw?.port || '', label: fw?.label || 'Frontend' })
   }
   return out
 }

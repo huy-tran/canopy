@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { detectDevServers, detectLaravelServe, isLaravel, withInstall, type DetectedServer } from '../../shared/devdetect'
+import { configPort, detectDevServers, detectLaravelServe, isLaravel, withInstall, type DetectedServer } from '../../shared/devdetect'
 import { siteOf } from './sites'
 
 function json(file: string): any {
@@ -38,6 +38,32 @@ function text(file: string): string {
   }
 }
 
+/** Does a Blade view of the app (or one of its modules) call a live `@vite(`? Looks at a few hundred files at most. */
+function usesVite(dir: string): boolean {
+  const stack = [path.join(dir, 'resources', 'views')]
+  let seen = 0
+  while (stack.length && seen < 400) {
+    const d = stack.pop()!
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(d, { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) stack.push(p)
+      else if (e.name.endsWith('.blade.php') && ++seen && /^(?!\s*\{\{--).*@vite\s*\(/m.test(text(p))) return true
+    }
+  }
+  return false
+}
+
+/** The dev port the framework's own config sets (quasar.config, vite.config, nuxt.config), if any. */
+function devPort(dir: string): string | undefined {
+  for (const n of ['quasar.config.js', 'quasar.config.ts', 'quasar.config.mjs', 'vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'vite.config.mts', 'nuxt.config.ts', 'nuxt.config.js']) {
+    const p = configPort(text(path.join(dir, n)))
+    if (p) return p
+  }
+  return undefined
+}
+
 /** What "Serve" runs: for a Laravel app its queue, Reverb, scheduler and frontend (see detectLaravelServe), for anything else its dev server. */
 export async function detectServe(dir: string): Promise<DetectedServer[]> {
   if (typeof dir !== 'string' || !dir) return []
@@ -52,6 +78,8 @@ export async function detectServe(dir: string): Promise<DetectedServer[]> {
     artisan: has('artisan'),
     locks: ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json'].filter(has),
     herd: await hasHerd(),
+    devPort: devPort(dir),
+    usesVite: usesVite(dir),
     served: !!site,
     managedWorkers: !!site?.managedWorkers,
     reverbPort: /^\s*REVERB_SERVER_PORT\s*=\s*["']?(\d{2,5})/m.exec(env)?.[1],
@@ -69,6 +97,7 @@ export async function detectServers(dir: string): Promise<DetectedServer[]> {
     artisan: has('artisan'),
     locks: ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json'].filter(has),
     herd: await hasHerd(),
+    devPort: devPort(dir),
     manage: has('manage.py'),
     rails: has(path.join('bin', 'rails')) && has('Gemfile'),
     hugo: ['hugo.toml', 'hugo.yaml', 'hugo.json', 'config.toml'].some(has),

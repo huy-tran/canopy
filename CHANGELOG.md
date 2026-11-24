@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- A Laravel app whose views never call `@vite` (an API with the stock package.json) no longer runs `npm run dev` under Serve, only its queue, scheduler and Reverb.
+- A server whose port is taken (Quasar's 9000 with Minio on it, say) counts as running once its output names the port it moved to, so Lookout no longer opens whatever answers on the taken one.
+- Quasar apps are recognised (`quasar dev`, port 9000), and a dev port set in `quasar.config`, `vite.config` or `nuxt.config` is used. Before, such an app had no port, so Lookout skipped it.
+
 ## [0.34.1] - 2026-11-24
 
 - Lookout and Serve work on one repo of a project: the focused session's, else a frontend before a Laravel site. Other repos stay off, but a Laravel backend beside it keeps its queue, scheduler and Reverb. Stop reaches the same set.

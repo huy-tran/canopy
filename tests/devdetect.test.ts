@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectDevServers, detectLaravelServe, isServeCommand, listeningPort, withInstall } from '../shared/devdetect'
+import { configPort, detectDevServers, detectLaravelServe, isServeCommand, listeningPort, withInstall } from '../shared/devdetect'
 
 describe('detectDevServers', () => {
   it('runs a Laravel app with artisan, and its vite assets beside it', () => {
@@ -40,6 +40,18 @@ describe('detectDevServers', () => {
     expect(withInstall('php artisan serve', { hasVendor: true })).toBe('php artisan serve')
     expect(withInstall('bin/rails server -p 3000', {})).toBe('bundle check || bundle install && bin/rails server -p 3000')
     expect(withInstall('hugo server', {})).toBe('hugo server')
+  })
+
+  it('knows Quasar, and takes the port its config sets', () => {
+    const pkg = { scripts: { dev: 'quasar dev' }, dependencies: { quasar: '^2' }, devDependencies: { '@quasar/app-vite': '^2', vite: '^6' } }
+    expect(detectDevServers({ pkg, locks: ['yarn.lock'] })).toEqual([{ cmd: 'yarn dev', port: '9000', label: 'Quasar' }])
+    expect(detectDevServers({ pkg, locks: ['yarn.lock'], devPort: '8000' })[0]).toMatchObject({ port: '8000' })
+  })
+
+  it('reads a dev port from a framework config', () => {
+    expect(configPort('devServer: {\n  // https: true\n  port: 8000,\n  open: true\n}')).toBe('8000')
+    expect(configPort('export default { server: { port: 4100 } }')).toBe('4100')
+    expect(configPort('export default { build: { outDir: "x" } }')).toBeUndefined()
   })
 
   it('knows Django, Rails and Hugo', () => {
@@ -94,6 +106,12 @@ describe('detectLaravelServe', () => {
   it('leaves the workers to a site manager that runs them (Lerd), keeping the frontend', () => {
     const r = detectLaravelServe({ ...app, served: true, managedWorkers: true, scheduled: true, pkg: { scripts: { dev: 'vite' }, devDependencies: { vite: '^6' } } })
     expect(r.map(s => s.label)).toEqual(['Vite'])
+  })
+
+  it('runs no frontend for an API whose views never use Vite', () => {
+    const pkg = { scripts: { dev: 'vite' }, devDependencies: { vite: '^5' } }
+    expect(detectLaravelServe({ ...app, served: true, scheduled: true, pkg, usesVite: false }).map(s => s.label)).toEqual(['Queue', 'Scheduler'])
+    expect(detectLaravelServe({ ...app, served: true, scheduled: true, pkg, usesVite: true }).map(s => s.label)).toEqual(['Queue', 'Scheduler', 'Vite'])
   })
 
   it('knows the commands Serve writes itself from one added by hand', () => {
