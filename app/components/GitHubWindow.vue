@@ -18,7 +18,22 @@ function focusRoot() {
   nextTick(() => root.value?.focus())
 }
 
-watch(open, (on) => { if (on) setTimeout(focusRoot, 60) }, { immediate: true })
+/** The gh account that is active, read each time the window shows so `gh auth switch` is picked up. */
+const account = ref('')
+const accountCount = ref(0)
+function loadAccount() {
+  // Optional: a main process from before accounts has no such call until the app restarts.
+  api.gh.accounts?.().then((a) => {
+    account.value = a?.active || ''
+    accountCount.value = a?.list?.length || 0
+  }).catch(() => {})
+}
+
+watch(open, (on) => {
+  if (!on) return
+  setTimeout(focusRoot, 60)
+  loadAccount()
+}, { immediate: true })
 
 /**
  * Esc and Back: a dialog closes first, then a PR, run or repo goes back to its list, then the list
@@ -133,6 +148,11 @@ const hints = computed(() => {
     <div class="drag flex h-10 flex-none items-center gap-2 border-b border-(--ln) pl-3.5">
       <UIcon name="i-hugeicons-github" class="size-4 text-(--tx2)" />
       <span class="text-[13px] font-semibold">GitHub</span>
+      <UTooltip v-if="account" :text="accountCount > 1 ? 'The active gh account. Projects can pick another in their settings' : 'The gh account Canopy reads GitHub as'">
+        <span class="no-drag mono flex items-center gap-1 rounded-sm bg-(--hov) px-1.5 py-px text-[11px] text-(--tx2)">
+          <UIcon name="i-hugeicons-user" class="size-3" />{{ account }}
+        </span>
+      </UTooltip>
       <UTooltip v-if="GW.slow" :text="`Fewer than 500 GitHub API calls left this hour, so Canopy reads less until it resets`">
         <span class="no-drag rounded-sm bg-(--ambf)/15 px-1.5 py-px text-[11px] text-(--amb)">Rate limit low · slowing down until {{ new Date(GW.resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }}</span>
       </UTooltip>
