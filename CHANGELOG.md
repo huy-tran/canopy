@@ -4,6 +4,9 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- The GitHub window's account chip is a menu when several gh accounts are signed in: pick one to run `gh auth switch`, and the current screen reads again as that account.
+- The port-in-use line in a server's log now says the server may move to a free port or share it.
+
 ## [0.34.2] - 2026-11-24
 
 - A Laravel app whose views never call `@vite` (an API with the stock package.json) no longer runs `npm run dev` under Serve, only its queue, scheduler and Reverb.

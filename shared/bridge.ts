@@ -240,6 +240,8 @@ export interface CanopyApi {
     runWorkflow(repo: string, id: number, ref: string, inputs: Record<string, string>): Promise<GhDone>
     /** The accounts the gh CLI is signed in with, the active one first. */
     accounts(): Promise<GhAccounts>
+    /** Makes a signed-in account gh's active one (`gh auth switch`). */
+    switchAccount(login: string): Promise<{ ok: boolean; error?: string }>
   }
   aws: AwsApi
   sys: {

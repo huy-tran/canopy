@@ -62,6 +62,18 @@ export function ghAccounts(): Promise<GhAccounts> {
   return known.value
 }
 
+/** Makes one of the signed-in accounts gh's active one (`gh auth switch`), and forgets what was read as the old one. */
+export async function switchAccount(login: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isLogin(login)) return { ok: false, error: 'Not an account name.' }
+  const a = await ghAccounts()
+  if (!a.list.includes(login)) return { ok: false, error: `${login} is not signed in to gh.` }
+  const r = await gh(['auth', 'switch', '--hostname', 'github.com', '--user', login])
+  known = null
+  misses.clear()
+  if (r.err) return { ok: false, error: 'gh could not switch accounts.' }
+  return { ok: true }
+}
+
 /** The accounts each repo's project asks for, by lowercase owner/name. */
 export function setProjectAccounts(map: Map<string, string>) {
   explicit = map

@@ -58,7 +58,7 @@ export async function startService(o: { id: string; cwd: string; cmd: string; po
   // Something already answering on the port (another project's Reverb, say) would make the probe call this server running
   // while it is about to fail with "address in use": say so, and go by the server's own output instead.
   const busy = port ? await portOpen(port) : false
-  if (busy) emit.data(o.id, `\r\nPort ${port} is already in use by another process, so the server will take another one.\r\n`)
+  if (busy) emit.data(o.id, `\r\nPort ${port} already answers (another process), so the server may move to a free one or share it.\r\n`)
   const ready = () => {
     if (pr.status !== 'starting') return
     pr.status = 'running'

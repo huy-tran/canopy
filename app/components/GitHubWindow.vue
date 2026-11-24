@@ -20,14 +20,40 @@ function focusRoot() {
 
 /** The gh account that is active, read each time the window shows so `gh auth switch` is picked up. */
 const account = ref('')
-const accountCount = ref(0)
+const accounts = ref<string[]>([])
+const accountCount = computed(() => accounts.value.length)
 function loadAccount() {
   // Optional: a main process from before accounts has no such call until the app restarts.
   api.gh.accounts?.().then((a) => {
     account.value = a?.active || ''
-    accountCount.value = a?.list?.length || 0
+    accounts.value = a?.list || []
   }).catch(() => {})
 }
+
+/** `gh auth switch` to another signed-in account, then read the current screen again as it. */
+const switching = ref(false)
+async function switchTo(login: string) {
+  if (switching.value || login === account.value || !api.gh.switchAccount) return
+  switching.value = true
+  try {
+    const r = await api.gh.switchAccount(login)
+    if (!r.ok) {
+      ui.toast({ title: 'Could not switch account', body: r.error || 'gh refused.' })
+      return
+    }
+    ui.toast({ title: `Switched to ${login}`, body: 'gh now runs as this account.' })
+    loadAccount()
+    await G.load(G.tab, true)
+  } finally {
+    switching.value = false
+  }
+}
+const accountItems = computed(() => [accounts.value.map(login => ({
+  label: login,
+  icon: login === account.value ? 'i-hugeicons-tick-02' : undefined,
+  disabled: switching.value,
+  onSelect: () => { switchTo(login) },
+}))])
 
 watch(open, (on) => {
   if (!on) return
@@ -148,7 +174,15 @@ const hints = computed(() => {
     <div class="drag flex h-10 flex-none items-center gap-2 border-b border-(--ln) pl-3.5">
       <UIcon name="i-hugeicons-github" class="size-4 text-(--tx2)" />
       <span class="text-[13px] font-semibold">GitHub</span>
-      <UTooltip v-if="account" :text="accountCount > 1 ? 'The active gh account. Projects can pick another in their settings' : 'The gh account Canopy reads GitHub as'">
+      <UDropdownMenu v-if="account && accountCount > 1" :items="accountItems" :content="{ align: 'start', sideOffset: 6 }">
+        <UTooltip text="The active gh account. Click to switch (gh auth switch). Projects can pick another in their settings">
+          <button class="no-drag mono flex cursor-pointer items-center gap-1 rounded-sm bg-(--hov) px-1.5 py-px text-[11px] text-(--tx2) hover:text-(--tx) disabled:opacity-60" :disabled="switching">
+            <UIcon name="i-hugeicons-user" class="size-3" />{{ account }}
+            <UIcon name="i-hugeicons-arrow-down-01" class="size-3" />
+          </button>
+        </UTooltip>
+      </UDropdownMenu>
+      <UTooltip v-else-if="account" text="The gh account Canopy reads GitHub as">
         <span class="no-drag mono flex items-center gap-1 rounded-sm bg-(--hov) px-1.5 py-px text-[11px] text-(--tx2)">
           <UIcon name="i-hugeicons-user" class="size-3" />{{ account }}
         </span>

@@ -53,6 +53,7 @@ const browserFallback: CanopyApi = {
     branches: async () => [],
     runWorkflow: async () => ({ ok: false, error: 'Needs the desktop app.' }),
     accounts: async () => ({ list: [], active: '' }),
+    switchAccount: async () => ({ ok: false, error: 'Needs the desktop app.' }),
   },
   aws: {
     ...Object.fromEntries(AWS_CALLS.map(c => [c, async () => ({ ok: false, error: 'Needs the desktop app.', problem: 'other' })])),

@@ -1,6 +1,6 @@
 // GitHub: the PR, run, repo and alert calls, and GitHub HQ's cache.
 import { ghCache, handle, store } from '../context'
-import { ghAccounts, setProjectAccounts } from '../services/ghaccounts'
+import { ghAccounts, setProjectAccounts, switchAccount } from '../services/ghaccounts'
 import {
   allRepos, branches, cancelRun, createPull, dispatchables, githubRepoOf, githubWorld, mergePull, pullDetail, pullDiff, rateLimit, rerunRun, reviewPull, reviewRequests, runDetail, runLog, runWorkflow, searchPulls, securityAlerts, workflowRuns,
 } from '../services/github'
@@ -32,6 +32,7 @@ const withAccounts = <A extends unknown[], R>(fn: (...a: A) => R) => async (...a
 
 export function registerGithubIpc() {
   handle('gh:accounts', () => ghAccounts())
+  handle('gh:switch', (login: string) => switchAccount(login))
   handle('gh:reviews', withAccounts(() => reviewRequests()))
   handle('gh:world', async (folders: string[], hidden: string[]) => {
     await syncProjectAccounts().catch(() => undefined)
