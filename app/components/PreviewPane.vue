@@ -3,6 +3,7 @@
 // Select element (one or several, with a note that can send the prompt), Draw annotations, a screenshot, and a Diagnose bar
 // for console errors and failed requests. One pane per project, kept alive while another project shows.
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT, describePick, type PickedElement } from '~/utils/previewPicker'
+import { ownedAddress, pickTarget, type RepoProbe } from '#shared/serve'
 
 /** What the webview element offers, of the part of Electron's API used here. */
 interface Webview extends HTMLElement {
@@ -65,8 +66,12 @@ const hmr = ref(false)
 const services = computed(() => V.ofProject(project.value).filter(v => v.port))
 const portOf = (u: string) => { try { return new URL(u).port } catch { return '' } }
 /** The dev server the page belongs to: the one on its port (set, or the one it moved to), else the first with a port. */
-const svc = computed(() => services.value.find(v => v.port === portOf(addr.value) || V.portOf(v) === portOf(addr.value)) || services.value[0] || null)
-const serveRun = computed(() => V.ofProject(project.value).some(v => V.status(v.id) !== 'stopped'))
+const onAddr = (v: { id: string; port: string }) => v.port === portOf(addr.value) || V.portOf(v) === portOf(addr.value)
+const svc = computed(() => {
+  const mine = services.value.filter(v => v.repo.id === target.value)
+  return (mine.length ? mine.find(onAddr) || mine.find(v => !/reverb:start/.test(v.cmd)) : null) || services.value.find(onAddr) || services.value[0] || null
+})
+const serveRun = computed(() => V.ofProject(project.value).some(v => V.inScope(v, target.value) && V.status(v.id) !== 'stopped'))
 const svcState = computed(() => (svc.value ? V.status(svc.value.id) : 'stopped'))
 
 const dev = computed(() => DEVICES.find(d => d.id === state.value?.device) || DEVICES[0]!)
@@ -113,17 +118,53 @@ function startServer(v = svc.value) {
 /** A Laravel app Herd serves: Lookout opens its site (folder.test) and runs Serve beside it (queue, Reverb, scheduler, frontend). */
 const site = ref('')
 
-async function findSite() {
-  for (const r of project.value?.repos || []) {
-    const u = await api.svc.site?.(r.path).catch(() => '')
-    if (u) return u
+/** The repo Lookout shows: one picked in the header, else the focused session's, else a frontend before a Laravel site. */
+const target = ref('')
+const pinned = ref('')
+/** Set when the address is one Canopy chose for another repo: the target's dev server takes over once it is running. */
+const retarget = ref(false)
+const focusRepo = computed(() => S.byId(S.focusedId(props.pid))?.repoId)
+
+/** Each repo's site and whether it has a dev server of its own (Reverb's port is not one). */
+async function probe(): Promise<RepoProbe[]> {
+  return Promise.all((project.value?.repos || []).map(async (r) => {
+    const site = (await api.svc.site?.(r.path).catch(() => '')) || ''
+    const found = site ? [] : (await api.svc.serve?.(r.path).catch(() => [])) || []
+    return { id: r.id, site, frontend: found.some(d => d.port && d.label !== 'Reverb') }
+  }))
+}
+
+/** Points Lookout at its repo and runs Serve for it. Returns false when the project has no site manager and no frontend to serve. */
+async function aim(): Promise<boolean> {
+  const repos = await probe()
+  const t = pickTarget(repos, pinned.value || focusRepo.value)
+  if (!t) return false
+  target.value = t.id
+  site.value = t.site
+  const owned = !boot.value || ownedAddress(addr.value, repos.map(r => r.site).filter(Boolean), services.value.map(v => V.portOf(v)))
+  if (t.site) {
+    if (owned && addr.value !== t.site) go(t.site)
+  } else if (owned && boot.value) {
+    // The saved address belongs to another repo: leave it until this repo's server is up, then follow.
+    retarget.value = true
   }
-  return ''
+  await V.serveProject(project.value, t.id)
+  follow()
+  return true
+}
+
+/** A retargeted Lookout moves to the target's server as soon as it is running. */
+function follow() {
+  if (!svc.value || svcState.value !== 'running') return
+  if (retarget.value) {
+    retarget.value = false
+    go(`http://localhost:${V.portOf(svc.value)}`)
+  }
 }
 
 /** Every server of the repo that has a port runs, so a Laravel app's vite assets come with its PHP server. */
 function startRepoServers() {
-  if (site.value) return
+  if (target.value) return
   const s = svc.value
   if (s) for (const v of services.value.filter(x => x.repo.id === s.repo.id)) startServer(v)
 }
@@ -143,12 +184,8 @@ async function detectServers() {
 let offRequest: (() => void) | undefined
 onMounted(async () => {
   offRequest = api.sys.onPreviewRequest(onRequest)
-  site.value = await findSite()
-  if (site.value) {
-    if (!boot.value) go(site.value)
-    V.serveProject(project.value)
-    return
-  }
+  // Serve starts what the project runs for the repo shown; Lookout opens its site, or waits for its frontend's port.
+  if (await aim()) return
   await detectServers()
   if (!svc.value) return
   startRepoServers()
@@ -162,15 +199,22 @@ onBeforeUnmount(() => {
 // Closing Lookout leaves its server running; opening it again starts it if it was stopped.
 watch(() => props.shown, (s) => {
   if (!s) return
-  if (site.value) V.serveProject(project.value)
+  if (target.value) V.serveProject(project.value, target.value)
   else startRepoServers()
+})
+
+// Another session's repo comes into focus, or one is picked in the header: Lookout follows it.
+watch([focusRepo, pinned], () => {
+  if (props.shown && target.value) aim()
 })
 
 watch(svcState, (s) => {
   if (s !== 'running' || !svc.value) return
   if (!boot.value) go(`http://localhost:${V.portOf(svc.value)}`)
+  else if (retarget.value) follow()
   else if (failed.value) go(addr.value)
 })
+watch(svc, () => follow())
 
 // A server whose port was taken moves to the next free one and says so in its output: follow it.
 watch(() => (svc.value ? V.portOf(svc.value) : ''), (p, old) => {
@@ -397,13 +441,22 @@ const small = 'grid size-7 cursor-pointer place-items-center rounded-md text-[14
       <button :class="iconBtn" :disabled="!canBack" title="Back" @click="wv?.goBack()"><UIcon name="i-hugeicons-arrow-left-02" /></button>
       <button :class="iconBtn" :disabled="!canFwd" title="Forward" @click="wv?.goForward()"><UIcon name="i-hugeicons-arrow-right-02" /></button>
       <UTooltip :text="serveRun ? 'Stop the dev servers' : 'Serve: start what this project runs'">
-        <button :class="iconBtn" :disabled="ui.serving" @click="ui.toggleServe()">
+        <button :class="iconBtn" :disabled="ui.serving" @click="ui.toggleServe(target)">
           <UIcon :name="serveRun ? 'i-hugeicons-stop' : 'i-hugeicons-play'" />
         </button>
       </UTooltip>
       <button :class="iconBtn" :disabled="!ready" :title="loading ? 'Stop' : 'Reload'" @click="loading ? wv?.stop() : wv?.reload()">
         <UIcon :name="loading ? 'i-hugeicons-cancel-01' : 'i-hugeicons-refresh'" />
       </button>
+      <UTooltip v-if="(project?.repos.length || 0) > 1" text="The repo Lookout shows and Serve runs">
+        <select
+          :value="target"
+          class="h-7 max-w-28 flex-none cursor-pointer truncate rounded-md border border-(--ln) bg-(--chrome) px-1.5 text-[11.5px] text-(--tx) outline-none focus:border-(--bb)"
+          @change="pinned = ($event.target as HTMLSelectElement).value"
+        >
+          <option v-for="r in project?.repos" :key="r.id" :value="r.id">{{ r.label || r.path.split(/[\\/]/).pop() }}</option>
+        </select>
+      </UTooltip>
       <input
         v-model="addr"
         spellcheck="false"

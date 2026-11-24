@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { Project, Repo, Service } from '#shared/types'
 import { isServeCommand } from '#shared/devdetect'
+import { inServeScope } from '#shared/serve'
 
 export type SvcStatus = 'starting' | 'running' | 'stopped'
 /** A log line; `n` is a running id, so the list redraws only the lines that came or went. */
@@ -115,14 +116,16 @@ export const useServicesStore = defineStore('services', () => {
   }
 
   /** Serve: starts what each repo of the project runs (a Laravel app's queue, Reverb, scheduler and frontend; any other app's dev server), adding it to the repo first. */
-  async function serveProject(p: Project | null) {
+  async function serveProject(p: Project | null, repoId?: string) {
     if (!p) return
     for (const r of p.repos) {
-      const found = await api.svc.serve?.(r.path).catch(() => []) || []
+      // With a repo named, only it runs in full; a Laravel backend beside it keeps its queue, scheduler and Reverb, and other repos stay off.
+      const found = (await api.svc.serve?.(r.path).catch(() => []) || []).filter(d => inServeScope(d.cmd, r.id === repoId, !!repoId))
+      if (repoId && r.id !== repoId && !found.length) continue
       const detected = adopt(p.id, r.id, found)
       // Services added by hand start too. One of Serve's own commands that detection no longer asks for (artisan serve once a
       // site manager serves the folder, a worker the manager runs itself) is left stopped.
-      const mine = (r.services || []).filter(v => !isServeCommand(v.cmd) || found.some(d => d.cmd === v.cmd))
+      const mine = (r.services || []).filter(v => (!isServeCommand(v.cmd) && inServeScope(v.cmd, r.id === repoId, !!repoId)) || found.some(d => d.cmd === v.cmd))
       const seen = new Set<string>()
       for (const v of [...detected, ...mine.map(v => ({ ...v, repo: r }))]) {
         if (seen.has(v.id)) continue
@@ -183,9 +186,14 @@ export const useServicesStore = defineStore('services', () => {
     ofProject(p).forEach(v => start(v, v.repo))
   }
 
-  function stopProject(p: Project | null) {
-    ofProject(p).forEach(v => stop(v.id))
+  /** What Serve would run for the project (see serveProject), so Stop reaches the same set. */
+  function inScope(v: Service & { repo: Repo }, repoId?: string) {
+    return inServeScope(v.cmd, v.repo.id === repoId, !!repoId)
   }
 
-  return { runtime, livePorts, died, dismissDied, portOf, onPort, status, onData, onStatus, ofProject, adopt, serveProject, start, stop, restart, clear, forget, startProject, stopProject }
+  function stopProject(p: Project | null, repoId?: string) {
+    ofProject(p).filter(v => inScope(v, repoId)).forEach(v => stop(v.id))
+  }
+
+  return { runtime, livePorts, died, dismissDied, portOf, onPort, status, onData, onStatus, ofProject, adopt, serveProject, inScope, start, stop, restart, clear, forget, startProject, stopProject }
 })

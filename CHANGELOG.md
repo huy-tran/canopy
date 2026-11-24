@@ -4,6 +4,10 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Lookout and Serve work on one repo of a project: the focused session's, else a frontend before a Laravel site. Other repos stay off, but a Laravel backend beside it keeps its queue, scheduler and Reverb. Stop reaches the same set.
+- A repo picker in Lookout's header (projects with several repos) chooses the repo. Lookout follows the focused session when it changes.
+- A saved address that Canopy chose for another repo is replaced by the shown repo's site or dev server. An address you typed is kept.
+
 ## [0.34.0] - 2026-11-24
 
 - A Serve button for every project (Lookout's header, the command palette, Ctrl+Shift+Y) starts what the project runs: a Laravel app's queue worker or Horizon, Reverb, scheduler and frontend dev server, or any other app's dev server. A second press stops them. Servers you added yourself start too.

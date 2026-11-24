@@ -743,13 +743,14 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   /** Serve: starts what the project runs (see serveProject), or stops it all when something is running already. */
-  async function toggleServe() {
+  async function toggleServe(repo?: string) {
     const p = cur.value
     if (!p || serving.value) return
-    if (V.ofProject(p).some(v => V.status(v.id) !== 'stopped')) return V.stopProject(p)
+    const repoId = repo || focused.value?.repoId
+    if (V.ofProject(p).some(v => V.inScope(v, repoId) && V.status(v.id) !== 'stopped')) return V.stopProject(p, repoId)
     serving.value = true
     try {
-      await V.serveProject(p)
+      await V.serveProject(p, repoId)
     } finally {
       serving.value = false
     }
@@ -966,7 +967,7 @@ export const useUiStore = defineStore('ui', () => {
       files: () => openExplorer(),
       editor: openEditor,
       logs: () => toggleLogs(),
-      serve: toggleServe,
+      serve: () => toggleServe(),
       preview: togglePreview,
       lookoutWide: toggleLookoutWide,
       sidebar: toggleSidebar,
