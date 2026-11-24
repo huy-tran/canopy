@@ -4,6 +4,12 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- A Serve button for every project (Lookout's header, the command palette, Ctrl+Shift+Y) starts what the project runs: a Laravel app's queue worker or Horizon, Reverb, scheduler and frontend dev server, or any other app's dev server. A second press stops them. Servers you added yourself start too.
+- Laravel apps served by Herd, Lerd or Flock no longer start `artisan serve`: Lookout opens the site (`folder.test`, or the name it is linked under) and runs Serve beside it. A folder the manager does not serve still gets `artisan serve`. Lerd's own workers are left to Lerd.
+- Reverb uses the port in `.env` (REVERB_SERVER_PORT), and a server whose port is already taken says so instead of showing as running.
+- The Dev Servers bar only shows while a server is running or has stopped on its own, and no longer has the Add popover (Manage opens the project's settings instead).
+- Removed the "Start dev servers with the sessions" project setting: use Serve.
+
 ## [0.33.1] - 2026-11-24
 
 - The GitHub window shows which gh account is active in its header.

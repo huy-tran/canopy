@@ -281,7 +281,6 @@ export interface Project {
   view: View
   expanded: boolean
   autoStart: boolean
-  autoServices: boolean
   resume: boolean
   editor: Editor
   createdAt: number

@@ -52,6 +52,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'preview', g: 'Files and dev servers', label: 'Lookout: your app beside the chat', def: ['Ctrl+Shift+U'] },
   { id: 'lookoutWide', g: 'Files and dev servers', label: 'Lookout at full width, or back', def: ['Ctrl+Shift+K'] },
   { id: 'logs', g: 'Files and dev servers', label: 'Dev server logs', def: ['Ctrl+Shift+B'] },
+  { id: 'serve', g: 'Files and dev servers', label: 'Serve: start or stop what the project runs', def: ['Ctrl+Shift+Y'] },
   { id: 'shell', g: 'Files and dev servers', label: 'Open or close the shell panel', def: ['Ctrl+`'] },
   { id: 'shellNew', g: 'Shell panel, while it has focus', label: 'New shell (default shell)', def: ['Ctrl+T'], scope: 'shell' },
   { id: 'shellNewPick', g: 'Shell panel, while it has focus', label: 'New shell, choosing which', def: ['Ctrl+Shift+T'], scope: 'shell' },

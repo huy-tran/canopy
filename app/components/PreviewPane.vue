@@ -66,6 +66,7 @@ const services = computed(() => V.ofProject(project.value).filter(v => v.port))
 const portOf = (u: string) => { try { return new URL(u).port } catch { return '' } }
 /** The dev server the page belongs to: the one on its port (set, or the one it moved to), else the first with a port. */
 const svc = computed(() => services.value.find(v => v.port === portOf(addr.value) || V.portOf(v) === portOf(addr.value)) || services.value[0] || null)
+const serveRun = computed(() => V.ofProject(project.value).some(v => V.status(v.id) !== 'stopped'))
 const svcState = computed(() => (svc.value ? V.status(svc.value.id) : 'stopped'))
 
 const dev = computed(() => DEVICES.find(d => d.id === state.value?.device) || DEVICES[0]!)
@@ -109,8 +110,20 @@ function startServer(v = svc.value) {
   if (v && V.status(v.id) === 'stopped') V.start(v, v.repo)
 }
 
+/** A Laravel app Herd serves: Lookout opens its site (folder.test) and runs Serve beside it (queue, Reverb, scheduler, frontend). */
+const site = ref('')
+
+async function findSite() {
+  for (const r of project.value?.repos || []) {
+    const u = await api.svc.site?.(r.path).catch(() => '')
+    if (u) return u
+  }
+  return ''
+}
+
 /** Every server of the repo that has a port runs, so a Laravel app's vite assets come with its PHP server. */
 function startRepoServers() {
+  if (site.value) return
   const s = svc.value
   if (s) for (const v of services.value.filter(x => x.repo.id === s.repo.id)) startServer(v)
 }
@@ -130,6 +143,12 @@ async function detectServers() {
 let offRequest: (() => void) | undefined
 onMounted(async () => {
   offRequest = api.sys.onPreviewRequest(onRequest)
+  site.value = await findSite()
+  if (site.value) {
+    if (!boot.value) go(site.value)
+    V.serveProject(project.value)
+    return
+  }
   await detectServers()
   if (!svc.value) return
   startRepoServers()
@@ -141,7 +160,11 @@ onBeforeUnmount(() => {
 })
 
 // Closing Lookout leaves its server running; opening it again starts it if it was stopped.
-watch(() => props.shown, (s) => { if (s) startRepoServers() })
+watch(() => props.shown, (s) => {
+  if (!s) return
+  if (site.value) V.serveProject(project.value)
+  else startRepoServers()
+})
 
 watch(svcState, (s) => {
   if (s !== 'running' || !svc.value) return
@@ -373,6 +396,11 @@ const small = 'grid size-7 cursor-pointer place-items-center rounded-md text-[14
     <div class="flex h-10 flex-none items-center gap-1 border-b border-(--ln) bg-(--head) px-2">
       <button :class="iconBtn" :disabled="!canBack" title="Back" @click="wv?.goBack()"><UIcon name="i-hugeicons-arrow-left-02" /></button>
       <button :class="iconBtn" :disabled="!canFwd" title="Forward" @click="wv?.goForward()"><UIcon name="i-hugeicons-arrow-right-02" /></button>
+      <UTooltip :text="serveRun ? 'Stop the dev servers' : 'Serve: start what this project runs'">
+        <button :class="iconBtn" :disabled="ui.serving" @click="ui.toggleServe()">
+          <UIcon :name="serveRun ? 'i-hugeicons-stop' : 'i-hugeicons-play'" />
+        </button>
+      </UTooltip>
       <button :class="iconBtn" :disabled="!ready" :title="loading ? 'Stop' : 'Reload'" @click="loading ? wv?.stop() : wv?.reload()">
         <UIcon :name="loading ? 'i-hugeicons-cancel-01' : 'i-hugeicons-refresh'" />
       </button>

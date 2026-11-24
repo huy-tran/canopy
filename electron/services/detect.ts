@@ -2,7 +2,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { detectDevServers, withInstall, type DetectedServer } from '../../shared/devdetect'
+import { detectDevServers, detectLaravelServe, isLaravel, withInstall, type DetectedServer } from '../../shared/devdetect'
+import { siteOf } from './sites'
 
 function json(file: string): any {
   try {
@@ -29,6 +30,36 @@ export async function commandWithInstall(dir: string, cmd: string): Promise<stri
   })
 }
 
+function text(file: string): string {
+  try {
+    return fs.readFileSync(file, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+/** What "Serve" runs: for a Laravel app its queue, Reverb, scheduler and frontend (see detectLaravelServe), for anything else its dev server. */
+export async function detectServe(dir: string): Promise<DetectedServer[]> {
+  if (typeof dir !== 'string' || !dir) return []
+  const composer = json(path.join(dir, 'composer.json'))
+  if (!isLaravel({ artisan: fs.existsSync(path.join(dir, 'artisan')), composer })) return detectServers(dir)
+  const has = (n: string) => fs.existsSync(path.join(dir, n))
+  const env = text(path.join(dir, '.env'))
+  const site = siteOf(dir)
+  return detectLaravelServe({
+    pkg: json(path.join(dir, 'package.json')),
+    composer: json(path.join(dir, 'composer.json')),
+    artisan: has('artisan'),
+    locks: ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json'].filter(has),
+    herd: await hasHerd(),
+    served: !!site,
+    managedWorkers: !!site?.managedWorkers,
+    reverbPort: /^\s*REVERB_SERVER_PORT\s*=\s*["']?(\d{2,5})/m.exec(env)?.[1],
+    queueSync: /^\s*QUEUE_CONNECTION\s*=\s*["']?sync\b/m.test(env),
+    scheduled: /\bSchedule::/.test(text(path.join(dir, 'routes', 'console.php'))) || has(path.join('app', 'Console', 'Kernel.php')),
+  })
+}
+
 export async function detectServers(dir: string): Promise<DetectedServer[]> {
   if (typeof dir !== 'string' || !dir) return []
   const has = (n: string) => fs.existsSync(path.join(dir, n))
@@ -42,4 +73,12 @@ export async function detectServers(dir: string): Promise<DetectedServer[]> {
     rails: has(path.join('bin', 'rails')) && has('Gemfile'),
     hugo: ['hugo.toml', 'hugo.yaml', 'hugo.json', 'config.toml'].some(has),
   })
+}
+
+/** The address a local site manager (Herd, Lerd, Flock) serves a Laravel app at; '' when it is not a Laravel app or none serves it. */
+export async function laravelSite(dir: string): Promise<string> {
+  if (typeof dir !== 'string' || !dir) return ''
+  const composer = json(path.join(dir, 'composer.json'))
+  if (!isLaravel({ artisan: fs.existsSync(path.join(dir, 'artisan')), composer })) return ''
+  return siteOf(dir)?.url || ''
 }

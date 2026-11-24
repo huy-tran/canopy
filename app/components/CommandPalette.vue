@@ -81,6 +81,7 @@ const cmdItems = computed<PalItem[]>(() => {
   C('SSH: open or close the window', kl('ssh'), () => ui.runAction('ssh'))
   C('Windows: put GitHub, AWS and SSH back where they started', '', () => api.tool.reset())
   ;(prefs.prefs.sshHosts || []).forEach(h => C(`SSH: ${sshTitle(h)} (${sshDetail(h)})`, '', () => ui.openShell(null, { ssh: h.id })))
+  C('Dev servers: Serve, or stop what is running', kl('serve'), () => ui.toggleServe())
   C('Dev servers: start all', '', () => V.startProject(P.current))
   C('Dev servers: stop all', '', () => V.stopProject(P.current))
   C('New session in a new worktree', '', () => ui.newSession(null, true))

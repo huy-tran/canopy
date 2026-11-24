@@ -51,7 +51,7 @@ npm run release -- minor  # release the CHANGELOG "Unreleased" notes: bump, comm
 | Plan limit warnings | The same usage endpoint, checked every two minutes: one warning at 80% and one at 95% of each window. |
 | Review comments | Saved per folder until sent, and pasted at Claude's prompt as one numbered list. |
 | GitHub window, review requests | The `gh` CLI and its sign-in. With several accounts signed in (`gh auth login` more than once), each repo is read and changed as the account that can reach it, by passing that account's token to `gh` for the call; a project can name its account. Nothing is stored by Canopy. |
-| Dev servers | node-pty, with the whole process tree killed on Stop. |
+| Dev servers | node-pty, with the whole process tree killed on Stop. Serve works out what a project runs from its files (Laravel: queue, Horizon, Reverb, scheduler, frontend; otherwise its dev server) and asks Herd, Lerd or Flock whether they already serve the site. |
 | Lookout (app preview) | An Electron `<webview>` on its own session, locked to http(s); Select element and annotations run inside the page and reach Claude's prompt as pasted text and image paths. |
 | Screenshots | A pasted image is saved to disk and its path pasted at Claude's prompt, which attaches it as `[Image #n]`. |
 | Notifications, updates, fonts | Electron `Notification`, `electron-updater`, `font-list`. |

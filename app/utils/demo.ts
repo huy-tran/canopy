@@ -12,7 +12,7 @@ const repo = (id: string, label: string, path: string, stack: string, branch = '
   ({ id, label, path, cmd: 'claude', stack, branch, services: [] })
 
 const project = (id: string, name: string, hue: number, repos: Repo[], layout: Project['layout'] = 'tabs'): Project => ({
-  id, name, hue, repos, layout, view: 'terminals', expanded: true, autoStart: false, autoServices: false, resume: false, editor: 'VS Code', createdAt: Date.now() - 30 * 86_400_000,
+  id, name, hue, repos, layout, view: 'terminals', expanded: true, autoStart: false, resume: false, editor: 'VS Code', createdAt: Date.now() - 30 * 86_400_000,
 })
 
 const PROJECTS: Project[] = [

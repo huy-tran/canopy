@@ -49,7 +49,7 @@ const api: CanopyApi = {
   },
   summary: { activity: inv('summary:activity') },
   claude: { run: inv('claude:run') },
-  svc: { start: inv('svc:start'), stop: inv('svc:stop'), detect: inv('svc:detect'), onPort: on('svc:port'), onData: on('svc:data'), onStatus: on('svc:status') },
+  svc: { start: inv('svc:start'), stop: inv('svc:stop'), detect: inv('svc:detect'), serve: inv('svc:serve'), site: inv('svc:site'), onPort: on('svc:port'), onData: on('svc:data'), onStatus: on('svc:status') },
   history: inv('history'),
   usage: inv('usage'),
   gh: {

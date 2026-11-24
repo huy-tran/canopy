@@ -71,7 +71,7 @@ export const useUiStore = defineStore('ui', () => {
   const sshSaved = ref<SavedSession[]>([])
   const inbox = ref<{ sid: string | null; leftAt?: number } | null>(null)
   const bc = ref<{ text: string; targets: string[] } | null>(null)
-  const svcAdd = ref(false)
+  const serving = ref(false)
   const logsOpen = ref(false)
   const svcTab = ref<string | null>(null)
   /** Dock panel state per project, saved with the app state and swapped in as the selected project changes. */
@@ -188,7 +188,6 @@ export const useUiStore = defineStore('ui', () => {
 
   function closeTransient() {
     newMenu.value = false
-    svcAdd.value = false
   }
 
   function selectProject(pid: string) {
@@ -354,7 +353,6 @@ export const useUiStore = defineStore('ui', () => {
   async function startAll(pid: string) {
     const p = P.byId(pid)
     if (!p) return
-    if (p.autoServices) V.startProject(p)
     P.sel = pid
     const have = new Set(S.claudeOf(pid).map(s => s.repoId))
     const resume = resumeOnce.has(pid)
@@ -744,6 +742,19 @@ export const useUiStore = defineStore('ui', () => {
     logsOpen.value = true
   }
 
+  /** Serve: starts what the project runs (see serveProject), or stops it all when something is running already. */
+  async function toggleServe() {
+    const p = cur.value
+    if (!p || serving.value) return
+    if (V.ofProject(p).some(v => V.status(v.id) !== 'stopped')) return V.stopProject(p)
+    serving.value = true
+    try {
+      await V.serveProject(p)
+    } finally {
+      serving.value = false
+    }
+  }
+
   // ---------- Shells ----------
 
   /** Folder for a new shell: the focused session's folder (its worktree when it has one), else the repo. */
@@ -955,6 +966,7 @@ export const useUiStore = defineStore('ui', () => {
       files: () => openExplorer(),
       editor: openEditor,
       logs: () => toggleLogs(),
+      serve: toggleServe,
       preview: togglePreview,
       lookoutWide: toggleLookoutWide,
       sidebar: toggleSidebar,
@@ -974,13 +986,13 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, sshAskCloseAll, sshAskTick, badge, sshSaved, inbox, bc, svcAdd,
+    width, now, palette, confirm, projectModal, explorer, settings, about, summary, recaps, recapHours, updOpen, upd, details, sim, simTarget, simTalk, gh, aws, ssh, sshTerm, sshSel, sshAskCloseAll, sshAskTick, badge, sshSaved, inbox, bc, serving,
     logsOpen, svcTab, panels, previews, previewAlive, lookoutWide, toggleLookoutWide, preview, sidebarW, toggleSidebar, previewShown, previewRatio, setPreview, togglePreview, sendToClaude, shellPicker, stripOn, stripMode, lightbox, hoverImg, newMenu, range, repoFilter, usage, resumeOnce,
     wide, cur, fid, focused, panelShown, waitList,
     toast, focusLater, selectProject, focusSession, showSession, showProject, simNextWaiting, nextWaiting, cycle, setLayout, cycleLayout, setView, toggleView,
     newSession, startAll, closeSession, closeTerminal, closeAll, closeDockShell, openEditor, mergeWt, inboxGo, toggleInbox, inboxSkip, inboxTick,
     openBc, sendBc, shareInfo, shareChanges, shareFocused, mention, openPalette, openModal, openSettings, openSummary, openExplorer,
-    toggleLogs, openShell, openSshTerminal, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
+    toggleLogs, toggleServe, openShell, openSshTerminal, newPanelShell, toggleShellPanel, openLightbox, checkUpdates, quitApp, isViewing, notifySession, answer, runAction,
     openGithub, openAws, find, findTick, toggleFind, sendNotes, prWt, prBusy, pushCwd,
   }
 })

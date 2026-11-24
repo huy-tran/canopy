@@ -8,7 +8,6 @@ interface Draft {
   name: string
   repos: Repo[]
   autoStart: boolean
-  autoServices: boolean
   resume: boolean
   editor: Editor
   /** The gh account for its repos; '' leaves it to whichever account can reach each repo. */
@@ -80,12 +79,12 @@ watch(() => ui.projectModal, (m, prev) => {
     draft.value = {
       pid: p.id, name: p.name,
       repos: p.repos.map(r => ({ ...r, services: (r.services || []).map(v => ({ ...v })) })),
-      autoStart: p.autoStart, autoServices: !!p.autoServices, resume: p.resume, editor: p.editor, ghAccount: p.ghAccount || '',
+      autoStart: p.autoStart, resume: p.resume, editor: p.editor, ghAccount: p.ghAccount || '',
     }
   } else {
     draft.value = {
       pid: null, name: '', repos: [emptyRepo()],
-      autoStart: true, autoServices: true, resume: true, editor: prefs.prefs.editor, ghAccount: '',
+      autoStart: true, resume: true, editor: prefs.prefs.editor, ghAccount: '',
     }
   }
 }, { immediate: true })
@@ -253,7 +252,7 @@ async function save() {
       services: (r.services || []).filter(v => (v.cmd || '').trim()).map(v => ({ id: v.id || uid('v'), cmd: v.cmd.trim(), port: String(v.port || '').replace(/[^0-9]/g, '') })),
     }
   })
-  const fields = { name: d.name.trim(), repos, autoStart: d.autoStart, autoServices: d.autoServices, resume: d.resume, editor: d.editor, ghAccount: d.ghAccount || undefined }
+  const fields = { name: d.name.trim(), repos, autoStart: d.autoStart, resume: d.resume, editor: d.editor, ghAccount: d.ghAccount || undefined }
 
   if (mode.value === 'add') {
     const p: Project = {
@@ -497,13 +496,6 @@ const ring = (bad: boolean) => (bad ? 'ring-(--red)' : 'ring-(--ln)')
               color="neutral"
               size="sm"
               label="Start all sessions when I open this project"
-              :ui="{ root: 'items-center cursor-pointer', base: 'rounded-sm ring-(--bb)', wrapper: 'ms-[9px]', label: 'text-[12.5px] font-normal text-(--tx) cursor-pointer' }"
-            />
-            <UCheckbox
-              v-model="draft.autoServices"
-              color="neutral"
-              size="sm"
-              label="Start dev servers with the sessions"
               :ui="{ root: 'items-center cursor-pointer', base: 'rounded-sm ring-(--bb)', wrapper: 'ms-[9px]', label: 'text-[12.5px] font-normal text-(--tx) cursor-pointer' }"
             />
             <UCheckbox

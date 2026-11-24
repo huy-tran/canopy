@@ -77,6 +77,62 @@ export function detectDevServers(f: ProjectFiles): DetectedServer[] {
   return out
 }
 
+export interface LaravelFacts extends ProjectFiles {
+  /** .env sets QUEUE_CONNECTION=sync: jobs run inside the request, so no worker is needed. */
+  queueSync?: boolean
+  /** The app schedules something (a Schedule:: call in routes/console.php, or a Console Kernel). */
+  scheduled?: boolean
+  /** A local site manager (Herd, Lerd, Flock) serves this folder, so `artisan serve` is not needed. Not the same as Herd being installed. */
+  served?: boolean
+  /** The site manager runs the queue, scheduler and Reverb itself (Lerd's `workers:`): Serve must not start a second copy. */
+  managedWorkers?: boolean
+  /** REVERB_SERVER_PORT from .env, when it sets one. */
+  reverbPort?: string
+}
+
+export function isLaravel(f: ProjectFiles): boolean {
+  return !!f.artisan && !!(f.composer?.require?.['laravel/framework'] || f.composer?.['require-dev']?.['laravel/framework'])
+}
+
+/** The commands Serve itself writes for a Laravel app, which is what tells a stale one (kept from an earlier detection) from a service added by hand. */
+const SERVE_COMMANDS = /^(?:herd )?php artisan (?:serve(?: --port=\d+)?|queue:work|horizon|schedule:work|reverb:start(?: --port=\d+)?)$/
+
+export function isServeCommand(cmd: string): boolean {
+  return SERVE_COMMANDS.test(cmd.trim())
+}
+
+/**
+ * What "Serve" runs for a Laravel app: the background processes its code and packages call for (queue worker or Horizon,
+ * Reverb, the scheduler) and, when it has a frontend, its asset dev server. `artisan serve` only when no site manager serves
+ * the folder, and no workers when the site manager runs them. Empty when the folder is not a Laravel app.
+ */
+export function detectLaravelServe(f: LaravelFacts): DetectedServer[] {
+  if (!isLaravel(f)) return []
+  const out: DetectedServer[] = []
+  const req = { ...(f.composer?.require || {}), ...(f.composer?.['require-dev'] || {}) }
+  const php = f.herd ? 'herd php' : 'php'
+
+  if (!f.served) out.push({ cmd: `${php} artisan serve --port=8000`, port: '8000', label: 'Laravel' })
+  if (!f.managedWorkers) {
+    if (req['laravel/horizon']) out.push({ cmd: `${php} artisan horizon`, port: '', label: 'Horizon' })
+    else if (!f.queueSync) out.push({ cmd: `${php} artisan queue:work`, port: '', label: 'Queue' })
+    if (req['laravel/reverb']) {
+      const port = f.reverbPort || '8080'
+      out.push({ cmd: port === '8080' ? `${php} artisan reverb:start` : `${php} artisan reverb:start --port=${port}`, port, label: 'Reverb' })
+    }
+    if (f.scheduled) out.push({ cmd: `${php} artisan schedule:work`, port: '', label: 'Scheduler' })
+  }
+
+  // The frontend: whichever of dev/start/serve the package.json has, run with the package manager its lockfile names.
+  const script = ['dev', 'start', 'serve'].find(s => f.pkg?.scripts?.[s])
+  if (script) {
+    const deps = { ...(f.pkg?.dependencies || {}), ...(f.pkg?.devDependencies || {}) }
+    const fw = JS.find(j => deps[j.dep])
+    out.push({ cmd: `${runner(f.locks)} ${script}`, port: scriptPort(f.pkg!.scripts![script]!) || fw?.port || '', label: fw?.label || 'Frontend' })
+  }
+  return out
+}
+
 export interface InstallFacts {
   locks?: string[]
   herd?: boolean

@@ -196,6 +196,10 @@ export interface CanopyApi {
     stop(id: string): Promise<void>
     /** The dev servers a folder runs (Laravel, Nuxt, Vite...), read from its package.json and composer.json. */
     detect(dir: string): Promise<DetectedServer[]>
+    /** What Serve runs in a folder: a Laravel app's queue, Reverb, scheduler and frontend, or any other app's dev server. */
+    serve(dir: string): Promise<DetectedServer[]>
+    /** The address Herd, Lerd or Flock serves a Laravel app folder at (http://folder.test), or '' when it is not one or none serves it. */
+    site(dir: string): Promise<string>
     /** A server said it listens on another port than the one set (its default was taken). */
     onPort(fn: (id: string, port: number) => void): Off
     onData(fn: (id: string, data: string) => void): Off

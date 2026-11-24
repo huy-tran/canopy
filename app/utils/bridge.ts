@@ -28,7 +28,7 @@ const browserFallback: CanopyApi = {
   },
   summary: { activity: async () => ({ sessions: [], commits: [] }) },
   claude: { run: async () => ({ ok: false, text: '', error: 'Needs the desktop app.' }) },
-  svc: { start: none, stop: none, detect: async () => [], onPort: noop, onData: noop, onStatus: noop },
+  svc: { start: none, stop: none, detect: async () => [], serve: async () => [], site: async () => '', onPort: noop, onData: noop, onStatus: noop },
   history: async () => [],
   usage: none,
   gh: {

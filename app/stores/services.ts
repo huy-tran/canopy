@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Project, Repo, Service } from '#shared/types'
+import { isServeCommand } from '#shared/devdetect'
 
 export type SvcStatus = 'starting' | 'running' | 'stopped'
 /** A log line; `n` is a running id, so the list redraws only the lines that came or went. */
@@ -30,6 +31,9 @@ export const useServicesStore = defineStore('services', () => {
   // Shallow: entries are only ever replaced, and logs hold up to a thousand lines each.
   /** The port each running server printed it listens on, which differs from the one set when the default was taken. */
   const livePorts = ref<Record<string, string>>({})
+  /** Servers that stopped on their own (not asked to), until they are started again or dismissed: the bar stays up for them. */
+  const died = ref<Record<string, true>>({})
+  const asked = new Set<string>()
   const runtime = shallowRef<Record<string, { status: SvcStatus; log: LogLine[]; partial: string }>>({})
   /** Output received but not yet added, per service: chatty servers send many small chunks. A timer, not a frame, so it still drains while the window is hidden. */
   const pending = new Map<string, string>()
@@ -84,6 +88,7 @@ export const useServicesStore = defineStore('services', () => {
   function onStatus(id: string, s: SvcStatus, code?: number) {
     // Output that came before the status goes first.
     flush()
+    if (s === 'stopped' && !asked.delete(id)) died.value = { ...died.value, [id]: true }
     const r = rt(id)
     const extra: LogLine[] = s === 'stopped' ? [...(r.partial ? [ln(r.partial, tint(r.partial))] : []), ln(code != null && code !== 0 && code !== 1 ? `Exited with code ${code}.` : 'Stopped.', 'fa')] : []
     runtime.value = { ...runtime.value, [id]: { status: s, partial: s === 'stopped' ? '' : r.partial, log: [...r.log, ...extra].slice(-MAX_LINES) } }
@@ -94,9 +99,51 @@ export const useServicesStore = defineStore('services', () => {
     return p ? p.repos.flatMap(r => (r.services || []).map(v => ({ ...v, repo: r }))) : []
   }
 
+  /** Adds the detected servers a repo does not have yet, and returns the repo's services that match them (with the repo). */
+  function adopt(pid: string, repoId: string, found: { cmd: string; port: string }[]): (Service & { repo: Repo })[] {
+    const P = useProjectsStore()
+    const has = (r: Repo, cmd: string) => (r.services || []).some(v => v.cmd === cmd)
+    const repo = P.byId(pid)?.repos.find(x => x.id === repoId)
+    if (!repo) return []
+    const fresh = found.filter(d => !has(repo, d.cmd))
+    if (fresh.length) {
+      P.update(pid, q => ({ ...q, repos: q.repos.map(rr => (rr.id === repoId ? { ...rr, services: [...(rr.services || []), ...fresh.map(d => ({ id: uid('v'), cmd: d.cmd, port: d.port }))] } : rr)) }))
+    }
+    // Read back from the store: the update above made the new services' ids.
+    const now = P.byId(pid)?.repos.find(x => x.id === repoId)
+    return (now?.services || []).filter(v => found.some(d => d.cmd === v.cmd)).map(v => ({ ...v, repo: now! }))
+  }
+
+  /** Serve: starts what each repo of the project runs (a Laravel app's queue, Reverb, scheduler and frontend; any other app's dev server), adding it to the repo first. */
+  async function serveProject(p: Project | null) {
+    if (!p) return
+    for (const r of p.repos) {
+      const found = await api.svc.serve?.(r.path).catch(() => []) || []
+      const detected = adopt(p.id, r.id, found)
+      // Services added by hand start too. One of Serve's own commands that detection no longer asks for (artisan serve once a
+      // site manager serves the folder, a worker the manager runs itself) is left stopped.
+      const mine = (r.services || []).filter(v => !isServeCommand(v.cmd) || found.some(d => d.cmd === v.cmd))
+      const seen = new Set<string>()
+      for (const v of [...detected, ...mine.map(v => ({ ...v, repo: r }))]) {
+        if (seen.has(v.id)) continue
+        seen.add(v.id)
+        start(v, v.repo)
+      }
+    }
+  }
+
+  function dismissDied(ids: string[]) {
+    if (!ids.some(id => died.value[id])) return
+    const next = { ...died.value }
+    ids.forEach(id => delete next[id])
+    died.value = next
+  }
+
   function start(v: Service, r: Repo) {
     const st = status(v.id)
     if (st === 'running' || st === 'starting') return
+    dismissDied([v.id])
+    asked.delete(v.id)
     push(v.id, [ln('> ' + v.cmd, 'fa')])
     runtime.value = { ...runtime.value, [v.id]: { ...rt(v.id), status: 'starting' } }
     if (livePorts.value[v.id]) {
@@ -108,6 +155,7 @@ export const useServicesStore = defineStore('services', () => {
 
   function stop(id: string) {
     if (status(id) === 'stopped') return
+    asked.add(id)
     push(id, [ln('^C', 'fa')])
     return api.svc.stop(id)
   }
@@ -139,5 +187,5 @@ export const useServicesStore = defineStore('services', () => {
     ofProject(p).forEach(v => stop(v.id))
   }
 
-  return { runtime, livePorts, portOf, onPort, status, onData, onStatus, ofProject, start, stop, restart, clear, forget, startProject, stopProject }
+  return { runtime, livePorts, died, dismissDied, portOf, onPort, status, onData, onStatus, ofProject, adopt, serveProject, start, stop, restart, clear, forget, startProject, stopProject }
 })

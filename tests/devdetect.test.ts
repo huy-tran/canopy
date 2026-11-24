@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectDevServers, listeningPort, withInstall } from '../shared/devdetect'
+import { detectDevServers, detectLaravelServe, isServeCommand, listeningPort, withInstall } from '../shared/devdetect'
 
 describe('detectDevServers', () => {
   it('runs a Laravel app with artisan, and its vite assets beside it', () => {
@@ -59,5 +59,49 @@ describe('listeningPort', () => {
   it('ignores addresses that are not this machine, and lines with none', () => {
     expect(listeningPort('Network: http://192.168.1.5:5173/')).toBeNull()
     expect(listeningPort('ready in 312 ms')).toBeNull()
+  })
+})
+
+describe('detectLaravelServe', () => {
+  const app = { artisan: true, composer: { require: { 'laravel/framework': '^12' } } }
+
+  it('skips artisan serve under Herd and runs the worker, scheduler and frontend', () => {
+    const r = detectLaravelServe({ ...app, herd: true, served: true, scheduled: true, pkg: { scripts: { dev: 'vite' }, devDependencies: { vite: '^6' } }, locks: ['yarn.lock'] })
+    expect(r.map(s => [s.label, s.cmd])).toEqual([
+      ['Queue', 'herd php artisan queue:work'],
+      ['Scheduler', 'herd php artisan schedule:work'],
+      ['Vite', 'yarn dev'],
+    ])
+  })
+
+  it('serves the site itself when no site manager does', () => {
+    expect(detectLaravelServe(app)[0]).toMatchObject({ cmd: 'php artisan serve --port=8000', port: '8000' })
+    // Herd installed, but this folder is neither parked nor linked.
+    expect(detectLaravelServe({ ...app, herd: true })[0]).toMatchObject({ cmd: 'herd php artisan serve --port=8000' })
+  })
+
+  it('prefers Horizon to a plain worker, adds Reverb, and drops the worker when queues are sync', () => {
+    const r = detectLaravelServe({ ...app, served: true, composer: { require: { 'laravel/framework': '^12', 'laravel/horizon': '^5', 'laravel/reverb': '^1' } } })
+    expect(r.map(s => s.label)).toEqual(['Horizon', 'Reverb'])
+    expect(detectLaravelServe({ ...app, served: true, queueSync: true })).toEqual([])
+  })
+
+  it('takes Reverb\'s port from .env', () => {
+    const composer = { require: { 'laravel/framework': '^12', 'laravel/reverb': '^1' } }
+    expect(detectLaravelServe({ ...app, composer, served: true, queueSync: true, reverbPort: '8081' })).toEqual([{ cmd: 'php artisan reverb:start --port=8081', port: '8081', label: 'Reverb' }])
+  })
+
+  it('leaves the workers to a site manager that runs them (Lerd), keeping the frontend', () => {
+    const r = detectLaravelServe({ ...app, served: true, managedWorkers: true, scheduled: true, pkg: { scripts: { dev: 'vite' }, devDependencies: { vite: '^6' } } })
+    expect(r.map(s => s.label)).toEqual(['Vite'])
+  })
+
+  it('knows the commands Serve writes itself from one added by hand', () => {
+    for (const c of ['php artisan serve --port=8000', 'herd php artisan queue:work', 'php artisan horizon', 'php artisan schedule:work', 'php artisan reverb:start --port=8081']) expect(isServeCommand(c)).toBe(true)
+    for (const c of ['php artisan queue:work --queue=emails', 'npm run storybook', 'php artisan pail']) expect(isServeCommand(c)).toBe(false)
+  })
+
+  it('is empty for anything but a Laravel app', () => {
+    expect(detectLaravelServe({ pkg: { scripts: { dev: 'nuxt dev' } } })).toEqual([])
   })
 })
