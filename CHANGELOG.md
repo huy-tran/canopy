@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+- Pasting several lines into an EC2 SSM shell now types them a line at a time, so none are dropped or garbled.
+
 ## [0.35.0] - 2026-11-24
 
 - The GitHub window's account chip is a menu when several gh accounts are signed in: pick one to run `gh auth switch`, and the current screen reads again as that account.
