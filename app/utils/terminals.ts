@@ -259,6 +259,13 @@ export function attachTerminal(sid: string, host: HTMLElement) {
     ta?.addEventListener('paste', (ev: ClipboardEvent) => {
       const items = ev.clipboardData?.items
       if (!items) return
+      const text = ev.clipboardData?.getData('text/plain')
+      if (lineByLine.has(sid) && text && /[\r\n]/.test(text)) {
+        ev.preventDefault()
+        ev.stopImmediatePropagation()
+        void pasteLines(sid, text)
+        return
+      }
       for (const it of items) {
         if (it.type.startsWith('image/')) {
           const f = it.getAsFile()
@@ -350,8 +357,24 @@ export function focusTerminal(sid: string) {
 }
 
 /** Inserts text at Claude's prompt without sending it. */
+/** Sessions (an SSM shell) whose remote end drops or garbles a multi-line paste sent in one burst. */
+const lineByLine = new Set<string>()
+export function pasteLineByLine(sid: string) { lineByLine.add(sid) }
+
+/** Types the text a line at a time, pausing between lines so the remote shell keeps up. No bracketed paste markers: the SSM shell has no tty to honour them. */
+async function pasteLines(sid: string, text: string) {
+  const lines = pasteText(text).split('\n')
+  if (lines[lines.length - 1] === '') lines.pop()
+  for (let i = 0; i < lines.length; i++) {
+    if (!entries.has(sid)) return
+    api.pty.write(sid, i < lines.length - 1 || /\n$/.test(text) ? `${lines[i]}\r` : lines[i]!)
+    if (i < lines.length - 1) await new Promise(r => setTimeout(r, 40))
+  }
+}
+
 export function pasteInto(sid: string, text: string) {
   const e = ensureTerminal(sid)
+  if (lineByLine.has(sid) && /[\r\n]/.test(text)) return void pasteLines(sid, text)
   const clean = pasteText(text)
   if (e.opened) return e.term.paste(clean)
   // xterm's own paste needs the terminal on screen: for one never shown (a session started in the background) it delivers

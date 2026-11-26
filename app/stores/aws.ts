@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { AWS_TABS, type AwsBookmark, type AwsCtx, type AwsDone, type AwsLockState, type AwsProblem, type AwsProfile, type AwsResult, type AwsTab, type AwsTerm } from '#shared/aws'
 import type { AwsLink } from '~/utils/aws'
-import { disposeTerminal, ensureTerminal, terminalSize, writeToTerminal } from '~/utils/terminals'
+import { disposeTerminal, ensureTerminal, pasteLineByLine, terminalSize, writeToTerminal } from '~/utils/terminals'
 
 /** A one-key choice shown along the bottom, such as a sort column or what to copy. */
 export interface AwsChoice {
@@ -211,6 +211,7 @@ export const useAwsStore = defineStore('aws', () => {
   async function openTerm(kind: AwsTerm['kind'], title: string, o: { instance?: string; remotePort?: number; localPort?: number; host?: string; group?: string } = {}) {
     const id = `aws-${Date.now().toString(36)}-${++termSeq}`
     ensureTerminal(id)
+    if (kind === 'shell') pasteLineByLine(id)
     const { cols, rows } = terminalSize(id)
     const r = await api.aws.term(c(), id, { kind, ...o }, cols, rows)
     if (!r.ok) {
