@@ -4,6 +4,8 @@ All notable changes to Canopy are listed here. Versions follow [Semantic Version
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-11-26
+
 - Pasting several lines into an EC2 SSM shell now types them a line at a time, so none are dropped or garbled.
 
 ## [0.35.0] - 2026-11-24
@@ -361,6 +363,7 @@ First release.
 - Command palette, rebindable shortcuts, light and dark themes, font and terminal settings.
 - Automatic updates from GitHub releases.
 
+[0.35.1]: https://github.com/huy-tran/canopy/releases/tag/v0.35.1
 [0.35.0]: https://github.com/huy-tran/canopy/releases/tag/v0.35.0
 [0.34.2]: https://github.com/huy-tran/canopy/releases/tag/v0.34.2
 [0.34.1]: https://github.com/huy-tran/canopy/releases/tag/v0.34.1
